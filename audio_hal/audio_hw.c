@@ -154,6 +154,11 @@
 #include "../automotive/bus_stream_out.h"
 #endif
 
+#ifdef LOWPOWER_DSP_FFV
+#include "audio_hw_dsp.h"
+#include "audio_hw_ffv.h"
+#endif
+
 #define CARD_AMLOGIC_BOARD 0
 
 
@@ -2134,19 +2139,36 @@ int start_input_stream(struct aml_stream_in *in)
         audioDevType2Str(in->device | AUDIO_DEVICE_BIT_IN), (in->device | AUDIO_DEVICE_BIT_IN),
         in->config.channels, in->config.period_size, in->config.rate, in->requested_rate, adev->mode);
 
-    in->pcm = pcm_open(card, alsa_device, PCM_IN | PCM_MONOTONIC | PCM_NONEBLOCK, &in->config);
-    if (!pcm_is_ready(in->pcm)) {
-        ALOGE("%s: cannot open pcm_in driver: %s", __func__, pcm_get_error(in->pcm));
-        pcm_close (in->pcm);
-        in->pcm = NULL;
-        adev->active_input = NULL;
-        return -ENOMEM;
+#ifdef LOWPOWER_DSP_FFV
+    if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
+        ret = sound_trigger_open(in, port, card);
+        if (ret != 0)
+            return ret;
+    } else {
+#endif
+        in->pcm = pcm_open(card, alsa_device, PCM_IN | PCM_MONOTONIC | PCM_NONEBLOCK, &in->config);
+        if (!pcm_is_ready(in->pcm)) {
+            ALOGE("%s: cannot open pcm_in driver: %s", __func__, pcm_get_error(in->pcm));
+            pcm_close (in->pcm);
+            in->pcm = NULL;
+            adev->active_input = NULL;
+            return -ENOMEM;
+        }
+#ifdef LOWPOWER_DSP_FFV
     }
-
+#endif
     if (in->requested_rate != in->config.rate) {
         ret = add_in_stream_resampler(in);
         if (ret < 0) {
-            pcm_close (in->pcm);
+#ifdef LOWPOWER_DSP_FFV
+            if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
+                ret = sound_trigger_close(in);
+                if (ret != 0)
+                    return ret;
+            }
+            if (in->pcm != NULL)
+#endif
+                pcm_close (in->pcm);
             in->pcm = NULL;
             adev->active_input = NULL;
             return -EINVAL;
@@ -2234,10 +2256,20 @@ int do_input_standby(struct aml_stream_in *in)
     struct aml_audio_device *adev = in->dev;
 
     if (!in->standby) {
-        if (in->pcm != NULL) {
-            pcm_close (in->pcm);
+#ifdef LOWPOWER_DSP_FFV
+        if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
+            int ret = sound_trigger_to_suspend(in);
+            if (ret != 0)
+                return -EIO;
+        } else {
+#endif
+            if (in->pcm != NULL) {
+                pcm_close (in->pcm);
+                in->pcm = NULL;
+            }
+#ifdef LOWPOWER_DSP_FFV
         }
-        in->pcm = NULL;
+#endif
 
         adev->active_input = NULL;
         if (adev->mode != AUDIO_MODE_IN_CALL) {
@@ -2585,8 +2617,7 @@ static ssize_t read_frames (struct aml_stream_in *in, void *buffer, ssize_t fram
 }
 
 #define DEBUG_AEC (0) // Remove after AEC is fine-tuned
-
-static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
+static ssize_t in_read_from_hw(struct audio_stream_in *stream, void* buffer, size_t bytes)
 {
     int ret = 0;
     struct aml_stream_in *in = (struct aml_stream_in *)stream;
@@ -2598,7 +2629,11 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
 
     ALOGV("%s(): stream: %p, source: %d, bytes %zu in_frames:%zu in->devices %0x", __func__, in, in->source, bytes, in_frames, in->device);
 
+    if (bytes == 0)
+        return 0;
+
     lock_input_stream(in);
+
 #ifdef ENABLE_AEC_APP
     /* Special handling for Echo Reference: simply get the reference from FIFO.
      * The format and sample rate should be specified by arguments to adev_open_input_stream. */
@@ -2687,9 +2722,16 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
                 ret = read_frames(in, buffer, in_frames);
             } else {
                 /*coverity[sleep]*/
-                ret = aml_alsa_input_read(stream, buffer, bytes);
+#ifdef LOWPOWER_DSP_FFV
+                if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
+                    ret = sound_trigger_read(in, buffer, bytes, &in->dsp_ffv_in_t->ts);
+                } else {
+#endif
+                    ret = aml_alsa_input_read(stream, buffer, bytes);
+#ifdef LOWPOWER_DSP_FFV
+                }
+#endif
             }
-
             if (ret < 0)
                 goto exit;
             //DoDumpData(buffer, bytes, CC_DUMP_SRC_TYPE_INPUT);
@@ -2698,6 +2740,10 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
 
     if (ret >= 0) {
         in->frames_read += in_frames;
+#ifdef LOWPOWER_DSP_FFV
+        if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC)
+            in->timestamp_nsec = pcm_get_timestamp_dsp(in->dsp_ffv_in_t->sound_trigger_handle, in->config.rate, 0 /*isOutput*/, in->dsp_ffv_in_t->total_read, in->dsp_ffv_in_t->ts);
+#endif
     }
     bool mic_muted = false;
     adev_get_mic_mute((struct audio_hw_device*)adev, &mic_muted);
@@ -2732,6 +2778,19 @@ exit:
     return bytes;
 }
 
+static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
+{
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    ssize_t sum = 0;
+#ifdef LOWPOWER_DSP_FFV
+    if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC)
+        sum = in_read_from_fetch_buf(stream, buffer, bytes);
+#endif
+    sum += in_read_from_hw(stream, (void *)((char*)buffer + sum), bytes - sum);
+
+    return sum;
+}
+
 static int in_get_capture_position (const struct audio_stream_in* stream, int64_t* frames,
                                    int64_t* time) {
     if (stream == NULL || frames == NULL || time == NULL) {
@@ -2755,6 +2814,14 @@ static int in_get_capture_position (const struct audio_stream_in* stream, int64_
             return 0;
         }
     }
+#ifdef LOWPOWER_DSP_FFV
+    if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
+        *frames = in->frames_read;
+        *time = in->timestamp_nsec;
+        pthread_mutex_unlock(&in->lock);
+        return 0;
+    }
+#endif
 exit:
     *frames = in->frames_read;
     in->timestamp_nsec = aml_audio_get_systime_ns();
@@ -5276,6 +5343,10 @@ int adev_open_input_stream(struct audio_hw_device *dev,
     in->hal_channel_mask = config->channel_mask;
     in->hal_format = config->format;
 
+#ifdef LOWPOWER_DSP_FFV
+    dsp_ffv_stream_init(in);
+#endif
+
     if (in->device & AUDIO_DEVICE_IN_ALL_SCO) {
         memcpy(&in->config, &pcm_config_bt, sizeof(pcm_config_bt));
         if (adev->bt_wbs) {
@@ -5435,6 +5506,9 @@ void adev_close_input_stream(struct audio_hw_device *dev,
         aml_audio_resample_close(in->resample_handle);
         in->resample_handle = NULL;
     }
+#ifdef LOWPOWER_DSP_FFV
+    dsp_ffv_stream_deinit(in);
+#endif
 
     pthread_mutex_destroy(&in->pre_lock);
     pthread_mutex_destroy(&in->lock);
@@ -7910,6 +7984,10 @@ static int adev_close(hw_device_t *device)
         ALOGD("%s, wait_count:%d, ms12 resource should be released finish\n", __func__, wait_count);
     }
 
+#ifdef LOWPOWER_DSP_FFV
+    dsp_ffv_dev_deinit(adev);
+#endif
+
 #ifdef ENABLE_AML_ACR
     aml_close_ai_audio_module(&adev->native_postprocess);
 #endif
@@ -8309,6 +8387,10 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     }
     g_adev = (void *)adev;
     g_aml_primary_adev = (void *)adev;
+
+#ifdef LOWPOWER_DSP_FFV
+    dsp_ffv_dev_init(adev);
+#endif
 
     adev->is_ui_force_dap_disable = 1;
     adev->atmos_indicator_status = false;

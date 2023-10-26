@@ -314,6 +314,22 @@ struct aml_bt_output {
     size_t resampler_in_frames;
 };
 
+#ifdef LOWPOWER_DSP_FFV
+struct dsp_ffv_dev {
+    void*                   sound_trigger_lib;
+    /* interface of soundtrigger */
+    int                     (*sound_trigger_open_for_streaming)();
+    size_t                  (*sound_trigger_read_samples)(int, void*, size_t);
+    int                     (*sound_trigger_close_for_streaming)(int);
+    /* if signal_thread is true, suspend_task thread has started.*/
+    bool signal_thread;
+    pthread_t suspend_task;
+    /* parameters of suspend_mode node */
+    int suspend_mode_fd;
+    int suspend_mode_size;
+};
+#endif
+
 typedef enum DEVICE_TYPE {
     STB = 0,
     TV  = 1,
@@ -634,6 +650,10 @@ struct aml_audio_device {
     pcm_record_delay_t aml_pcm_record_delay;
     bool is_manual;
     audio_manual_set_t manual_encoding_format[AUDIO_PROFILE_ITEM_NUM];  /*refer to AUDIO_ENCODING_FORMAT_E*/
+#ifdef LOWPOWER_DSP_FFV
+    /* visible api about soundtrigger */
+    struct dsp_ffv_dev *dsp_ffv;
+#endif
 };
 
 struct meta_data {
@@ -1011,6 +1031,10 @@ struct aml_stream_in {
     bool is_tv_src_stream;
     aml_audio_resample_t *resample_handle;
     struct tv_stream_param tv_param;
+#ifdef LOWPOWER_DSP_FFV
+    /* about ffv mic stream */
+    struct dsp_ffv_in *dsp_ffv_in_t;
+#endif
 };
 typedef  int (*do_standby_func)(struct aml_stream_out *out);
 typedef  int (*do_startup_func)(struct aml_stream_out *out);

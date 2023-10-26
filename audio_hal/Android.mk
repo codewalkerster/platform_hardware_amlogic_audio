@@ -52,6 +52,9 @@ include $(BUILD_PREBUILT)
         LOCAL_CFLAGS += -DPRODUCT_SOUNDBAR
     endif  #end TARGET_BUILD_TYPE_SOUNDBAR
 
+    ifeq ($(BOARD_ENABLE_DSP_FFV), true)
+        LOCAL_CFLAGS += -DLOWPOWER_DSP_FFV
+    endif
     LOCAL_MODULE_RELATIVE_PATH := hw
     LOCAL_SRC_FILES := \
         audio_hw.c \
@@ -182,6 +185,13 @@ include $(BUILD_PREBUILT)
 
     LOCAL_C_INCLUDES += \
         vendor/amlogic/common/mediahal_sdk/include \
+
+    ifeq ($(BOARD_ENABLE_DSP_FFV), true)
+        LOCAL_C_INCLUDES += vendor/amlogic/common/dsp/dsp_util/include
+        LOCAL_SHARED_LIBRARIES += sound_trigger.primary.amlogic
+        LOCAL_SRC_FILES += \
+            audio_hw_ffv.c
+    endif
 
 #For audio content recognize
 LOCAL_CFLAGS += -DENABLE_AML_ACR
