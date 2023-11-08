@@ -45,6 +45,7 @@ using namespace android;
 extern "C" {
 
 #include "../Utility/LibAudioEffect.h"
+#define MODEL_SUM_OTT_DEFAULT_PATH "/vendor/etc/audio_config/model_sum.ini"
 
 #define MODEL_SUM_DEFAULT_PATH "/mnt/vendor/odm_ext/etc/tvconfig/model/model_sum.ini"
 #define AUDIO_EFFECT_DEFAULT_PATH "/mnt/vendor/odm_ext/etc/tvconfig/audio/AUDIO_EFFECT.ini"
@@ -350,21 +351,31 @@ int DAPV2_get_ini_file(char *ini_name, int size)
     char model_name[PROPERTY_VALUE_MAX] = {0};
     IniParser* pIniParser = NULL;
     const char *ini_value = NULL;
-    const char *filename = MODEL_SUM_DEFAULT_PATH;
+    const char *filename = NULL;
 
     DAPV2_get_model_name(model_name, sizeof(model_name));
     pIniParser = new IniParser();
-    if (pIniParser->parse(filename) < 0) {
-        ALOGW("%s: Load INI file -> %s Failed", __FUNCTION__, filename);
+    if (((access(MODEL_SUM_DEFAULT_PATH, F_OK)) != -1)) {
+        filename = MODEL_SUM_DEFAULT_PATH;
+    } else if (((access(MODEL_SUM_OTT_DEFAULT_PATH, F_OK)) != -1)) {
+        filename = MODEL_SUM_OTT_DEFAULT_PATH;
+    } else {
+        ALOGW("%s: model_sum.ini does not exist", __FUNCTION__);
         goto exit;
     }
+    ALOGD("%s: Start parsering INI file -> %s", __FUNCTION__, filename);
+    if (pIniParser->parse(filename) < 0) {
+        ALOGW("%s: Parser INI file -> %s Failed", __FUNCTION__, filename);
+        goto exit;
+    }
+    ALOGD("%s: Parser INI file -> %s successful", __FUNCTION__, filename);
 
     ini_value = pIniParser->GetString(model_name, "AMLOGIC_AUDIO_EFFECT_INI_PATH", AUDIO_EFFECT_DEFAULT_PATH);
     if (ini_value == NULL || access(ini_value, F_OK) == -1) {
-        ALOGD("%s: INI File is not exist", __FUNCTION__);
+        ALOGW("%s: AUDIO EFFECT INI File is not exist", __FUNCTION__);
         goto exit;
     }
-    ALOGD("%s: INI File -> %s", __FUNCTION__, ini_value);
+    ALOGD("%s: get AUDIO EFFECT INI File -> %s successful", __FUNCTION__, ini_value);
     strncpy(ini_name, ini_value, size);
 
     result = 0;
