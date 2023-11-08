@@ -41,7 +41,7 @@
 #elif ANDROID_PLATFORM_SDK_VERSION > 29
 #define MODEL_SUM_DEFAULT_PATH "/mnt/vendor/odm_ext/etc/tvconfig/model/model_sum.ini"
 #endif
-
+#define MODEL_SUM_OTT_DEFAULT_PATH "/vendor/etc/audio_config/model_sum.ini"
 
 static struct audio_file_config_s dev_cfg[2] = {
     {/*amlogic inner EQ & DRC*/
@@ -382,7 +382,7 @@ int eq_drc_init(struct eq_drc_data *pdata)
 {
     int i, ret;
     char model_name[50] = {0};
-    const char *filename = MODEL_SUM_DEFAULT_PATH;
+    const char *filename = NULL;
 
     pdata->s_gain.atv = 1.0;
     pdata->s_gain.dtv = 1.0;
@@ -398,7 +398,15 @@ int eq_drc_init(struct eq_drc_data *pdata)
     if (ret < 0) {
         return -1;
     }
-
+    if (((access(MODEL_SUM_DEFAULT_PATH, F_OK)) != -1)) {
+        filename = MODEL_SUM_DEFAULT_PATH;
+    } else if (((access(MODEL_SUM_OTT_DEFAULT_PATH, F_OK)) != -1)) {
+        filename = MODEL_SUM_OTT_DEFAULT_PATH;
+    } else {
+        ALOGW("%s: model_sum.ini does not exist", __FUNCTION__);
+        return -1;
+    }
+    ALOGD("%s: %s exist", __FUNCTION__, filename);
     /*parse amlogic ini file*/
     ret = parse_audio_sum(filename, model_name, &dev_cfg[0]);
     if (ret == 0) {
