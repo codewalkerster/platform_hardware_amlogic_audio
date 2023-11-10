@@ -219,6 +219,7 @@ struct dolby_ms12_desc {
     drc_param_t stereo_drc;
     drc_param_t multi_dap_drc;
     int system_sound_target;
+    float tempo_speed;
 };
 
 /*
