@@ -264,6 +264,8 @@ struct aml_audio_patch
     int mdelay;
     bool start_mute;
     struct aml_stream_out *output_stream;
+    int32_t PServerDev;
+    bool singleDmxNonTunnelMode;
 };
 
 void create_tvin_buffer(struct aml_audio_patch *patch);
