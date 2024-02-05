@@ -572,6 +572,7 @@ ssize_t hw_write (struct audio_stream_out *stream
     uint64_t total_frame = 0;
     uint64_t write_frames = 0;
     uint64_t  sys_total_cost = 0;
+    uint64_t  deep_buf_total_cost = 0;
     int  adjust_ms = 0;
     int  alsa_port = -1;
 
@@ -917,12 +918,30 @@ ssize_t hw_write (struct audio_stream_out *stream
             adev->ms12.sys_audio_frame_pos = adev->ms12.sys_audio_base_pos + adev->ms12.sys_audio_skip + sys_total_cost - latency_frames;
             adev->ms12.sys_data_write2alsa_status = true;
         }
+
+        /* check deep buffer audio position */
+        deep_buf_total_cost = dolby_ms12_get_consumed_deep_buffer_audio();
+        if (adev->ms12.last_deep_buf_audio_cost_pos != deep_buf_total_cost) {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            adev->ms12.deep_buf_audio_timestamp.tv_sec = ts.tv_sec;
+            adev->ms12.deep_buf_audio_timestamp.tv_nsec = ts.tv_nsec;
+            /*FIXME. 2ch 16 bit audio */
+            adev->ms12.deep_buf_audio_frame_pos = adev->ms12.deep_buf_audio_base_pos + adev->ms12.deep_buf_audio_skip + deep_buf_total_cost - latency_frames;
+            adev->ms12.deep_buf_write2alsa_status = true;
+        }
+
         if (adev->debug_flag) {
             ALOGI("%s  ms12.last_frames_position:%" PRIu64 ",last_ms12_pcm_out_position:%" PRIu64 "; sys audio pos %"PRIu64" ms ,sys_total_cost %"PRIu64",base pos %"PRIu64",latency %d \n", __func__,
                   adev->ms12.last_frames_position, adev->ms12.last_ms12_pcm_out_position,
                   adev->ms12.sys_audio_frame_pos/48,sys_total_cost,adev->ms12.sys_audio_base_pos,latency_frames);
+            if (deep_buf_total_cost != (uint64_t)-1) {
+                ALOGI("%s  deep buf audio pos %"PRIu64" ms ,deep_buf_total_cost %"PRIu64",base pos %"PRIu64",latency %d \n", __func__,
+                    adev->ms12.deep_buf_audio_frame_pos/48, deep_buf_total_cost, adev->ms12.deep_buf_audio_base_pos, latency_frames);
+            }
         }
         adev->ms12.last_sys_audio_cost_pos = sys_total_cost;
+        adev->ms12.last_deep_buf_audio_cost_pos = deep_buf_total_cost;
     }
     if (adev->debug_flag) {
         AM_LOGI("io %d: out:%p pcm handle %p format input:%s output:%s 61937: %d",

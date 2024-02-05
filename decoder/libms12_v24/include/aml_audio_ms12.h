@@ -220,6 +220,14 @@ struct dolby_ms12_desc {
     drc_param_t multi_dap_drc;
     int system_sound_target;
     float tempo_speed;
+
+    void * deep_buf_virtual_buf_handle;
+    struct timespec  deep_buf_audio_timestamp;
+    uint64_t deep_buf_audio_frame_pos;
+    uint64_t deep_buf_audio_base_pos;
+    uint64_t deep_buf_audio_skip;
+    uint64_t last_deep_buf_audio_cost_pos;
+    bool deep_buf_write2alsa_status;
 };
 
 /*

@@ -2010,7 +2010,14 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
 
     if (out->is_normal_pcm) {
         //  AF::Track's Position should larger than hal, so minus DEFAULT_PLAYBACK_PERIOD_SIZE
-        int max_delay_frames = adev->sys_audio_frame_written - *frames - DEFAULT_PLAYBACK_PERIOD_SIZE;
+        int max_delay_frames = 0;
+        uint64_t stream_written_frames = adev->sys_audio_frame_written;
+        int is_deep_buffer = out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER;
+        if (is_deep_buffer) {
+            stream_written_frames = adev->deep_buf_audio_frame_written;
+        }
+
+        max_delay_frames = stream_written_frames - *frames - DEFAULT_PLAYBACK_PERIOD_SIZE;
         max_delay_frames = (max_delay_frames < 0 ? 0 : max_delay_frames);
 
         if (video_delay_frames > max_delay_frames) {
@@ -2020,8 +2027,8 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
             aml_audio_delay_timestamp(timestamp, offset_us);
             video_delay_frames = max_delay_frames;
             if (adev->debug_flag) {
-                ALOGI("%s sys_audio_frame_written:%" PRId64 " frames:%" PRId64 " max_delay_frames:%d offset_frames:%d offset_us:%d", __func__,
-                    adev->sys_audio_frame_written, *frames, max_delay_frames, offset_frames, offset_us);
+                ALOGI("%s deep_buf:%d sys_audio_frame_written:%" PRId64 " frames:%" PRId64 " max_delay_frames:%d offset_frames:%d offset_us:%d", __func__,
+                    is_deep_buffer, adev->sys_audio_frame_written, *frames, max_delay_frames, offset_frames, offset_us);
             }
         }
     }
@@ -3160,7 +3167,10 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         default:
             break;
         }
-    } else if (flags & AUDIO_OUTPUT_FLAG_DIRECT) {
+    } else if ((flags & AUDIO_OUTPUT_FLAG_DIRECT) || (flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER)) {
+        //fixme, Direct PCM and DEEP buffer can not be exiting at the same time.
+        //ASDK, test case[atmos_stickiness_usage_media_ddp_out-v241-HDMI (460)/467]
+        //then enable the Mixer with flag=AUDIO_OUTPUT_FLAG_DEEP_BUFFER.
         if (config->format == AUDIO_FORMAT_DEFAULT) {
             if (flags & AUDIO_OUTPUT_FLAG_MMAP_NOIRQ) {
                 config->format = AUDIO_FORMAT_PCM_16_BIT;
@@ -6581,14 +6591,15 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
     uint64_t enter_ns = 0;
     uint64_t leave_ns = 0;
     uint64_t sleep_time_us = 0;
+    bool is_deep_buf = aml_out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER;
 
     if (eDolbyMS12Lib == adev->dolby_lib_type && continuous_mode(adev)) {
         enter_ns = aml_audio_get_systime_ns();
     }
 
     if (adev->debug_flag) {
-        AM_LOGD("io %d: out:%p size:%zu, dolby_lib_type:%d, frame_size:%zu", aml_out->io_handle, aml_out,
-            bytes, adev->dolby_lib_type, frame_size);
+        AM_LOGD("io %d: out:%p size:%zu, dolby_lib_type:%d, frame_size:%zu, deep_buf:%d", aml_out->io_handle, aml_out,
+            bytes, adev->dolby_lib_type, frame_size, is_deep_buf);
     }
 
     if ((aml_out->stream_status == STREAM_HW_WRITING) && hw_mix) {
@@ -6702,11 +6713,15 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
          *the system tone voice should not be mixed
          */
         if (is_bypass_dolbyms12(stream)) {
-            ms12->sys_audio_skip += bytes / frame_size;
+            if (is_deep_buf) {
+                ms12->deep_buf_audio_skip += bytes / frame_size;
+            } else {
+                ms12->sys_audio_skip += bytes / frame_size;
+            }
             usleep(bytes * 1000000 /frame_size/out_get_sample_rate(&stream->common)*5/6);
         } else {
             /* audio zero data detect, and do fade in */
-            if (adev->is_netflix && STREAM_PCM_NORMAL == aml_out->usecase) {
+            if (adev->is_netflix && (STREAM_PCM_NORMAL == aml_out->usecase || STREAM_PCM_DEEP_BUF == aml_out->usecase)) {
                 aml_audio_data_handle(stream, buffer, bytes);
             }
 
@@ -6729,7 +6744,11 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
 
             while (bytes_remaining && adev->ms12.dolby_ms12_enable && retry < 20) {
                 size_t used_size = 0;
-                ret = dolby_ms12_system_process(stream, (char *)source + bytes_written, bytes_remaining, &used_size);
+                if (is_deep_buf) {
+                    ret = dolby_ms12_deep_buffer_process(stream, (char *)buffer + bytes_written, bytes_remaining, &used_size);
+                } else {
+                    ret = dolby_ms12_system_process(stream, (char *)buffer + bytes_written, bytes_remaining, &used_size);
+                }
                 if (!ret) {
                     bytes_remaining -= used_size;
                     bytes_written += used_size;
@@ -6742,8 +6761,14 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
                 }
             }
             if (bytes_remaining) {
-                ms12->sys_audio_skip += bytes_remaining / frame_size;
-                ALOGI("bytes_remaining =%zu total skip =%" PRId64 "", bytes_remaining, ms12->sys_audio_skip);
+
+                if (is_deep_buf) {
+                    ms12->deep_buf_audio_skip += bytes_remaining / frame_size;
+                    AM_LOGI("deep buf : bytes_remaining =%d total skip =%lld", bytes_remaining, ms12->deep_buf_audio_skip);
+                } else {
+                    ms12->sys_audio_skip += bytes_remaining / frame_size;
+                    AM_LOGI("sys audio : bytes_remaining =%d total skip =%lld", bytes_remaining, ms12->sys_audio_skip);
+                }
             }
         }
     } else {
@@ -6752,7 +6777,11 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
             size_t content_bytes = aml_hw_mixer_get_content_l(&adev->hw_mixer);
             size_t space_bytes = adev->hw_mixer.buf_size - content_bytes;
             bytes_written = aml_hw_mixer_write(&adev->hw_mixer, buffer, bytes);
-            ms12->sys_audio_skip += bytes / frame_size;
+            if (is_deep_buf) {
+                ms12->deep_buf_audio_skip += bytes / frame_size;
+            } else {
+                ms12->sys_audio_skip += bytes / frame_size;
+            }
             if (content_bytes < adev->hw_mixer.buf_size / 2) {
                 sleep_time_us = (uint64_t)bytes_written * 1000000 / frame_size / out_get_sample_rate(&stream->common) / 2;
             } else {
@@ -6796,7 +6825,11 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
            */
         alsa_latency_frame = adev->ms12.latency_frame;
         int system_latency = 0;
-        system_latency = dolby_ms12_get_system_buffer_avail(NULL) / frame_size;
+        if (is_deep_buf) {
+            system_latency = dolby_ms12_get_deep_buffer_avail_frames(NULL);
+        } else {
+            system_latency = dolby_ms12_get_system_buffer_avail(NULL) / frame_size;
+        }
 
         if (adev->compensate_video_enable) {
             alsa_latency_frame = 0;
@@ -6807,8 +6840,8 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
         }
         pthread_mutex_unlock(&aml_out->apts_update_lock);
         if (adev->debug_flag) {
-            ALOGI("%s stream audio presentation %"PRIu64" latency_frame %d.ms12 system latency_frame %d,total frame=%" PRId64 " %" PRId64 " ms",
-                  __func__,aml_out->last_frames_position, alsa_latency_frame, system_latency,aml_out->frame_write_sum, aml_out->frame_write_sum/48);
+            ALOGI("%s deep_buf %d stream audio presentation %"PRIu64" latency_frame %d.ms12 system latency_frame %d,total frame=%" PRId64 " %" PRId64 " ms",
+                  __func__, is_deep_buf, aml_out->last_frames_position, alsa_latency_frame, system_latency,aml_out->frame_write_sum, aml_out->frame_write_sum/48);
         }
     } else {
         aml_out->last_frames_position = aml_out->frame_write_sum;
@@ -7316,7 +7349,11 @@ ssize_t out_write_new(struct audio_stream_out *stream,
         if (aml_out->is_normal_pcm) {
             size_t frame_size = audio_stream_out_frame_size(stream);
             if (frame_size != 0) {
-                adev->sys_audio_frame_written = aml_out->input_bytes_size / frame_size;
+                if (aml_out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER) {
+                    adev->deep_buf_audio_frame_written = aml_out->input_bytes_size / frame_size;
+                } else {
+                    adev->sys_audio_frame_written = aml_out->input_bytes_size / frame_size;
+                }
             }
         }
     }
@@ -7403,7 +7440,7 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
     R_CHECK_RET(ret, "open stream failed");
     aml_out = (struct aml_stream_out *)(*stream_out);
     aml_out->usecase = attr_to_usecase(aml_out->device, aml_out->hal_format, aml_out->flags);
-    aml_out->is_normal_pcm = (aml_out->usecase == STREAM_PCM_NORMAL) ? 1 : 0;
+    aml_out->is_normal_pcm = (aml_out->usecase == STREAM_PCM_NORMAL || aml_out->usecase == STREAM_PCM_DEEP_BUF) ? 1 : 0;
     aml_out->out_cfg = *config;
     aml_out->card = adev->card;
     aml_out->hwsync_parsed_frames_sum = 0;

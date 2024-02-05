@@ -214,8 +214,9 @@ typedef enum stream_usecase {
     STREAM_PCM_PATCH        = 5,
     STREAM_RAW_PATCH        = 6,
     STREAM_PCM_MMAP         = 7,
+    STREAM_PCM_DEEP_BUF     = 8,
 
-    STREAM_USECASE_MAX      = 8,
+    STREAM_USECASE_MAX      = 9,
 } stream_usecase_t;
 
 typedef enum alsa_device {
@@ -459,6 +460,7 @@ struct aml_audio_device {
     bool spdif_coexist_other; /* spdif coexist other device */
 
     uint64_t  sys_audio_frame_written;
+    uint64_t  deep_buf_audio_frame_written;
     void* hw_mediasync;
     struct aec_t *aec;
     bool bt_wbs;

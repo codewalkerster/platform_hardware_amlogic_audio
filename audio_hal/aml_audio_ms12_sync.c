@@ -660,6 +660,32 @@ static int get_ms12_nontunnel_latency_offset(enum OUT_PORT port
     return latency_ms;
 }
 
+static int get_ms12_nontunel_deepbuffer_latency_offset(bool is_netflix)
+{
+    char buf[PROPERTY_VALUE_MAX] = {'\0'};
+    int ret = -1;
+    int latency_ms = 0;
+    char *prop_name = NULL;
+
+    /*non tunnel pcm case*/
+    if (is_netflix) {
+        prop_name = AVSYNC_MS12_NETFLIX_NONTUNNEL_DEEPBUFFER_LATENCY_PROPERTY;
+        latency_ms = AVSYNC_MS12_NETFLIX_NONTUNNEL_DEEPBUFFER_LATENCY;
+    } else {
+        prop_name = AVSYNC_MS12_NONTUNNEL_DEEPBUFFER_LATENCY_PROPERTY;
+        latency_ms = AVSYNC_MS12_NONTUNNEL_DEEPBUFFER_LATENCY;
+    }
+
+    if (prop_name) {
+        ret = property_get(prop_name, buf, NULL);
+        if (ret > 0) {
+            latency_ms = atoi(buf);
+        }
+    }
+    return latency_ms;
+}
+
+
 static int get_ms12_tunnel_latency_offset(enum OUT_PORT port
     , audio_format_t input_format
     , audio_format_t output_format
@@ -1306,6 +1332,7 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
     uint64_t frames_written_hw = out->last_frames_position;
     device_type_t platform_type = STB;
     bool is_earc = (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
+    bool b_deepbuffer = (out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER);
 
     if (is_STB(adev)) {
         platform_type = STB;
@@ -1345,12 +1372,19 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
         }
 
         if (out->is_normal_pcm && adev->ms12.dolby_ms12_enable) {
-            frames_written_hw = adev->ms12.sys_audio_frame_pos;
-             //add this code for Youtube test.
-             if (adev->ms12.sys_data_write2alsa_status) {
-                 *timestamp = adev->ms12.sys_audio_timestamp;
-             }
-
+            if (b_deepbuffer) {
+                frames_written_hw = adev->ms12.deep_buf_audio_frame_pos;
+                //add this code for Youtube test.
+                if (adev->ms12.deep_buf_write2alsa_status) {
+                    *timestamp = adev->ms12.deep_buf_audio_timestamp;
+                }
+            } else {
+                frames_written_hw = adev->ms12.sys_audio_frame_pos;
+                //add this code for Youtube test.
+                if (adev->ms12.sys_data_write2alsa_status) {
+                    *timestamp = adev->ms12.sys_audio_timestamp;
+                }
+            }
         }
 
         *frames = frames_written_hw;
@@ -1364,6 +1398,9 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
                                                                adev->is_netflix,
                                                                platform_type,
                                                                is_earc) * 48;
+            if (out->is_normal_pcm && b_deepbuffer) {
+                frame_latency += get_ms12_nontunel_deepbuffer_latency_offset(adev->is_netflix) * 48;
+            }
             if (adev->ms12.is_dolby_atmos || adev->atoms_lock_flag) {
                 frame_latency += get_ms12_atmos_latency_offset(false, adev->is_netflix) * 48;
             }

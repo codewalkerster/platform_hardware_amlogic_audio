@@ -243,6 +243,28 @@ extern "C" int dolby_ms12_input_system(void *dolbyMS12_pointer
     }
 }
 
+extern "C" int dolby_ms12_input_deep_buffer(void *dolbyMS12_pointer
+                                       , const void *audio_stream_out_buffer //ms12 input buffer
+                                       , size_t audio_stream_out_buffer_size //ms12 input buffer size
+                                       , int audio_stream_out_format
+                                       , int audio_stream_out_channel_num
+                                       , int audio_stream_out_sample_rate
+                                      )
+{
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance)
+        return dolby_ms12_instance->DolbyMS12InputDeepBuffer(dolbyMS12_pointer
+                , audio_stream_out_buffer //ms12 input buffer
+                , audio_stream_out_buffer_size //ms12 input buffer size
+                , audio_stream_out_format
+                , audio_stream_out_channel_num
+                , audio_stream_out_sample_rate);
+    else {
+        return -1;
+    }
+}
+
+
 extern "C" int dolby_ms12_input_app(void *dolbyMS12_pointer
                                        , const void *audio_stream_out_buffer //ms12 input buffer
                                        , size_t audio_stream_out_buffer_size //ms12 input buffer size
@@ -497,6 +519,18 @@ extern "C" int dolby_ms12_get_system_buffer_avail(int * max_size)
     }
 }
 
+extern "C" int dolby_ms12_get_deep_buffer_avail_frames(int * max_size)
+{
+    ALOGV("%s()\n", __FUNCTION__);
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->DolbyMS12GetDeepBufferAvailFrames(max_size);
+    } else {
+        return -1;
+    }
+}
+
+
 extern "C" int dolby_ms12_set_main_volume(float volume)
 {
     ALOGV("%s()\n", __FUNCTION__);
@@ -628,6 +662,17 @@ extern "C" unsigned long long dolby_ms12_get_consumed_sys_audio(void)
     android::DolbyMS12* dolby_ms12_instance = getInstance();
     if (dolby_ms12_instance) {
         return dolby_ms12_instance->DolbyMS12GetNBytesConsumedSysSound();
+    } else {
+        return -1;
+    }
+}
+
+extern "C" unsigned long long dolby_ms12_get_consumed_deep_buffer_audio(void)
+{
+    ALOGV("%s()\n", __FUNCTION__);
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->DolbyMS12GetFramesConsumedDeepBufferAudio();
     } else {
         return -1;
     }

@@ -80,6 +80,7 @@
   so we choose 84ms now
 */
 #define MS12_SYS_INPUT_BUF_NS  (84000000LL)
+#define MS12_DEEP_BUF_INPUT_BUF_NS  (32000000LL)
 
 #define NANO_SECOND_PER_SECOND 1000000000LL
 #define NANO_SECOND_PER_MILLISECOND 1000000LL
@@ -88,6 +89,7 @@
 
 #define MS12_MAIN_BUF_INCREASE_TIME_MS (1000)
 #define MS12_SYS_BUF_INCREASE_TIME_MS (1000)
+#define MS12_DEEP_BUF_INCREASE_TIME_MS (1000)
 #define DDPI_UDC_COMP_LINE 2
 
 #define MS12_PCM_FRAME_SIZE         (6144)
@@ -107,6 +109,7 @@
 #define DUMP_MS12_INPUT_SYS              0x200
 #define DUMP_MS12_INPUT_APP              0x400
 #define DUMP_MS12_INPUT_ASSOCIATE        0x800
+#define DUMP_MS12_INPUT_DEEP_BUF         0x1000
 
 
 #define MS12_OUTPUT_SPEAKER_PCM_FILE     "/data/vendor/audiohal/ms12_speaker_pcm.raw"
@@ -118,6 +121,7 @@
 #define MS12_OUTPUT_BITSTREAM_MAT_WI_MLP_FILE   "/data/vendor/audiohal/ms12_bitstream_wi_mlp.mat"
 
 #define MS12_INPUT_SYS_PCM_FILE          "/data/vendor/audiohal/ms12_input_sys.pcm"
+#define MS12_INPUT_DEEP_BUF_PCM_FILE     "/data/vendor/audiohal/ms12_input_deepbuf.pcm"
 #define MS12_INPUT_SYS_MAIN_FILE         "/data/vendor/audiohal/ms12_input_main.raw"
 #define MS12_INPUT_SYS_ASSOCIATE_FILE    "/data/vendor/audiohal/ms12_input_associate.raw"
 #define MS12_INPUT_SYS_APP_FILE          "/data/vendor/audiohal/ms12_input_app.pcm"
@@ -1099,7 +1103,9 @@ int get_the_dolby_ms12_prepared(
         ms12->main_input_sr = input_sample_rate;
     }
     ms12->sys_audio_base_pos = adev->sys_audio_frame_written;
+    ms12->deep_buf_audio_base_pos = adev->deep_buf_audio_frame_written;
     ms12->sys_audio_skip     = 0;
+    ms12->deep_buf_audio_skip = 0;
     ms12->dap_pcm_frames     = 0;
     ms12->stereo_pcm_frames  = 0;
     ms12->master_pcm_frames  = 0;
@@ -1115,6 +1121,8 @@ int get_the_dolby_ms12_prepared(
     ALOGI("set ms12 sys pos =%" PRId64 "", ms12->sys_audio_base_pos);
     ms12->aaudio_low_latency = false;
     ms12->tempo_speed        = 1.0f;
+
+    ALOGI("set ms12 deep buf pos =%" PRId64 "", ms12->deep_buf_audio_base_pos);
 
     ms12->iec61937_ddp_buf = aml_audio_calloc(1, MS12_DDP_FRAME_SIZE);
     if (ms12->iec61937_ddp_buf == NULL) {
@@ -1881,6 +1889,76 @@ int dolby_ms12_system_process(
             audio_virtual_buf_open(&ms12->system_virtual_buf_handle, "ms12 system input", input_ns/2, MS12_SYS_INPUT_BUF_NS, 0, MS12_SYS_BUF_INCREASE_TIME_MS);
         }
         audio_virtual_buf_process(ms12->system_virtual_buf_handle, input_ns);
+    }
+
+    return ret;
+}
+
+
+int dolby_ms12_deep_buffer_process(
+    struct audio_stream_out *stream
+    , const void *buffer
+    , size_t bytes
+    , size_t *use_size)
+{
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = aml_out->dev;
+    struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    int mixer_default_samplerate = 48000;
+    int dolby_ms12_input_bytes = 0;
+    int ms12_output_size = 0;
+    int ret = -1;
+
+    if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
+        check_audio_level("ms12_deep_buf", buffer, bytes);
+    }
+
+    pthread_mutex_lock(&ms12->lock);
+    if (ms12->dolby_ms12_enable) {
+
+        if (ms12->tv_tuning_flag && ms12->input_config_format == AUDIO_FORMAT_MAT) {
+            ALOGW("MS12 use -tv_tuning Flag to activate a special processing graph for TV tuning purposes!\n");
+            ALOGW("System sound is Mute as design!\n");
+            pthread_mutex_unlock(&ms12->lock);
+            return ret;
+        }
+        /*set the dolby ms12 debug level*/
+        dolby_ms12_enable_debug();
+
+        //Dual input, here get the system data
+        dolby_ms12_input_bytes =
+            dolby_ms12_input_deep_buffer(
+                ms12->dolby_ms12_ptr
+                , buffer
+                , bytes
+                , AUDIO_FORMAT_PCM_16_BIT
+                , aml_out->hal_ch
+                , mixer_default_samplerate);
+        if (dolby_ms12_input_bytes > 0) {
+            *use_size = dolby_ms12_input_bytes;
+            ret = 0;
+        }else {
+            *use_size = 0;
+            ret = -1;
+        }
+    }
+    if (get_ms12_dump_enable(DUMP_MS12_INPUT_DEEP_BUF)) {
+        dump_ms12_output_data((void*)buffer, *use_size, MS12_INPUT_DEEP_BUF_PCM_FILE);
+    }
+    pthread_mutex_unlock(&ms12->lock);
+
+    if (adev->continuous_audio_mode == 1) {
+        uint64_t input_ns = 0;
+        input_ns = (uint64_t)(*use_size) * NANO_SECOND_PER_SECOND / aml_out->hal_frame_size / mixer_default_samplerate;
+
+        if (ms12->deep_buf_virtual_buf_handle == NULL) {
+            //aml_audio_sleep(input_ns/1000);
+            if (input_ns == 0) {
+                input_ns = (uint64_t)(bytes) * NANO_SECOND_PER_SECOND / aml_out->hal_frame_size / mixer_default_samplerate;
+            }
+            audio_virtual_buf_open(&ms12->deep_buf_virtual_buf_handle, "ms12 deep buf input", input_ns/3, MS12_DEEP_BUF_INPUT_BUF_NS, 0, MS12_DEEP_BUF_INCREASE_TIME_MS);
+        }
+        audio_virtual_buf_process(ms12->deep_buf_virtual_buf_handle, input_ns);
     }
 
     return ret;
@@ -4913,6 +4991,7 @@ int aml_dap_open(
         ms12->main_input_sr = input_sample_rate;
     }
     ms12->sys_audio_base_pos = adev->sys_audio_frame_written;
+    ms12->deep_buf_audio_base_pos = adev->deep_buf_audio_frame_written;
     ms12->sys_audio_skip = 0;
     ms12->dap_pcm_frames = 0;
     ms12->stereo_pcm_frames = 0;

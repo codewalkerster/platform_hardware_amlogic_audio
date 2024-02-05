@@ -121,6 +121,15 @@ public:
         , int audio_stream_out_channel_num
         , int audio_stream_out_sample_rate
     );
+    virtual int     DolbyMS12InputDeepBuffer(
+        void *dolbyMS12_pointer
+        , const void *audio_stream_out_buffer //ms12 input buffer
+        , size_t audio_stream_out_buffer_size //ms12 input buffer size
+        , int audio_stream_out_format
+        , int audio_stream_out_channel_num
+        , int audio_stream_out_sample_rate
+    );
+
     virtual int     DolbyMS12InputApp(
         void *dolbyMS12_pointer
         , const void *audio_stream_out_buffer //ms12 input buffer
@@ -188,6 +197,7 @@ public:
     virtual int     DolbyMS12GetAssociateBufferAvail(void);
 
     virtual int     DolbyMS12GetSystemBufferAvail(int * max_size);
+    virtual int     DolbyMS12GetDeepBufferAvailFrames(int * max_size);
 
     virtual int     DolbyMS12GetGain(int);
 
@@ -209,6 +219,7 @@ public:
     virtual void DumpDolbyMS12Info(int);
 
     virtual unsigned long long DolbyMS12GetNBytesConsumedSysSound(void);
+    virtual unsigned long long DolbyMS12GetFramesConsumedDeepBufferAudio(void);
 
     virtual int DolbyMS12GetTotalNFramesDelay(void *);
 

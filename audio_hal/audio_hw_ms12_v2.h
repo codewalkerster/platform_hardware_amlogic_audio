@@ -122,6 +122,13 @@ int dolby_ms12_system_process(
     , size_t bytes
     , size_t *used_size);
 
+int dolby_ms12_deep_buffer_process(
+    struct audio_stream_out *stream
+    , const void *buffer
+    , size_t bytes
+    , size_t *used_size);
+
+
 enum MS12_PCM_TYPE {
     NORMAL_LPCM = 0,
     DAP_LPCM = 1,

@@ -118,6 +118,13 @@ int dolby_ms12_input_system(void *dolby_mS12_pointer
                             , int audio_stream_out_channel_num
                             , int audio_stream_out_sample_rate);
 
+int dolby_ms12_input_deep_buffer(void *dolby_mS12_pointer
+                            , const void *audio_stream_out_buffer
+                            , size_t audio_stream_out_buffer_size
+                            , int audio_stream_out_format
+                            , int audio_stream_out_channel_num
+                            , int audio_stream_out_sample_rate);
+
 int dolby_ms12_input_app(void *dolby_mS12_pointer
                             , const void *audio_stream_out_buffer
                             , size_t audio_stream_out_buffer_size
@@ -251,6 +258,8 @@ int dolby_ms12_get_associate_buffer_avail(void);
 */
 int dolby_ms12_get_system_buffer_avail(int * max_size);
 
+int dolby_ms12_get_deep_buffer_avail_frames(int * max_size);
+
 void dolby_ms12_set_main_dummy(int type, int dummy);
 
 int dolby_ms12_get_gain(int idx);
@@ -324,6 +333,8 @@ void dolby_ms12_set_debug_level(int level);
     @brief get the sys consumed size
 */
 unsigned long long dolby_ms12_get_consumed_sys_audio();
+
+unsigned long long dolby_ms12_get_consumed_deep_buffer_audio();
 
 /*@@
     @brief get the total delay(which means frame nums)

@@ -656,8 +656,8 @@ bool is_dual_output_stream(struct audio_stream_out *stream)
 const char *write_func_strs[MIXER_WRITE_FUNC_MAX] = {
     "OUT_WRITE_NEW",
     "MIXER_AUX_BUFFER_WRITE_SM",
-    "MIXER_MAIN_BUFFER_WRITE_SM,"
-    "MIXER_MMAP_BUFFER_WRITE_SM"
+    "MIXER_MAIN_BUFFER_WRITE_SM",
+    "MIXER_MMAP_BUFFER_WRITE_SM",
     "MIXER_AUX_BUFFER_WRITE",
     "MIXER_MAIN_BUFFER_WRITE",
     "MIXER_APP_BUFFER_WRITE",

@@ -379,7 +379,9 @@ static inline stream_usecase_t attr_to_usecase(uint32_t devices __unused,
             //multi-channel LPCM or hi-res LPCM
             return STREAM_PCM_DIRECT;
         }
-    } else {
+    } else if (flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER) {
+        return STREAM_PCM_DEEP_BUF;
+    } else  {
         return STREAM_PCM_NORMAL;
     }
 }

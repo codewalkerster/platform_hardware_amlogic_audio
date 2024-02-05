@@ -319,6 +319,10 @@
 // right offset. -5-->5->10
 #define  AVSYNC_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY        (10)
 
+//deepbuffer
+#define  AVSYNC_MS12_NETFLIX_NONTUNNEL_DEEPBUFFER_LATENCY (0)
+#define  AVSYNC_MS12_NONTUNNEL_DEEPBUFFER_LATENCY (0)
+
 
 #define  AVSYNC_MS12_NETFLIX_PCM_OUT_LATENCY             (0)
 #define  AVSYNC_MS12_NETFLIX_DD_OUT_LATENCY              (0)
@@ -346,6 +350,9 @@
 #define  AVSYNC_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY_PROPERTY      "vendor.media.audio.hal.ms12.netflix.nontunnel.pcm"
 #define  AVSYNC_MS12_NETFLIX_NONTUNNEL_DDP_LATENCY_PROPERTY      "vendor.media.audio.hal.ms12.netflix.nontunnel.ddp"
 #define  AVSYNC_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY_PROPERTY    "vendor.media.audio.hal.ms12.netflix.nontunnel.atmos"
+//deepbuffer
+#define  AVSYNC_MS12_NETFLIX_NONTUNNEL_DEEPBUFFER_LATENCY_PROPERTY   "vendor.media.audio.hal.ms12.netflix.nontunnel.deepbuffer"
+#define  AVSYNC_MS12_NONTUNNEL_DEEPBUFFER_LATENCY_PROPERTY   "vendor.media.audio.hal.ms12.nontunnel.deepbuffer"
 
 
 #define  AVSYNC_MS12_NETFLIX_TUNNEL_PCM_LATENCY_PROPERTY         "vendor.media.audio.hal.ms12.netflix.tunnel.pcm"
