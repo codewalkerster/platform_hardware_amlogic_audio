@@ -3333,6 +3333,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->hwsync_header_stripped = false;
     out->is_closing = false;
     out->pause_time = 0;
+    out->needs_compensation_timeus = 0;
     out->restore_vmaster = false;
 
     clock_gettime(CLOCK_MONOTONIC, &out->last_info_timestamp);
