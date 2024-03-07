@@ -16,6 +16,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <semaphore.h>
 #include <system/audio.h>
 #include <cutils/list.h>
 #include "dolby_ms12.h"
@@ -220,7 +221,6 @@ struct dolby_ms12_desc {
     drc_param_t multi_dap_drc;
     int system_sound_target;
     float tempo_speed;
-
     void * deep_buf_virtual_buf_handle;
     struct timespec  deep_buf_audio_timestamp;
     uint64_t deep_buf_audio_frame_pos;
@@ -228,6 +228,8 @@ struct dolby_ms12_desc {
     uint64_t deep_buf_audio_skip;
     uint64_t last_deep_buf_audio_cost_pos;
     bool deep_buf_write2alsa_status;
+    int ms12_continuous_state;
+    sem_t standby_sem;
 };
 
 /*
