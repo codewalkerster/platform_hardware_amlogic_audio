@@ -76,6 +76,7 @@
 #include "aml_audio_output.h"
 #include "aml_mmap_audio.h"
 #include "earc_utils.h"
+#include "aml_audio_uevent.h"
 
 #include <dolby_ms12_status.h>
 #include <SPDIFEncoderAD.h>
@@ -8686,6 +8687,9 @@ static int adev_close(hw_device_t *device)
     release_aec(adev->aec);
 #endif
 
+    aml_audio_uevent_close();
+
+
     destroy_vendor_post_process(&adev->native_postprocess);
 
     g_adev = NULL;
@@ -8947,6 +8951,25 @@ static int adev_remove_device_effect(struct audio_hw_device *dev,
     return status;
 }
 #endif
+
+static int adev_uevent_callback(int uevent_type) {
+    struct aml_audio_device *adev = aml_adev_get_handle();
+
+    AM_LOGI("uevent type=%d", uevent_type);
+    switch (uevent_type) {
+        case UEVENT_TYPE_VMODE_CHANGE:
+            if ((adev->useSubMix)) {
+                subMixingOutputRestart(adev);
+            }
+            adev->reset_hdmitx_audio = true;
+            break;
+        default:
+        break;
+    }
+
+
+    return 0;
+}
 
 #define MAX_SPK_EXTRA_LATENCY_MS (100)
 #define DEFAULT_SPK_EXTRA_LATENCY_MS (15)
@@ -9352,6 +9375,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->mmap_audio_manager = mmap_audio_new_manager(eDolbyMS12Lib == adev->dolby_lib_type);
 
     //adev_open_sys_resource_mgr(adev);
+    aml_audio_uevent_open(adev_uevent_callback);
 
 #ifdef ENABLE_AML_ACR
     if (aml_open_ai_audio_module(&adev->native_postprocess, &adev->alsa_mixer) < 0) {

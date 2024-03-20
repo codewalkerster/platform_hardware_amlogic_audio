@@ -566,6 +566,7 @@ struct aml_audio_device {
     int avsync_compensate_delay_ms; /*compensate the avsync audio delay*/
     bool b_ott_tv_arc_connected;    /*the hdmitx connection is ott --> TV  --> ARC AVR/SOUNDBAR*/
     int arc_delay_ms;               /*assume avr/soundbar delay of above connections is 100ms default value*/
+    bool reset_hdmitx_audio;
 };
 
 struct meta_data {
