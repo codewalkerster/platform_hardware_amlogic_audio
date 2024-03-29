@@ -65,6 +65,12 @@ struct bitstream_out_desc {
     bool is_bypass_ms12;
 };
 
+typedef struct drc_param {
+    int mode;
+    int cut;
+    int boost;
+} drc_param_t;
+
 struct dolby_ms12_desc {
     bool dolby_ms12_enable;
     bool dolby_ms12_init_flags;
@@ -209,6 +215,10 @@ struct dolby_ms12_desc {
     int alsa_limit_frame;
     bool scheduler_sleep_enable;
     uint64_t scheduler_run_count;
+
+    drc_param_t stereo_drc;
+    drc_param_t multi_dap_drc;
+    int system_sound_target;
 };
 
 /*

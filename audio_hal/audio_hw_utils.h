@@ -340,6 +340,7 @@ const char *show_format(audio_format_t fmt);
 int adev_open_sys_resource_mgr(struct aml_audio_device *adev);
 int adev_close_sys_resource_mgr(struct aml_audio_device *adev);
 int get_loudness_level(void);
+int get_digital_terresteral_tv_standards(void);
 
 inline bool is_dts_format(audio_format_t format) {
     switch (format) {
