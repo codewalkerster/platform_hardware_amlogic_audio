@@ -1979,7 +1979,6 @@ int dolby_ms12_app_process(
         check_audio_level("ms12_app", buffer, bytes);
     }
 
-    pthread_mutex_lock(&ms12->lock);
     if (ms12->dolby_ms12_enable) {
         /*set the dolby ms12 debug level*/
         dolby_ms12_enable_debug();
@@ -2004,7 +2003,6 @@ int dolby_ms12_app_process(
     if (get_ms12_dump_enable(DUMP_MS12_INPUT_APP)) {
         dump_ms12_output_data((void*)buffer, *use_size, MS12_INPUT_SYS_APP_FILE);
     }
-    pthread_mutex_unlock(&ms12->lock);
 
     return ret;
 }
@@ -2030,8 +2028,7 @@ int dolby_ms12_multi_app_process(
         return -1;
     }
 
-    pthread_mutex_lock(&ms12->lock);
-    if (bConfigUpdate) {
+    if (bConfigUpdate && ms12->dolby_ms12_enable) {
         set_ms12_app_pcm_acmod_lfe(ms12, pstAudioConfig->channelMask);
         dolby_ms12_app_flush();
     }
@@ -2059,7 +2056,6 @@ int dolby_ms12_multi_app_process(
     if (get_ms12_dump_enable(DUMP_MS12_INPUT_APP)) {
         dump_ms12_output_data((void*)buffer, *use_size, MS12_INPUT_SYS_APP_FILE);
     }
-    pthread_mutex_unlock(&ms12->lock);
 
     return ret;
 }
