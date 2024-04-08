@@ -205,6 +205,9 @@ struct dolby_ms12_desc {
     bool main_input_insert_zero;
     bool aaudio_low_latency;
     bool dap_only_enable;
+    int alsa_limit_frame;
+    bool scheduler_sleep_enable;
+    uint64_t scheduler_run_count;
 };
 
 /*

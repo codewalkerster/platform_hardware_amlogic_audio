@@ -548,6 +548,7 @@ struct aml_audio_device {
     /* primary streamout config format, juged by policy */
     audio_format_t primary_out_format;
     pthread_mutex_t bitstream_lock;
+    bool ms12_dynamic_sleep;
 };
 
 struct meta_data {
