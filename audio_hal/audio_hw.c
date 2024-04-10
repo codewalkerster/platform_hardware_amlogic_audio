@@ -1596,7 +1596,7 @@ static int out_pause_new (struct audio_stream_out *stream)
     }
     if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
         pthread_mutex_lock(&ms12->lock);
-        if ((aml_dev->ms12.dolby_ms12_enable == true) &&
+        if ((aml_dev->ms12.dolby_ms12_enable == true) && (aml_out->input_bytes_size != 0) &&
             ((aml_dev->ms12.is_continuous_paused == false) || (aml_out->pause_status == false))) {
             dolby_ms12_main_pause(stream);
         } else {
@@ -3688,7 +3688,7 @@ static int aml_audio_outport_enable(struct aml_audio_device *adev, audio_devices
         set_output_device_avail(adev, AUDIO_DEVICE_OUT_HDMI_ARC, enable);
         clear_arc_cached_edid(adev);
         set_arc_hdmi_updated(adev, true);
-        if (eDolbyMS12Lib == adev->dolby_lib_type) {
+        if (eDolbyMS12Lib == adev->dolby_lib_type && adev->ms12.dolby_ms12_enable) {
             /*when arc is connected, disable dap*/
             set_ms12_full_dap_disable(&adev->ms12, enable);
         }
