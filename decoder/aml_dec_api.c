@@ -79,6 +79,12 @@ static aml_dec_func_t * get_decoder_function(audio_format_t format, int dts_lib_
         else
             return &aml_iec_func;
     }
+    case AUDIO_FORMAT_DTS_UHD_P2: {
+        if (dts_lib_type == eDTSXLib)
+            return &aml_dtsx_func;
+        else
+            return NULL;
+    }
     case AUDIO_FORMAT_PCM_16_BIT:
     case AUDIO_FORMAT_PCM_32_BIT:
     case AUDIO_FORMAT_PCM_8_BIT:

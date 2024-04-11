@@ -886,7 +886,8 @@ static inline int dts_stream_active(struct aml_audio_device *adev)
     for (i = 0 ; i < STREAM_USECASE_MAX; i++) {
         out = adev->active_outputs[i];
         if (out && (out->hal_internal_format == AUDIO_FORMAT_DTS
-            || out->hal_internal_format == AUDIO_FORMAT_DTS_HD)) {
+            || out->hal_internal_format == AUDIO_FORMAT_DTS_HD
+            || out->hal_internal_format == AUDIO_FORMAT_DTS_UHD_P2)) {
             is_dts = 1;
             break;
         }

@@ -214,7 +214,7 @@ int aml_alsa_output_open(struct audio_stream_out *stream) {
             config_raw.rate = aml_out->config.rate;//MM_FULL_POWER_SAMPLING_RATE ;
             config_raw.period_size = DEFAULT_PLAYBACK_PERIOD_SIZE * period_mul;
             config_raw.period_count = PLAYBACK_PERIOD_COUNT;
-            if ((aml_out->hal_internal_format == AUDIO_FORMAT_DTS) || (aml_out->hal_internal_format == AUDIO_FORMAT_DTS_HD)) {
+            if (is_dts_format(aml_out->hal_internal_format)) {
                 config_raw.period_count *= 4;
             }
             config_raw.start_threshold = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;

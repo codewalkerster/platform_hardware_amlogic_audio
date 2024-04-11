@@ -339,4 +339,17 @@ int adev_open_sys_resource_mgr(struct aml_audio_device *adev);
 int adev_close_sys_resource_mgr(struct aml_audio_device *adev);
 int get_loudness_level(void);
 
+inline bool is_dts_format(audio_format_t format) {
+    switch (format) {
+    case AUDIO_FORMAT_DTS:
+    case AUDIO_FORMAT_DTS_HD:
+    case AUDIO_FORMAT_DTS_UHD_P2:
+    ///< audio_format_t does not include dts_express. So we get the format(dts_express especially) from the decoder.
+    // case AUDIO_FORMAT_DTS_EXPRESS:
+        return true;
+    default:
+        return false;
+    }
+}
+
 #endif

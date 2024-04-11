@@ -3675,7 +3675,7 @@ void dtv_avsync_process(struct audio_stream_out *stream, size_t bytes, audio_for
             pts = dtv_hal_get_pts(stream, pcm_latency);
             process_ac3_sync(patch, pts, stream_out);
         }
-    } else if (patch->aformat ==  AUDIO_FORMAT_DTS || patch->aformat == AUDIO_FORMAT_DTS_HD) {
+    } else if (is_dts_format(patch->aformat)) {
         if (stream_out != NULL) {
             ringbuffer = &(patch->aml_ringbuffer);
             pcm_latency = out_get_latency(stream) + audio_output_delay;

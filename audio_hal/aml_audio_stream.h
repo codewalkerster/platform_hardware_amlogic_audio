@@ -48,7 +48,8 @@ enum {
         ((format & AUDIO_FORMAT_E_AC3) == AUDIO_FORMAT_E_AC3) ||\
         ((format & AUDIO_FORMAT_MAT) == AUDIO_FORMAT_MAT) ||\
         (format == AUDIO_FORMAT_DTS) ||\
-        (format == AUDIO_FORMAT_DTS_HD))
+        (format == AUDIO_FORMAT_DTS_HD) ||\
+        (format == AUDIO_FORMAT_DTS_UHD_P2))
 
 #define IS_DIGITAL_IN_HW(device) ((device) == AUDIO_DEVICE_IN_HDMI ||\
                              (device) == AUDIO_DEVICE_IN_HDMI_ARC ||\
@@ -197,6 +198,7 @@ typedef enum {
     ENCODING_MPEGH_LC_L4                  = 26,
     ENCODING_DTS_UHD                      = 27,
     ENCODING_DRA                          = 28,
+    ENCODING_DTS_UHD_P2                   = 30,
 } AUDIO_ENCODING_FORMAT_E;
 
 static inline audio_format_t encodingFormat2AudioFormat(AUDIO_ENCODING_FORMAT_E audioFormat)
@@ -284,6 +286,7 @@ static inline bool is_digital_raw_format(audio_format_t format)
     case AUDIO_FORMAT_MAT:
     case AUDIO_FORMAT_DTS:
     case AUDIO_FORMAT_DTS_HD:
+    case AUDIO_FORMAT_DTS_UHD_P2:
     case AUDIO_FORMAT_DOLBY_TRUEHD:
     case AUDIO_FORMAT_IEC61937:
     case AUDIO_FORMAT_MP3:
@@ -310,18 +313,6 @@ static inline bool is_dolby_format(audio_format_t format) {
     case AUDIO_FORMAT_AAC:
     case AUDIO_FORMAT_HE_AAC_V1:
     case AUDIO_FORMAT_HE_AAC_V2:
-        return true;
-    default:
-        return false;
-    }
-}
-
-inline bool is_dts_format(audio_format_t format) {
-    switch (format) {
-    case AUDIO_FORMAT_DTS:
-    case AUDIO_FORMAT_DTS_HD:
-    ///< audio_format_t does not include dts_express. So we get the format(dts_express especially) from the decoder.
-    // case AUDIO_FORMAT_DTS_EXPRESS:
         return true;
     default:
         return false;

@@ -640,6 +640,10 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
         }
         ALOGI("%s AUDIO_FORMAT_DTS_HD buffer size = %zu frames", __FUNCTION__, size);
         break;
+    case AUDIO_FORMAT_DTS_UHD_P2:
+        size = DTSHD_PERIOD_SIZE;
+        ALOGI("%s AUDIO_FORMAT_DTS_UHD_P2 buffer size = %zu frames", __FUNCTION__, size);
+        break;
 #if 0
     case AUDIO_FORMAT_PCM:
         if (adev->continuous_audio_mode) {
@@ -3207,6 +3211,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
             break;
         case AUDIO_FORMAT_DTS:
         case AUDIO_FORMAT_DTS_HD:
+        case AUDIO_FORMAT_DTS_UHD_P2:
             break;
         default:
             break;
@@ -3632,7 +3637,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         adev->dolby_lib_type = adev->dolby_lib_type_last;
         pthread_mutex_unlock(&adev->ms12.lock);
         if (adev->effect_ctrl.effect_mode == EFFECT_MODE_DAP &&
-            (out->hal_internal_format == AUDIO_FORMAT_DTS || out->hal_internal_format == AUDIO_FORMAT_DTS_HD)) {
+            is_dts_format(out->hal_internal_format)) {
             if (adev->ms12.dolby_ms12_enable) {
                 aml_dap_close(&adev->ms12);
             }
@@ -6228,8 +6233,7 @@ hwsync_rewrite:
             need_reconfig_output = true;
             need_reset_decoder = true;
             need_reconfig_samplerate = true;
-            if (aml_out->hal_internal_format == AUDIO_FORMAT_DTS ||
-                aml_out->hal_internal_format == AUDIO_FORMAT_DTS_HD) {
+            if (is_dts_format(aml_out->hal_internal_format)) {
                 /*when switch from ms12 to dts, we should clean ms12 first*/
                 if (adev->dolby_lib_type == eDolbyMS12Lib) {
                     adev_ms12_cleanup((struct audio_hw_device *)adev);

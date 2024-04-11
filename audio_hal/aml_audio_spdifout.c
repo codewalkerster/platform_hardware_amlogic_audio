@@ -321,6 +321,7 @@ static int spdifout_support_format(audio_format_t audio_format)
     case AUDIO_FORMAT_E_AC3:
     case AUDIO_FORMAT_DTS:
     case AUDIO_FORMAT_DTS_HD:
+    case AUDIO_FORMAT_DTS_UHD_P2:
     case AUDIO_FORMAT_MAT:
     case AUDIO_FORMAT_DOLBY_TRUEHD:
     case AUDIO_FORMAT_IEC61937:

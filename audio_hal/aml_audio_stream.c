@@ -481,6 +481,7 @@ void get_sink_format(struct audio_stream_out *stream)
         (source_format != AUDIO_FORMAT_AC4) && \
         (source_format != AUDIO_FORMAT_DTS) &&
         (source_format != AUDIO_FORMAT_DTS_HD) && \
+        (source_format != AUDIO_FORMAT_DTS_UHD_P2) && \
         (source_format != AUDIO_FORMAT_DOLBY_TRUEHD) && \
         (source_format != AUDIO_FORMAT_AAC) && \
         (source_format != AUDIO_FORMAT_AAC_LATM) && \

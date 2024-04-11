@@ -87,8 +87,7 @@ void audio_digital_input_format_check(struct aml_audio_patch *patch)
             aml_out->hal_internal_format = cur_aformat;
             aml_out->hal_channel_mask = audio_parse_get_audio_channel_mask (patch->audio_parse_para);
             ALOGI ("%s hal_channel_mask %#x, mode_reconfig_flag %d\n", __FUNCTION__, aml_out->hal_channel_mask, patch->mode_reconfig_flag);
-            if (aml_out->hal_internal_format == AUDIO_FORMAT_DTS ||
-                aml_out->hal_internal_format == AUDIO_FORMAT_DTS_HD) {
+            if (is_dts_format(aml_out->hal_internal_format)) {
                 if (aml_out->hal_internal_format == AUDIO_FORMAT_DTS_HD) {
                     /* For DTS-HD case, needs enlarge buffer and start threshold to anti-xrun */
                     aml_out->config.period_count = 12;

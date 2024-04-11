@@ -594,6 +594,8 @@ int get_codec_type(int format)
         return TYPE_DTS;
     case AUDIO_FORMAT_DTS_HD:
         return TYPE_DTS_HD;
+    case AUDIO_FORMAT_DTS_UHD_P2:
+        return TYPE_DTSX;
     case AUDIO_FORMAT_DOLBY_TRUEHD:
         return TYPE_TRUE_HD;
     case AUDIO_FORMAT_AC4:
@@ -2029,8 +2031,7 @@ bool is_disable_ms12_continuous(struct audio_stream_out *stream) {
     struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = aml_out->dev;
 
-    if ((aml_out->hal_internal_format == AUDIO_FORMAT_DTS)
-        || (aml_out->hal_internal_format == AUDIO_FORMAT_DTS_HD)
+    if (is_dts_format(aml_out->hal_internal_format)
         || (aml_out->hal_internal_format == AUDIO_FORMAT_DOLBY_TRUEHD)) {
         /*dts case, we need disable ms12 continuous mode*/
         return true;
@@ -2720,6 +2721,7 @@ const char* audioFormat2Str(audio_format_t type)
     ENUM_TYPE_TO_STR(AUDIO_FORMAT_MPEGH_LC_L4)
     ENUM_TYPE_TO_STR(AUDIO_FORMAT_IEC60958)
     ENUM_TYPE_TO_STR(AUDIO_FORMAT_DTS_UHD)
+    ENUM_TYPE_TO_STR(AUDIO_FORMAT_DTS_UHD_P2)
     ENUM_TYPE_TO_STR(AUDIO_FORMAT_DRA)
     ENUM_TYPE_TO_STR_END
 }
@@ -2908,7 +2910,7 @@ int aml_get_stream_dump_file_name(audio_format_t audio_format, char *file_name)
     else if (audio_format == AUDIO_FORMAT_MAT) {
         snprintf(audio_type, 32, "%s", "mat");
     }
-    else if ((audio_format == AUDIO_FORMAT_DTS) || (audio_format == AUDIO_FORMAT_DTS_HD)) {
+    else if (is_dts_format(audio_format)) {
         snprintf(audio_type, 32, "%s", "dts");
     }
     else {

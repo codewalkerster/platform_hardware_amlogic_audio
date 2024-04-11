@@ -618,9 +618,7 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, const void *buffer
             }
 
             /*special case  for dts , dts decoder need to follow aml_dec_api.h */
-            if ((aml_out->hal_internal_format == AUDIO_FORMAT_DTS ||
-                aml_out->hal_internal_format == AUDIO_FORMAT_DTS_HD )&&
-                decoder_ret == AML_DEC_RETURN_TYPE_NEED_DEC_AGAIN ) {
+            if (is_dts_format(aml_out->hal_internal_format) && decoder_ret == AML_DEC_RETURN_TYPE_NEED_DEC_AGAIN ) {
                 try_again = true;
             }
 
@@ -954,7 +952,8 @@ int aml_decoder_config_prepare(struct audio_stream_out *stream, audio_format_t f
 
         dts_decoder_config_prepare(stream, dec_config);
     }
-    case AUDIO_FORMAT_DTS_HD: {
+    case AUDIO_FORMAT_DTS_HD:
+    case AUDIO_FORMAT_DTS_UHD_P2: {
         if (adev->dts_decode_enable && bd_config->DTS_output_ch)
             dca_set_out_ch_internal(bd_config->DTS_output_ch);
 

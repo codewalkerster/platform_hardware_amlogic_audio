@@ -197,6 +197,11 @@ AUDIO_CHANNEL_OUT_5POINT1|\
 AUDIO_CHANNEL_OUT_6POINT1|\
 AUDIO_CHANNEL_OUT_7POINT1"
 
+#define DTSUHD_P2_SUPPORT_CHANNEL    \
+"AUDIO_CHANNEL_OUT_STEREO|\
+AUDIO_CHANNEL_OUT_5POINT1|\
+AUDIO_CHANNEL_OUT_5POINT1POINT4"
+
 #define IEC61937_SUPPORT_CHANNEL  \
 "AUDIO_CHANNEL_OUT_STEREO|\
 AUDIO_CHANNEL_OUT_5POINT1|\
@@ -1659,7 +1664,7 @@ char*  get_offload_cap(const char *keys,audio_format_t format)
         }
         /*todo if dts decoder is supported*/
         //if (adev->dts_decode_enable)
-        size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DTS|AUDIO_FORMAT_DTS_HD");
+        size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DTS|AUDIO_FORMAT_DTS_HD|AUDIO_FORMAT_DTS_UHD_P2");
         size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_AAC_LC");
         size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_AAC_HE_V1");
         size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_AAC_HE_V2");
@@ -1691,6 +1696,9 @@ char*  get_offload_cap(const char *keys,audio_format_t format)
             case AUDIO_FORMAT_DTS_HD:
                 size += sprintf(aud_cap, "sup_channels=%s", DTSHD_SUPPORT_CHANNEL);
                 break;
+            case AUDIO_FORMAT_DTS_UHD_P2:
+                size += sprintf(aud_cap, "sup_channels=%s", DTSUHD_P2_SUPPORT_CHANNEL);
+                break;
             case AUDIO_FORMAT_IEC61937:
                 size += sprintf(aud_cap, "sup_channels=%s", IEC61937_SUPPORT_CHANNEL);
                 break;
@@ -1720,6 +1728,9 @@ char*  get_offload_cap(const char *keys,audio_format_t format)
                 break;
             case AUDIO_FORMAT_DTS_HD:
                 size += sprintf(aud_cap, "sup_sampling_rates=%s", "22050|24000|32000|44100|48000|88200|96000|192000");
+                break;
+            case AUDIO_FORMAT_DTS_UHD_P2:
+                size += sprintf(aud_cap, "sup_sampling_rates=%s", "48000");
                 break;
             case AUDIO_FORMAT_IEC61937:
                 size += sprintf(aud_cap, "sup_sampling_rates=%s",
@@ -1936,6 +1947,10 @@ char *strdup_tv_platform_cap_default(const char *keys, audio_format_t format)
             strcat(fmt, "AUDIO_FORMAT_DTS_HD");
             cap = strdup(fmt);
             break;
+        case AUDIO_FORMAT_DTS_UHD_P2:
+            strcat(fmt, "AUDIO_FORMAT_DTS_UHD_P2");
+            cap = strdup(fmt);
+            break;
         case AUDIO_FORMAT_IEC61937:
             strcat(fmt, "AUDIO_FORMAT_IEC61937");
             cap = strdup(fmt);
@@ -1976,6 +1991,10 @@ char *strdup_tv_platform_cap_default(const char *keys, audio_format_t format)
             strcat(ch_mask, "AUDIO_CHANNEL_OUT_MONO,AUDIO_CHANNEL_OUT_STEREO,AUDIO_CHANNEL_OUT_2POINT1,AUDIO_CHANNEL_OUT_TRI,AUDIO_CHANNEL_OUT_QUAD_BACK,AUDIO_CHANNEL_OUT_QUAD_SIDE,AUDIO_CHANNEL_OUT_PENTA,AUDIO_CHANNEL_OUT_5POINT1,AUDIO_CHANNEL_OUT_6POINT1,AUDIO_CHANNEL_OUT_7POINT1");
             cap = strdup(ch_mask);
             break;
+        case AUDIO_FORMAT_DTS_UHD_P2:
+            strcat(ch_mask, "AUDIO_CHANNEL_OUT_STEREO,AUDIO_CHANNEL_OUT_5POINT1,AUDIO_CHANNEL_OUT_5POINT1POINT4");
+            cap = strdup(ch_mask);
+            break;
         case AUDIO_FORMAT_IEC61937:
             strcat(ch_mask, "AUDIO_CHANNEL_OUT_STEREO,AUDIO_CHANNEL_OUT_5POINT1,AUDIO_CHANNEL_OUT_7POINT1");
             cap = strdup(ch_mask);
@@ -2010,6 +2029,10 @@ char *strdup_tv_platform_cap_default(const char *keys, audio_format_t format)
             break;
         case AUDIO_FORMAT_DTS_HD:
             strcat(sr, "22050|24000|32000|44100|48000|88200|96000|192000");
+            cap = strdup(sr);
+            break;
+        case AUDIO_FORMAT_DTS_UHD_P2:
+            strcat(sr, "48000");
             cap = strdup(sr);
             break;
         case AUDIO_FORMAT_IEC61937:
