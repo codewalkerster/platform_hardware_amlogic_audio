@@ -4284,13 +4284,7 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
     ret = str_parms_get_str(parms, "bt_wbs", value, sizeof(value));
     if (ret >= 0) {
         ALOGI("Amlogic_HAL - %s: bt_wbs=%s.", __func__, value);
-        if (is_rtl_bt_module()) {
-            // Realtek bt modules do not support 16k by default.
-            adev->bt_wbs = false;
-            AM_LOGI("rtl bt module, force use 8k sample rate.");
-        } else {
-            adev->bt_wbs = (strncmp(value, "on", 2) == 0);
-        }
+        adev->bt_wbs = (strncmp(value, "on", 2) == 0);
         goto exit;
     }
 

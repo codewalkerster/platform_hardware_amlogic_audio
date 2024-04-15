@@ -127,7 +127,6 @@ unsigned char codec_type_is_raw_data(int type);
 int mystrstr(char *mystr, char *substr);
 void *convert_audio_sample_for_output(int input_frames, int input_format, int input_ch, void *input_buf, int *out_size/*,float lvol*/);
 int check_chip_name(char *chip_name, unsigned int length, struct aml_mixer_handle *mixer_handle);
-bool is_rtl_bt_module();
 int aml_audio_get_debug_flag();
 int aml_audio_get_default_alsa_output_ch();
 int aml_audio_debug_set_optical_format();
