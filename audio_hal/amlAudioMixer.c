@@ -845,7 +845,10 @@ static int mixer_update_tstamp(struct amlAudioMixer *audio_mixer)
             int64_t alsa_latency_frames = mixer_get_mc_outport_latency_frames(audio_mixer);
             int64_t signed_frames = in_port->mix_consumed_frames - alsa_latency_frames;
             if (signed_frames < 0) {
+                in_port->s64_negative_frames = signed_frames;
                 signed_frames = 0;
+            } else {
+                in_port->s64_negative_frames = 0;
             }
             in_port->presentation_frames = in_port->initial_frames + signed_frames;
             clock_gettime(CLOCK_MONOTONIC, &in_port->timestamp);
@@ -867,7 +870,10 @@ static int mixer_update_tstamp(struct amlAudioMixer *audio_mixer)
             size_t kernel_buf_size = DEFAULT_KERNEL_FRAMES;
             int64_t signed_frames = in_port->mix_consumed_frames - kernel_buf_size + avail;
             if (signed_frames < 0) {
+                in_port->s64_negative_frames = signed_frames;
                 signed_frames = 0;
+            } else {
+                in_port->s64_negative_frames = 0;
             }
             in_port->presentation_frames = in_port->initial_frames + signed_frames;
             AM_LOGV("present frames:%" PRId64 ", initial %" PRId64 ", consumed %" PRId64 ", sec:%ld, nanosec:%ld",
@@ -2222,6 +2228,7 @@ int mixer_get_presentation_position(
         struct amlAudioMixer *audio_mixer,
         uint8_t port_index,
         uint64_t *frames,
+        int64_t *s64_negative_frames,
         struct timespec *timestamp)
 {
     int ret = 0;
@@ -2234,6 +2241,7 @@ int mixer_get_presentation_position(
         return -EINVAL;
     }
     *frames = in_port->presentation_frames;
+    *s64_negative_frames = in_port->s64_negative_frames;
     *timestamp = in_port->timestamp;
     if (!is_inport_pts_valid(in_port)) {
         AM_LOGW("not valid now");
@@ -2400,5 +2408,19 @@ int mixer_reset_virtual_buf(void *audio_mixer, bool reset)
 
     mixer->reset_virtual_buf = reset;
     return 0;
+}
+
+
+int mixer_get_inport_start_threshold(struct aml_stream_out *out, struct amlAudioMixer *audio_mixer)
+{
+    input_port *in_port = NULL;
+
+    R_CHECK_POINTER_LEGAL(0, out, "");
+    R_CHECK_POINTER_LEGAL(0, audio_mixer, "");
+    R_CHECK_PARAM_LEGAL(0, out->inputPortID, 0, NR_INPORTS - 1, "");
+    in_port = audio_mixer->in_ports[out->inputPortID];
+    R_CHECK_POINTER_LEGAL(0, in_port, "");
+
+    return in_port->inport_start_threshold;
 }
 
