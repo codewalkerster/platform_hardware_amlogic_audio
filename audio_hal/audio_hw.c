@@ -8160,7 +8160,7 @@ static int adev_close(hw_device_t *device)
         pthread_mutex_unlock(&adev_mutex);
         return 0;
     }
-    adev_close_sys_resource_mgr(adev);
+    //adev_close_sys_resource_mgr(adev);
 
     /* free ease resource  */
     aml_audio_ease_close(adev->audio_ease);
@@ -8891,7 +8891,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     create_async_write_thread();
     adev->mmap_audio_manager = mmap_audio_new_manager(eDolbyMS12Lib == adev->dolby_lib_type);
 
-    adev_open_sys_resource_mgr(adev);
+    //adev_open_sys_resource_mgr(adev);
 
 #ifdef ENABLE_AML_ACR
     if (aml_open_ai_audio_module(&adev->native_postprocess, &adev->alsa_mixer) < 0) {
