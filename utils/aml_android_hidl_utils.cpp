@@ -102,7 +102,7 @@ String8 getParameters(const String8& keys) {
     if (err != NO_ERROR) {
         ALOGW("getParameters err: err=%d", err);
     }
-    ALOGD("[%s:%d] key:%s", __func__, __LINE__, keys.c_str());
+    ALOGV("[%s:%d] key:%s", __func__, __LINE__, keys.c_str());
 
     return mString;
 }

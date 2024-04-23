@@ -174,6 +174,8 @@
 
 #define MAX_INPUT_STREAM_CNT                            (3)
 
+#define DIRECT_DDP_BUFSIZE                              (768)
+
 #define NETFLIX_DDP_BUFSIZE                             (768)
 #define OUTPUT_PORT_MAX_COEXIST_NUM                     (3)
 
@@ -560,7 +562,7 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
                 /*fix issue SWPL-162010, same with offload size to fix amnuplayer audio breaks issue*/
                 size = (DEFAULT_PLAYBACK_PERIOD_SIZE << 3) + (DEFAULT_PLAYBACK_PERIOD_SIZE << 1);
             } else {
-                size = out->ddp_frame_size * 4;
+                size = DIRECT_DDP_BUFSIZE;
             }
         }
 
@@ -3517,6 +3519,9 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     int wait_cnt = 0;
     AM_LOGI("io %d: out:%p dev:%s(%#x) flags:%#x, usecase:%s", out->io_handle, out,
         audioDevType2Str(out->out_device), out->out_device, out->flags, usecase2Str(out->usecase));
+
+    adev->atmos_indicator_status = false;
+
     if (out->restore_hdmitx_selection) {
         /* switch back to spdifa when the dual stream is done */
         aml_audio_select_src_to_hdmi(AML_SPDIF_A_TO_HDMITX);
@@ -4383,6 +4388,13 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
+
+        ret = str_parms_get_int(parms, "legacy_ddplus_out", &val);
+        if (ret >= 0) {
+            bool legacy_ddplus_out_falg = val ? true : false;
+            dolby_ms12_set_ddp_5_1_out(legacy_ddplus_out_falg);
+            ALOGI("-legacy_ddplus_out = %s\n", val ? "true" : "false");
+        }
     }
 
     if (eDTSXLib == adev->dts_lib_type) {
@@ -4767,6 +4779,31 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         sprintf(temp_buf, "hal_param_dtv_es_pts_dts_flag=%d", latencyms);
 #endif
         ALOGV("temp_buf %s", temp_buf);
+        return strdup(temp_buf);
+    } else if (strstr (keys, "hal_param_get_sink_format")) {
+        sprintf(temp_buf, "hal_param_get_sink_format=%#x", adev->sink_format);
+        ALOGI("temp_buf %s sink_format=%#x", temp_buf, adev->sink_format);
+        return strdup(temp_buf);
+    } else if (strstr (keys, "hal_param_get_atmos_supported")) {
+        struct aml_arc_hdmi_desc *hdmi_descs = get_arc_hdmi_cap(adev);
+        sprintf(temp_buf, "hal_param_get_atmos_supported=%d", hdmi_descs->ddp_fmt.atmos_supported);
+        ALOGI("temp_buf %s", temp_buf);
+        return strdup(temp_buf);
+    } else if (strstr (keys, "hal_param_get_dap_speaker_status")) {
+        bool dap_speaker_status = adev->is_ms12_tuning_dat && (adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER) && (is_TV(adev) || is_SBR(adev));
+        sprintf(temp_buf, "hal_param_get_dap_speaker_status=%d", dap_speaker_status);
+        ALOGI("temp_buf %s dap_speaker_status=%d", temp_buf, dap_speaker_status);
+    } else if (strstr (keys, "hal_param_get_atmos_indicator_status")) {
+        sprintf(temp_buf, "hal_param_get_atmos_indicator_status=%d", adev->atmos_indicator_status);
+        ALOGV("temp_buf %s atmos_indicator_status=%d", temp_buf, adev->atmos_indicator_status);
+        return strdup(temp_buf);
+    } else if (strstr (keys, "isAc4PresentationSelectionByIndexSupported")) {
+#ifdef MS12_V24_ENABLE
+        sprintf(temp_buf, "isAc4PresentationSelectionByIndexSupported=%d", 1);
+#else
+        sprintf(temp_buf, "isAc4PresentationSelectionByIndexSupported=%d", 0);
+#endif
+        ALOGI("temp_buf %s", temp_buf);
         return strdup(temp_buf);
     }
 
@@ -6628,6 +6665,19 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
         AM_LOGI("io %d: out:%p usecase:%s standby to unstandby", aml_out->io_handle, aml_out, usecase2Str(aml_out->usecase));
         aml_out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
         aml_out->standby = false;
+        /* for asdk14 cases:
+         * atmos_stickiness_usage_media_ddp_out-no_cfg-v241-HDMI (6581)
+         * atmos_stickiness_usage_media_mat_out-no_cfg-v241-HDMI (6612)
+         */
+        if (is_deep_buf && !adev->is_netflix) {
+            struct aml_stream_out *out = NULL;
+            for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
+                out = adev->active_outputs[i];
+                if (out && out->is_ms12_main_decoder && out->standby) {
+                    close_ms12_output_main_stream((struct audio_stream_out *)out);
+                }
+            }
+        }
 
         // NTS PCM mode: volume-tunel-nontunel/audio-lat-heaac testcase.
         if (adev->is_netflix && (eDolbyMS12Lib == adev->dolby_lib_type) && !dolby_stream_active(adev)) {
@@ -8698,6 +8748,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     g_aml_primary_adev = (void *)adev;
 
     adev->is_ui_force_dap_disable = 1;
+    adev->atmos_indicator_status = false;
     adev->hw_device.common.tag = HARDWARE_DEVICE_TAG;
 #if ANDROID_PLATFORM_SDK_VERSION > 32
     adev->hw_device.common.version = AUDIO_DEVICE_API_VERSION_3_2;//need compatible with 3.0

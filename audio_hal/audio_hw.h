@@ -538,6 +538,7 @@ struct aml_audio_device {
     struct usb_out *usb;
     pthread_mutex_t usb_lock;
     pthread_mutex_t stream_release_lock;
+    bool atmos_indicator_status;
     struct aml_post_effect_ctrl effect_ctrl;
     /*A consistent loudness level must be maintained at the PCM output, for the Dolby or other audio formats. */
     /*It is desirable that the bitstream output(over S/PDIF, HDMI, or eARC) should be played back at a consistent level.*/

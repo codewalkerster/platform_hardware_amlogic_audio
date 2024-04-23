@@ -1151,6 +1151,12 @@ static int update_audio_hal_info(struct aml_audio_device *adev, audio_format_t f
         __FUNCTION__, adev->audio_hal_info.update_cnt, format, adev->audio_hal_info.format,
         atmos_flag, adev->audio_hal_info.is_dolby_atmos, update_type);
 
+    if ((atmos_flag == 1) && (is_dolby_atmos_off == 0)) {
+        adev->atmos_indicator_status = true;
+    } else {
+        adev->atmos_indicator_status = false;
+    }
+
     adev->audio_hal_info.format = format;
     adev->audio_hal_info.is_dolby_atmos = atmos_flag;
     adev->audio_hal_info.update_type = update_type;

@@ -1758,13 +1758,13 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
         } else if (strcmp(opt, "cs") == 0) {
             val = atoi(mConfigParams[index]);
             if ((val >= 0) && (val <= 100)) {
-                ALOGI("-c DRCCutStereo: %d", val);
+                ALOGI("-cs DRCCutStereo: %d", val);
                 mDRCCutStereo = val;
             }
         } else if (strcmp(opt, "dmx") == 0) {
             val = atoi(mConfigParams[index]);
             if ((val >= 0) && (val <= 2)) {
-                ALOGI("-c Downmix Mode: %d", val);
+                ALOGI("-dmx Downmix Mode: %d", val);
                 /* Fixme: [he-aac] 2 = ARIB is not used on AOSP */
                 mDownmixMode = val;
             }
@@ -1792,6 +1792,12 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
                 ALOGI("-xu User control values:[-32 (mute assoc) to 32 (mute main)] %d", val);
                 mUserControlVal = val;
             }
+        } else if (strcmp(opt, "xs") == 0) {
+            val = atoi(mConfigParams[index]);
+            if ((val >= 0) && (val <= 1)) {
+                ALOGI("-xs system/application audio mixing: %d", val);
+                mSystemAPPAudioMixing = val;
+            }
         } else if (strcmp(opt, "pat") == 0) {
             val = atoi(mConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
@@ -1818,8 +1824,8 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
             }
         } else if (strcmp(opt, "ac4_short_prog_id") == 0) {
             val = atoi(mConfigParams[index]);
-            if ((val >= 0) && (val <= 1)) {
-                ALOGI("-ac4_pres_group_idx AC4ShortProgId: %d", val);
+            if (val >= 0) {
+                ALOGI("-ac4_short_prog_id AC4ShortProgId: %d", val);
                 mAC4ShortProgId = val;
             }
         } else if (strcmp(opt, "dap_surround_decoder_enable") == 0) {
@@ -1930,6 +1936,12 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
             val = atoi(mConfigParams[index]);
             mAtmosLock = val ? true : false;
             ALOGI("-atmos_lock: %d", mAtmosLock);
+        } else if (strcmp(opt, "chmod_locking") == 0) {
+            val = atoi(mConfigParams[index]);
+            if ((val >= 0) && (val <= 1)) {
+                mLockingChannelModeENC = val;
+                ALOGI("-chmod_locking: %d", val);
+            }
         } else if (strcmp(opt, "full_dap_disable") == 0) {
             val = atoi(mConfigParams[index]);
             mFullDAPDisable = val ? true : false;
