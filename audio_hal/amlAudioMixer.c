@@ -62,52 +62,14 @@ enum {
     INPORT_FEED_SILENCE_DONE, //underrun will happen quickly, we feed some silence data to avoid noise
 };
 
-//simple mixer support: 2 in , 1 out
-struct amlAudioMixer {
-    input_port *in_ports[NR_INPORTS];
-    uint32_t inportsMasks; // records of inport IDs
-    uint32_t inportsAvailMasks; // 1<< NR_INPORTS - 1
-    MIXER_OUTPUT_PORT cur_output_port_type;
-    output_port *out_ports[MIXER_OUTPUT_PORT_NUM];
-    pthread_mutex_t outport_locks[MIXER_OUTPUT_PORT_NUM];
-    pthread_mutex_t inport_lock;
-    ssize_t (*write)(struct amlAudioMixer *mixer, void *buffer, int bytes);
 
-    aml_pcm_mixing_st ch_mux_mixer;
-    aml_pcm_mixing_st stereo_mixer;
-    aml_pcm_mixing_st multich_mixer;
-    aml_pcm_downmix_st pcm_downmix;
-
-    struct audioCfg cfg; //mixing output config
-    uint32_t hwsync_frame_size;
-    pthread_t out_mixer_tid;
-    pthread_mutex_t lock;
-    unsigned int exit_thread : 1;
-    unsigned int mixing_enable : 1;
-    aml_mixer_state state;
-    struct timespec tval_last_write;
-    struct aml_audio_device *adev;
-    bool continuous_output;
-    //int init_ok : 1;
-    int submix_standby;
-    //aml_audio_mixer_run_state_type_e run_state;
-    bool reset_virtual_buf;  /* when audio port restart, need to reset */
-
-    //multich pcm output
-    bool mc_out_enable;
-    port_state mc_out_status;
-    bool aaudio_low_latency;
-    uint64_t run_count; // use for reduce debug info
-
-    // alsa delay info
-    struct timespec outport_delay_ts[MIXER_OUTPUT_PORT_NUM];
-    uint32_t outport_delay_ms[MIXER_OUTPUT_PORT_NUM];
-    pthread_mutex_t outport_delay_locks[MIXER_OUTPUT_PORT_NUM];
-    int multi_aaudio_port_index;
-
-    //using which one of aml_pcm_mixing_st
-    int type;
+const char *submix_state_2_string[SUBMIX_SCHEDULER_MAX] = {
+    "SUBMIX_SCHEDULER_RUNNING",
+    "SUBMIX_SCHEDULER_STANDBY",
 };
+#define DUMP_AUDIOMIXER_INPORT_READ     0x0010
+#define DUMP_AUDIOMIXER_INDUMP          0x0020
+#define DUMP_AUDIOMIXER_OUTDUMP         0x0040
 
 int mixer_set_state(struct amlAudioMixer *audio_mixer, aml_mixer_state state)
 {
@@ -1914,6 +1876,16 @@ static void *mixer_16b_threadloop(void *data)
             audio_mixer->reset_virtual_buf = false;
             pstVirtualBuffer = NULL;
         }
+
+        if (audio_mixer->submix_scheduler_state == SUBMIX_SCHEDULER_STANDBY) {
+            ALOGD("%s  submix continuous start standby wait ....\n", __FUNCTION__);
+            if (sem_wait(&audio_mixer->submix_standby_sem)) {
+                ALOGE("%s wait submix semaphore failed\n", __FUNCTION__);
+            } else {
+                ALOGD("%s wait submix semaphore successful, currently wakedup.\n", __FUNCTION__);
+            }
+        }
+
         if (pstVirtualBuffer == NULL) {
             if (audio_mixer->aaudio_low_latency) {
                 buffer_frame_ns = MIXER_WRITE_PERIOD_TIME_NANO * 3;
@@ -2025,6 +1997,29 @@ uint32_t mixer_get_outport_latency_frames(struct amlAudioMixer *audio_mixer)
     return latency_frames;
 }
 
+int aml_send_submix_standby_state_2_submix(void)
+{
+    struct aml_audio_device *adev = aml_adev_get_handle();
+    struct subMixing *sm = adev->sm;
+    struct amlAudioMixer *audio_mixer = sm ? sm->mixerData : NULL;
+    int sch_state = SUBMIX_SCHEDULER_STANDBY;
+    pthread_mutex_lock(&audio_mixer->lock);
+    audio_mixer->submix_scheduler_state = sch_state;
+    set_submix_continuous_state(audio_mixer, audio_mixer->submix_scheduler_state);
+    ALOGD("%s adev:%p, sch_state:%d(%s) ", __func__, adev, sch_state, submix_state_2_string[sch_state]);
+    pthread_mutex_unlock(&audio_mixer->lock);
+
+    return 0;
+}
+
+void submix_timer_callback_handler(union sigval sigv)
+{
+    ALOGD("func:%s sigv:%d ~~~~~~~~~~", __func__, sigv.sival_int);
+    aml_send_submix_standby_state_2_submix();
+    return ;
+
+}
+
 int pcm_mixer_thread_run(struct amlAudioMixer *audio_mixer)
 {
     int ret = 0;
@@ -2046,6 +2041,27 @@ int pcm_mixer_thread_run(struct amlAudioMixer *audio_mixer)
         return -EINVAL;
     }
     audio_mixer->mixing_enable = 1;
+    audio_mixer->submix_scheduler_state = SUBMIX_SCHEDULER_RUNNING;
+    if (is_TV(audio_mixer->adev)) {
+        audio_mixer->submix_scheduler_state = SUBMIX_SCHEDULER_STANDBY;
+    }
+    audio_mixer->last_scheduler_state = audio_mixer->submix_scheduler_state;
+
+    {
+        int ret = aml_audio_timer_create(submix_timer_callback_handler);
+        if (ret < 0) {
+            ALOGE("func:%s  timer_id:%d error and exit", __func__, audio_mixer->submix_timer_id);
+        } else {
+            audio_mixer->submix_timer_id = ret;
+            ALOGI("func:%s  timer_id:%d", __func__, audio_mixer->submix_timer_id);
+        }
+    }
+
+    if (sem_init(&audio_mixer->submix_standby_sem, 0, 0)) {
+        ALOGE("%s init submix standby semaphore failed\n", __FUNCTION__);
+    } else {
+        ALOGD("%s init submix standby semaphore successful\n", __FUNCTION__);
+    }
     switch (format) {
     /*coverity[unterminated_case]*/
     case AUDIO_FORMAT_PCM_32_BIT:
@@ -2069,13 +2085,32 @@ int pcm_mixer_thread_run(struct amlAudioMixer *audio_mixer)
 
 int pcm_mixer_thread_exit(struct amlAudioMixer *audio_mixer)
 {
+    unsigned int remaining_time = 0;
     audio_mixer->mixing_enable = 0;
     AM_LOGI("++ audio_mixer->mixing_enable %d", audio_mixer->mixing_enable);
     // block exit
+    if (audio_mixer->submix_scheduler_state == SUBMIX_SCHEDULER_STANDBY) {
+        sem_post(&audio_mixer->submix_standby_sem);
+    }
+
+    /* check timers is running or not,
+    ** timer should be stopped if running.
+    **/
+    remaining_time = audio_timer_remaining_time(audio_mixer->submix_timer_id);
+    if (remaining_time > 0) {
+        audio_timer_stop(audio_mixer->submix_timer_id);
+    }
+    int ret = aml_audio_timer_delete(audio_mixer->submix_timer_id);
+    ALOGD("func:%s timer_id:%d  ret:%d",__func__, audio_mixer->submix_timer_id, ret);
+
     audio_mixer->exit_thread = 1;
     pthread_join(audio_mixer->out_mixer_tid, NULL);
     audio_mixer->out_mixer_tid = 0;
-
+    if (sem_destroy(&audio_mixer->submix_standby_sem)) {
+        ALOGE("%s release submix standby semaphore failed\n", __FUNCTION__);
+    } else {
+        ALOGD("%s release submix standby semaphore successful\n", __FUNCTION__);
+    }
     notify_mixer_exit(audio_mixer);
     return 0;
 }
@@ -2421,5 +2456,75 @@ int mixer_get_inport_start_threshold(struct aml_stream_out *out, struct amlAudio
     R_CHECK_POINTER_LEGAL(0, in_port, "");
 
     return in_port->inport_start_threshold;
+}
+
+input_port *mixer_get_inport(
+        struct amlAudioMixer *audio_mixer, uint32_t *pMasks) {
+    return mixer_get_inport_by_mask_right_first(audio_mixer, pMasks);
+}
+
+void set_submix_continuous_state(struct amlAudioMixer *audio_mixer, int state) {
+    audio_mixer->submix_scheduler_state = state;
+    if (state == SUBMIX_SCHEDULER_RUNNING) {
+        if (sem_post(&audio_mixer->submix_standby_sem)) {
+            ALOGE("%s post submix unstandby semaphore failed", __FUNCTION__);
+        } else {
+            ALOGD("%s  post submix unstandby semaphore successful", __FUNCTION__);
+        }
+    } else {
+        // do nothing
+    }
+}
+
+int aml_set_submix_scheduler_state(struct amlAudioMixer *audio_mixer, int sch_state)
+{
+    struct aml_audio_device *adev = aml_adev_get_handle();
+    bool is_arc_connecting = is_HDMI_connected(adev);/*(adev->active_outport == OUTPORT_HDMI_ARC);*/
+    bool is_netflix = adev->is_netflix;
+    unsigned int remaining_time = 0;
+
+    if (sch_state <= SUBMIX_SCHEDULER_NONE ||  sch_state >= SUBMIX_SCHEDULER_MAX) {
+          ALOGE("%s  sch_state:%d is an invalid scheduler state.", __func__, sch_state);
+          return -1;
+    } else if (audio_mixer->last_scheduler_state == sch_state) {
+       ALOGW("%s  sch_state:%d %s, submix scheduler state not changed.", __func__, sch_state, submix_state_2_string[sch_state]);
+       return 0;
+    }
+
+    if (!is_arc_connecting && !is_netflix) {
+        remaining_time = audio_timer_remaining_time(audio_mixer->submix_timer_id);
+        if (remaining_time > 0) {
+            audio_timer_stop(audio_mixer->submix_timer_id);
+        }
+
+        if (sch_state == SUBMIX_SCHEDULER_STANDBY) {
+            audio_one_shot_timer_start(audio_mixer->submix_timer_id, AML_SUBMIX_TIMER_DELAY);
+        } else {
+            set_submix_continuous_state(audio_mixer, sch_state);
+        }
+        ALOGI("%s sch_state:%d %s is sent to submix", __func__, sch_state, submix_state_2_string[sch_state]);
+    } else {
+        remaining_time = audio_timer_remaining_time(audio_mixer->submix_timer_id);
+        if (remaining_time > 0) {
+            audio_timer_stop(audio_mixer->submix_timer_id);
+        }
+
+        sch_state = SUBMIX_SCHEDULER_RUNNING;
+        set_submix_continuous_state(audio_mixer, sch_state);
+        ALOGI("%s  is_arc_connecting:%d, is_netflix:%d, sch_state:%d %s is sent to submix", __func__,
+            is_arc_connecting, is_netflix, sch_state, submix_state_2_string[sch_state]);
+    }
+
+    audio_mixer->last_scheduler_state = sch_state;
+    return 0;
+}
+
+int aml_audiohal_sch_state_2_submix(struct amlAudioMixer *audio_mixer, int sch_state) {
+    if (audio_mixer->mixing_enable) {
+        pthread_mutex_lock(&audio_mixer->lock);
+        aml_set_submix_scheduler_state(audio_mixer, sch_state);
+        pthread_mutex_unlock(&audio_mixer->lock);
+    }
+    return 0;
 }
 
