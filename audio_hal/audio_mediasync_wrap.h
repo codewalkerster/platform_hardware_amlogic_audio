@@ -62,6 +62,7 @@ bool mediasync_wrap_AudioProcess(void* handle, int64_t apts, int64_t cur_apts,
 
 bool mediasync_wrap_reset(void* handle);
 void mediasync_wrap_destroy(void* handle);
+void mediasync_wrap_set_debug(bool enable);
 
 bool mediasync_wrap_setUpdateTimeThreshold(void* handle, int64_t value);
 bool mediasync_wrap_getUpdateTimeThreshold(void* handle, int64_t *value);

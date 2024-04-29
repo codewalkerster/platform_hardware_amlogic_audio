@@ -97,6 +97,7 @@ int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
     struct aml_audio_device *adev = p_hwsync->aout->dev;
     size_t  v2_hwsync_header = HW_AVSYNC_HEADER_SIZE_V2;
     int debug_enable = aml_audio_get_hwsync_flag();
+    mediasync_wrap_set_debug(debug_enable);
 
     //ALOGI(" --- out_write %d, cache cnt = %d, body = %d, hw_sync_state = %d", out_frames * frame_size, out->body_align_cnt, out->hw_sync_body_cnt, out->hw_sync_state);
     while (remain > 0) {
@@ -523,6 +524,7 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
             return 0;
         } else {
             debug_enable = aml_audio_get_hwsync_flag();
+            mediasync_wrap_set_debug(debug_enable);
         }
     }
 

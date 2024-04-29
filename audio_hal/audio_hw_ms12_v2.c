@@ -1010,10 +1010,14 @@ int get_the_dolby_ms12_prepared(
         output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_MAT | MS12_OUTPUT_MASK_MC;
     } else {
         if (is_TV(adev)) {
-            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
         } else {
             // MS12_OUTPUT_MASK_MC : NTS LLP-AUDIO-OUTPUT-LATENCY-STB-6CH
-            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_MC;
+            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_MC;
+        }
+        if (adev->sink_capability == AUDIO_FORMAT_E_AC3) {
+            // output ddp when sink needs, to reduce cpu loading
+            output_config |= MS12_OUTPUT_MASK_DDP;
         }
     }
     /* for soundbar, we only need speaker output */
@@ -1036,8 +1040,11 @@ int get_the_dolby_ms12_prepared(
             dolby_ms12_set_enforce_timeslice(true);
             ALOGI("hdmi in ddp/dd case, use enforce timeslice");
         }
-        if (output_config & MS12_OUTPUT_MASK_DDP)
-            dolby_ms12_set_hdmi_output_type(HDMI_ARC_OUTPUT);
+    }
+
+    if (is_TV(adev) && (output_config & MS12_OUTPUT_MASK_DDP)) {
+        // reduce ddp encoder latency (phase 90 shifted : disable)
+        dolby_ms12_set_hdmi_output_type(HDMI_ARC_OUTPUT);
     }
 
     if (input_sample_rate != OUTPUT_ALSA_SAMPLERATE &&
@@ -4372,6 +4379,7 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
     int output_config = MS12_OUTPUT_MASK_STEREO;
     bool current_mat_encoder_enable = false;
     bool current_ddp_encoder_enable = false;
+    bool current_dd_encoder_enable  = false;
     bool b_reset = 0;
     struct aml_arc_hdmi_desc* hdmi_descs = NULL;
 
@@ -4383,6 +4391,7 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
     pthread_mutex_lock(&ms12->lock);
     current_mat_encoder_enable = ms12->output_config & MS12_OUTPUT_MASK_MAT;
     current_ddp_encoder_enable = ms12->output_config & MS12_OUTPUT_MASK_DDP;
+    current_dd_encoder_enable  = ms12->output_config & MS12_OUTPUT_MASK_DD;
     adev = ms12_to_adev(ms12);
     hdmi_descs = get_arc_hdmi_cap(adev);
 
@@ -4391,9 +4400,14 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
         if (current_ddp_encoder_enable || !current_mat_encoder_enable) {
             b_reset = 1;
         }
-    } else {
+    } else if (adev->sink_capability == AUDIO_FORMAT_E_AC3) {
         output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
-        if (current_mat_encoder_enable || !current_ddp_encoder_enable) {
+        if (!current_ddp_encoder_enable || !current_dd_encoder_enable) {
+            b_reset = 1;
+        }
+    } else {
+        output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+        if (!current_dd_encoder_enable) {
             b_reset = 1;
         }
     }
@@ -4421,6 +4435,13 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
     }
 
     if (b_reset) {
+        if (is_TV(adev) && (output_config & MS12_OUTPUT_MASK_DDP)) {
+            // reduce ddp encoder latency (phase 90 shifted : disable)
+            dolby_ms12_set_hdmi_output_type(HDMI_ARC_OUTPUT);
+        } else {
+            dolby_ms12_set_hdmi_output_type(FULL_HDMI_OUTPUT);
+        }
+
         ms12->optical_format = adev->optical_format;
         ms12->sink_format    = adev->sink_format;
 

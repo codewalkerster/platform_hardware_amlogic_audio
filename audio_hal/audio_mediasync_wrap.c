@@ -106,6 +106,7 @@ static MediaSync_reset_func gMediaSync_reset = NULL;
 static MediaSync_destroy_func gMediaSync_destroy = NULL;
 
 static void*   glibHandle = NULL;
+static bool    gDebugFlag = false;
 
 static bool mediasync_wrap_create_init()
 {
@@ -377,7 +378,9 @@ bool mediasync_wrap_getSyncMode(void* handle, sync_mode *mode) {
      if (handle != NULL)  {
          mediasync_result ret = gMediaSync_getSyncMode(handle, mode);
          if (ret == AM_MEDIASYNC_OK) {
-            ALOGD(" mediasync_wrap_getSyncMode, mode=%d \n", *mode);
+            if (gDebugFlag || *mode != MEDIA_SYNC_AMASTER) {
+               ALOGD(" mediasync_wrap_getSyncMode, mode=%d \n", *mode);
+            }
             return true;
          } else {
             ALOGE("[%s] no ok\n", __func__);
@@ -669,3 +672,7 @@ void mediasync_wrap_destroy(void* handle) {
      }
 }
 
+void mediasync_wrap_set_debug(bool enable)
+{
+    gDebugFlag = enable;
+}
