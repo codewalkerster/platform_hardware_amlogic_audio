@@ -3331,6 +3331,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->pause_time = 0;
     out->needs_compensation_timeus = 0;
     out->restore_vmaster = false;
+    out->is_callback_pending = false;
 
     clock_gettime(CLOCK_MONOTONIC, &out->last_info_timestamp);
     clock_gettime(CLOCK_MONOTONIC, &out->last_avsync_timestamp);
@@ -3497,6 +3498,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
 
     int ret = 0;
+    int wait_cnt = 0;
     AM_LOGI("io %d: out:%p dev:%s(%#x) flags:%#x, usecase:%s", out->io_handle, out,
         audioDevType2Str(out->out_device), out->out_device, out->flags, usecase2Str(out->usecase));
     if (out->restore_hdmitx_selection) {
@@ -3652,9 +3654,27 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     }
 
     AM_LOGI("io %d: out:%p exit ------", out->io_handle, out);
+
+    wait_cnt = 20;
+    while (wait_cnt > 0) {
+        pthread_mutex_lock(&adev->stream_release_lock);
+        if (out->is_callback_pending == false) {
+            pthread_mutex_unlock(&adev->stream_release_lock);
+            break;
+        }
+        pthread_mutex_unlock(&adev->stream_release_lock);
+        aml_audio_sleep(10*1000);
+        AM_LOGE("wait callback ...");
+        wait_cnt--;
+    }
+    if (wait_cnt <= 0) {
+        AM_LOGE("wait callback finish fail !");
+    }
+
     pthread_mutex_lock(&adev->stream_release_lock);
     aml_audio_free(stream);
     pthread_mutex_unlock(&adev->stream_release_lock);
+
     stream = NULL;
     out = NULL;
 }
@@ -5636,16 +5656,18 @@ void aml_stream_timer_callback_handler(union sigval sigv)
         if (out && !out->is_closing &&  audio_is_linear_pcm(out->hal_internal_format)
             && (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC)) {
             is_hwsync_lpcm = true;
+            out->is_callback_pending = true;
             break;
         }
     }
+    pthread_mutex_unlock(&adev->stream_release_lock);
 
     if (out && is_hwsync_lpcm) {
         out->frame_write_sum_updated = false;
         frame_write_sum_updated = false;
+        out->is_callback_pending = false;
     }
     AM_LOGI("is_hwsync_lpcm:%d frame_write_sum_updated:%d", is_hwsync_lpcm, frame_write_sum_updated);
-    pthread_mutex_unlock(&adev->stream_release_lock);
     return ;
 }
 
@@ -5662,9 +5684,11 @@ void aml_stream_timer_pause_callback(union sigval sigv)
         if (out && !out->is_closing && audio_is_linear_pcm(out->hal_internal_format)
             && (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC)) {
             is_hwsync_lpcm = true;
+            out->is_callback_pending = true;
             break;
         }
     }
+    pthread_mutex_unlock(&adev->stream_release_lock);
 
     if (adev && out && is_hwsync_lpcm) {
         //cts tunnel underrun case failed, depond on pause/resume invoked from AudioFlinger.
@@ -5678,8 +5702,8 @@ void aml_stream_timer_pause_callback(union sigval sigv)
 
         if (!out->is_insert_zero_data && !out->hwsync->end_of_hwsync_frame && !out->is_waiting_video)
             out_pause_new((struct audio_stream_out *)out);
+        out->is_callback_pending = false;
     }
-    pthread_mutex_unlock(&adev->stream_release_lock);
     return ;
 }
 

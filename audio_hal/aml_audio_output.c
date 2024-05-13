@@ -855,12 +855,10 @@ ssize_t hw_write (struct audio_stream_out *stream
         bool frame_write_sum_updated = true;
         struct aml_stream_out *pcm_hwsync_out = NULL;
 
-        pthread_mutex_lock(&adev->stream_release_lock);
         pcm_hwsync_out = adev->active_outputs[STREAM_PCM_HWSYNC];
-        if (pcm_hwsync_out && pcm_hwsync_out->total_write_size) {
+        if (pcm_hwsync_out && !pcm_hwsync_out->is_closing && pcm_hwsync_out->total_write_size) {
             frame_write_sum_updated = pcm_hwsync_out->frame_write_sum_updated;
         }
-        pthread_mutex_unlock(&adev->stream_release_lock);
 
         /* SWPL-88828
          * If out_get_presentation_position() and hw_write()
