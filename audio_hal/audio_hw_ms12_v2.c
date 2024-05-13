@@ -54,6 +54,7 @@
 #include "aml_malloc_debug.h"
 #include "audio_hw_ms12_common.h"
 #include "aml_audio_report.h"
+#include "audio_hw_resource_mgr.h"
 
 
 #ifdef ENABLE_DVB_PATCH
@@ -3178,7 +3179,7 @@ int mat_bitstream_output(void *buffer, void *priv_data, size_t size)
     void *output_buffer = NULL;
     size_t output_buffer_bytes = 0;
     audio_format_t output_format = AUDIO_FORMAT_MAT;
-    bool is_earc_connected = (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
+    bool is_earc = is_earc_connected(adev);
     int ret = 0;
     int bitstream_delay_ms = 0;
 
@@ -3201,7 +3202,7 @@ int mat_bitstream_output(void *buffer, void *priv_data, size_t size)
     }
 #if 0
     /* amazon special audio strategy requirements, trunk doesn't need it*/
-    if (is_earc_connected && (aml_out->hal_ch >= 6 && aml_out->hal_internal_format == AUDIO_FORMAT_PCM_SUB_16_BIT)) {
+    if (is_earc && (aml_out->hal_ch >= 6 && aml_out->hal_internal_format == AUDIO_FORMAT_PCM_SUB_16_BIT)) {
         //for pcm multi channel when connected earc,
         //not use mat output and the data send to alsa/earc by mc_pcm_output, Hazel FIXME.
         return 0;
@@ -3313,7 +3314,7 @@ int mc_pcm_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_
     int mc_delay_ms = 0;
     int ch_mask = AUDIO_CHANNEL_OUT_STEREO;
     int data_ch = 2;
-    bool is_earc = (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
+    bool is_earc = is_earc_connected(adev);
     bool netflix_llp_mode = (adev->is_netflix && adev->aaudio_low_latency);
 
     if (adev->debug_flag > 1) {

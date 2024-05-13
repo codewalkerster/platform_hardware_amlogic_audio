@@ -1944,8 +1944,7 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
     int video_delay_frames = 0;
     int64_t origin_tv_nsec = 0;
     int origin_vdelay_frames = 0;
-    /* Fixme, use the tinymix inside aml_audio_earctx_get_type() everytime!!! */
-    bool is_earc = (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
+    bool is_earc = is_earc_connected(adev);
 
     /* add this code for VTS. */
     if (0 == frames_written_hw) {
@@ -3858,6 +3857,15 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
 {
     AM_LOGI("state:%d, dev:%s(%#x), pre_out:%#x, pre_in:%#x", state, audioDevType2Str(device),
         device, adev->out_device, adev->in_device);
+
+    /*
+     * AUDIO DEVICE OUT HDMI EARC is multi-bit mask, for convenience
+     * it is treated as ARC(single-bit mask) in audiohal device connect logic.
+    */
+    if (device == AUDIO_DEVICE_OUT_HDMI_EARC) {
+        device = AUDIO_DEVICE_OUT_HDMI_ARC;
+    }
+
     if (state) {
         check_usb_card_device(parms, device);
         if (audio_is_output_device(device)) {
@@ -3865,7 +3873,7 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
                 if (device & AUDIO_DEVICE_OUT_HDMI_ARC) {
                     aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_HDMI_ARC_AUDIO_ENABLE, true);
                 }
-                set_output_device_avail(adev, AUDIO_DEVICE_OUT_HDMI, true);
+                set_output_device_avail(adev, device, true);
                 clear_arc_cached_edid(adev);
             } else if (device & AUDIO_DEVICE_OUT_ALL_A2DP) {
                 a2dp_out_open(adev);
@@ -3884,7 +3892,7 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
     } else {
         if (audio_is_output_device(device)) {
             if ((device & AUDIO_DEVICE_OUT_HDMI_ARC) || (device & AUDIO_DEVICE_OUT_HDMI)) {
-                set_output_device_avail(adev, AUDIO_DEVICE_OUT_HDMI, true);
+                set_output_device_avail(adev, device, false);
                 clear_arc_cached_edid(adev);
                 if (device & AUDIO_DEVICE_OUT_HDMI_ARC) {
                     int attend_type = aml_audio_earctx_get_type(adev);

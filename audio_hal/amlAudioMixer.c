@@ -1498,20 +1498,26 @@ static int mixer_config_multich_output(struct amlAudioMixer *audio_mixer, struct
     int ret = 0;
     uint32_t masks = 0;
     input_port *in_port = NULL;
-    uint32_t input_max_ch = 1;
-    uint32_t mc_output_ch = 2;
-    uint32_t in_channelCnt = 0;
     int sink_max_channels = 2;
-    audio_channel_mask_t input_max_ch_mask = AUDIO_CHANNEL_OUT_MONO;
-    audio_channel_mask_t mc_output_ch_mask = AUDIO_CHANNEL_OUT_STEREO;
+    uint32_t input_channels = 2;
+    uint32_t mixer_max_channels = 2;
+    audio_channel_mask_t mixer_max_ch_mask = AUDIO_CHANNEL_OUT_STEREO;
     struct aml_audio_device *adev = audio_mixer->adev;
     struct audioCfg *p_mixer_cfg = &audio_mixer->multich_mixer.cfg;
-    struct audioCfg cfg;
+    struct audioCfg mixer_cfg;
     bool input_port_empty = true;
     const MIXER_OUTPUT_PORT port_index = MIXER_OUTPUT_PORT_MULTI_PCM;
     struct aml_arc_hdmi_desc* hdmi_descs = get_arc_hdmi_cap(adev);
 
     sink_max_channels = hdmi_descs->pcm_fmt.max_channels;
+    if (is_TV(adev)) {
+        if (is_earc_connected(adev)) {
+            sink_max_channels = 8;
+        } else {
+            sink_max_channels = 2;
+        }
+    }
+
     if (is_bypass_submix_active(adev)) {
         AM_LOGV("is_bypass_submix_active");
         return 0;
@@ -1529,19 +1535,15 @@ static int mixer_config_multich_output(struct amlAudioMixer *audio_mixer, struct
         }
 
         input_port_empty = false;
-        in_channelCnt = in_port->cfg.channelCnt;
-        if (in_channelCnt > input_max_ch) {
-            input_max_ch = in_channelCnt;
-            input_max_ch_mask = in_port->cfg.channelMask;
-        }
-        if ((in_channelCnt > mc_output_ch) && (in_channelCnt <= sink_max_channels)) {
-            mc_output_ch = in_channelCnt;
-            mc_output_ch_mask = in_port->cfg.channelMask;
+        input_channels = in_port->cfg.channelCnt;
+        if (input_channels >= mixer_max_channels && input_channels <= sink_max_channels) {
+            mixer_max_channels = input_channels;
+            mixer_max_ch_mask  = in_port->cfg.channelMask;
         }
     }
     if (input_port_empty) {
-        input_max_ch = 2;
-        input_max_ch_mask = AUDIO_CHANNEL_OUT_STEREO;
+        mixer_max_channels = 2;
+        mixer_max_ch_mask = AUDIO_CHANNEL_OUT_STEREO;
     }
 
     /* If not connected A2DP/Headphone, and HDMI RX/ARC supports multi-channel, so we have multi-channel output.
@@ -1551,54 +1553,41 @@ static int mixer_config_multich_output(struct amlAudioMixer *audio_mixer, struct
         || adev->out_device & AUDIO_DEVICE_OUT_WIRED_HEADSET
         || adev->out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE
         || !audio_mixer->mc_out_enable) {
-        mc_output_ch = 2;
-        mc_output_ch_mask = AUDIO_CHANNEL_OUT_STEREO;
+        mixer_max_channels = 2;
+        mixer_max_ch_mask = AUDIO_CHANNEL_OUT_STEREO;
     } else if (adev->is_netflix) {
-        if (input_max_ch <= 6) {
-            if (sink_max_channels >= 6) {
-                mc_output_ch = 6;
-                mc_output_ch_mask = AUDIO_CHANNEL_OUT_5POINT1;
-                input_max_ch = 6;
-                input_max_ch_mask = AUDIO_CHANNEL_OUT_5POINT1;
-            } else {
-                mc_output_ch = 2;
-                mc_output_ch_mask = AUDIO_CHANNEL_OUT_STEREO;
-            }
-        } else {
-            // do nothing
+        if (mixer_max_channels <= 6 && sink_max_channels >= 6) {
+            mixer_max_channels = 6;
+            mixer_max_ch_mask = AUDIO_CHANNEL_OUT_5POINT1;
         }
     }
     if (adev->debug_flag && (audio_mixer->run_count % 10 == 0)) {
         bool ad2p_connected = adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP;
-        AM_LOGI("mc_out_enable %d, A2DP_connected %d, is_netflix %d, input_max_ch %d, mc_output_ch %d",
-                audio_mixer->mc_out_enable, ad2p_connected, adev->is_netflix, input_max_ch, mc_output_ch);
+        AM_LOGI("mc_out_enable %d, A2DP_connected %d, is_netflix %d, mixer_max_channels %d, is_earc %d",
+                audio_mixer->mc_out_enable, ad2p_connected, adev->is_netflix, mixer_max_channels, is_earc_connected(adev));
     }
 
-    if ((input_max_ch != p_mixer_cfg->channelCnt) || (input_max_ch_mask != p_mixer_cfg->channelMask)) {
-        memcpy(&cfg, out_port_cfg, sizeof(cfg));
-        cfg.channelCnt  = input_max_ch;
-        cfg.channelMask = input_max_ch_mask;
-        cfg.frame_size  = cfg.channelCnt * audio_bytes_per_sample(cfg.format);
+    if ((mixer_max_channels != p_mixer_cfg->channelCnt) || (mixer_max_ch_mask != p_mixer_cfg->channelMask)) {
+        memcpy(&mixer_cfg, out_port_cfg, sizeof(*out_port_cfg));
+        mixer_cfg.format = AUDIO_FORMAT_PCM_16_BIT;   // raw (IEC format) output always output 16bit pcm
+        mixer_cfg.channelCnt  = mixer_max_channels;
+        mixer_cfg.channelMask = mixer_max_ch_mask;
+        mixer_cfg.frame_size  = mixer_cfg.channelCnt * audio_bytes_per_sample(mixer_cfg.format);
         deinit_multich_mixer_buffer(audio_mixer);
-        init_multich_mixer_buffer(audio_mixer, &cfg, MIXER_FRAME_COUNT);
+        init_multich_mixer_buffer(audio_mixer, &mixer_cfg, MIXER_FRAME_COUNT);
     }
 
     pthread_mutex_lock(&audio_mixer->outport_locks[port_index]);
     output_port *mc_out_port = audio_mixer->out_ports[port_index];
-    if (audio_mixer->mc_out_enable && mc_output_ch != 2) {
-        if (mc_out_port == NULL || mc_out_port->cfg.channelCnt != mc_output_ch) {
-            memcpy(&cfg, out_port_cfg, sizeof(cfg));
-            cfg.channelCnt  = mc_output_ch;
-            cfg.channelMask = mc_output_ch_mask;
-            cfg.frame_size  = mc_output_ch * audio_bytes_per_sample(cfg.format);
-
-            AM_LOGI("mc output channel change to  %d", mc_output_ch);
+    if (audio_mixer->mc_out_enable && mixer_max_channels != 2) {
+        if (mc_out_port == NULL || mc_out_port->cfg.channelCnt != mixer_max_channels) {
+            AM_LOGI("mc output channel change to  %d", mixer_max_channels);
             if (mc_out_port != NULL) {
                 free_mc_output_port(mc_out_port);
                 audio_mixer->out_ports[port_index] = NULL;
             }
 
-            mc_out_port = new_mc_output_port(&cfg, MIXER_FRAME_COUNT);
+            mc_out_port = new_mc_output_port(p_mixer_cfg, MIXER_FRAME_COUNT);
             if (mc_out_port == NULL) {
                 AM_LOGE("new_mc_output_port failed !");
                 pthread_mutex_unlock(&audio_mixer->outport_locks[port_index]);

@@ -90,6 +90,7 @@ typedef struct audio_hw_resource_mgr
     port_info_map out_devices_map[OUTPORT_MAX];
     //hdmi connected flags
     bool bHDMIARCon;
+    bool bHDMIEARCon;
     bool bHDMIConnected;
     bool bHDMIConnected_update;
     //do force routing ignore already routed count
@@ -314,6 +315,7 @@ int set_output_device_avail(struct aml_audio_device *adev, audio_devices_t devic
 {
     audio_hw_resource_mgr *mgr = get_hw_resource_manger(adev);
     int inport;
+    bool is_earc_connected = false;
     int ret = android_dev_convert_to_hal_dev(device, &inport);
     if (ret < 0) {
         AM_LOGE("Warning! Not support android input device:0x%x routing!", device);
@@ -327,6 +329,19 @@ int set_output_device_avail(struct aml_audio_device *adev, audio_devices_t devic
         mgr->bHDMIConnected = enable;
         mgr->bHDMIARCon = enable;
         mgr->bHDMIConnected_update = true;
+
+        /*
+         * AUDIO DEVICE OUT HDMI EARC is multi-bit mask, for convenience
+         * it is treated as ARC(single-bit mask) in audiohal device connect logic.
+        */
+        is_earc_connected = (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
+        if (enable && is_earc_connected) {
+            mgr->bHDMIEARCon = true;
+        } else {
+            mgr->bHDMIEARCon = false;
+        }
+        AM_LOGD("hdmi_arc enable %d, is_earc 0x%x, bHDMIEARCon %d",
+            enable, is_earc_connected, mgr->bHDMIEARCon);
     } else if (device == AUDIO_DEVICE_OUT_HDMI) {
         mgr->bHDMIConnected = enable;
         mgr->bHDMIConnected_update = true;
@@ -361,6 +376,12 @@ bool is_arc_connected(struct aml_audio_device *adev)
 {
     audio_hw_resource_mgr *mgr = get_hw_resource_manger(adev);
     return mgr->bHDMIARCon;
+}
+
+bool is_earc_connected(struct aml_audio_device *adev)
+{
+    audio_hw_resource_mgr *mgr = get_hw_resource_manger(adev);
+    return mgr->bHDMIEARCon;
 }
 
 //which source DMA is selected for input port

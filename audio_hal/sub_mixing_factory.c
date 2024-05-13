@@ -835,7 +835,7 @@ int out_get_presentation_position_port(
     int64_t negative_frames = 0;
     R_CHECK_POINTER_LEGAL(-EINVAL, frames, "");
     R_CHECK_POINTER_LEGAL(-EINVAL, timestamp, "");
-    bool is_earc = 0;//(ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
+    bool is_earc = is_earc_connected(adev);
 
     /* add this code for VTS. */
     if (0 == frames_written_hw) {

@@ -39,6 +39,7 @@ bool is_HDMI_connected(struct aml_audio_device *adev);
 bool is_HDMI_reconnected(struct aml_audio_device *adev);
 void set_HDMI_reconnected_flag(struct aml_audio_device *adev, bool enable);
 bool is_arc_connected(struct aml_audio_device *adev);
+bool is_earc_connected(struct aml_audio_device *adev);
 
 /* get already routed or connected devices in audio hal */
 audio_devices_t get_avail_in_devices(struct aml_audio_device *adev);

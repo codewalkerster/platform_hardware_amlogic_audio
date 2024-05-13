@@ -934,7 +934,7 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
     int32_t dv_delay = 0;
     bool is_output_ddp_atmos = aml_audio_output_ddp_atmos(stream);
     device_type_t platform_type = STB;
-    bool is_earc = (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
+    bool is_earc = is_earc_connected(adev);
 
     if (is_STB(adev)) {
         platform_type = STB;
@@ -973,7 +973,7 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
         dv_delay = get_sink_dv_latency_offset(true, adev->is_netflix) * 48;
     }
 
-    latency_frames = tuning_delay + atmos_tuning_delay + bypass_delay + video_delay + dv_delay;
+    latency_frames = tuning_delay + atmos_tuning_delay + bypass_delay - video_delay + dv_delay;
 
     ALOGV("latency frames =%d tuning delay=%d ms atmos =%d ms video delay %d ms dv_delay %d ms",
         latency_frames, tuning_delay / 48, atmos_tuning_delay / 48, video_delay / 48, dv_delay / 48);
@@ -1260,7 +1260,7 @@ int aml_audio_get_nonms12_tunnel_latency(struct audio_stream_out * stream, audio
     int latency_frames = 0;
     bool is_output_ddp_atmos = aml_audio_output_ddp_atmos(stream);
     device_type_t platform_type = STB;
-    bool is_earc = (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
+    bool is_earc = is_earc_connected(adev);
 
     if (is_STB(adev)) {
         platform_type = STB;
@@ -1331,8 +1331,8 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
     bool b_raw_out = false;
     uint64_t frames_written_hw = out->last_frames_position;
     device_type_t platform_type = STB;
-    bool is_earc = (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev));
     bool b_deepbuffer = (out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER);
+    bool is_earc = is_earc_connected(adev);
 
     if (is_STB(adev)) {
         platform_type = STB;
