@@ -2167,7 +2167,6 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12, bool set_non_continuous
     }
 
     ALOGI("++%s(), locked", __FUNCTION__);
-    adev->doing_cleanup_ms12 = true;
 
     /* check timers is running or not,
     ** timer should be stopped if running.
@@ -2265,7 +2264,6 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12, bool set_non_continuous
         ALOGI("%s set ms12 to non continuous mode", __func__);
     }
     adev->ms12_out = NULL;
-    adev->doing_cleanup_ms12 = false;
 exit:
     ALOGI("--%s(), locked", __FUNCTION__);
     pthread_mutex_unlock(&ms12->main_lock);
@@ -5384,7 +5382,6 @@ int aml_dap_close(struct dolby_ms12_desc *ms12)
     }
 
     ALOGI("++%s(), locked", __FUNCTION__);
-    adev->doing_cleanup_ms12 = true;
 
     /* check timers is running or not,
     ** timer should be stopped if running.
@@ -5431,7 +5428,6 @@ int aml_dap_close(struct dolby_ms12_desc *ms12)
     ms12->ms12_resume_state = MS12_RESUME_NONE;
     ms12_close_all_spdifout(ms12);
 
-    adev->doing_cleanup_ms12 = false;
 exit:
     ALOGI("--%s(), locked", __FUNCTION__);
     pthread_mutex_unlock(&ms12->main_lock);

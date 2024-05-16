@@ -325,6 +325,17 @@ static void select_mode (struct aml_audio_device *adev)
     return;
 }
 
+static void switch_to_nonms12_case (struct aml_audio_device *adev) {
+
+    adev->switching_dolby_lib = true;
+    if (adev->ms12.dolby_ms12_enable) {
+        adev_ms12_cleanup((struct audio_hw_device *)adev);
+    }
+    adev->dolby_lib_type = eDolbyDcvLib;
+    adev->switching_dolby_lib = false;
+    return;
+}
+
 /* must be called with hw device and output stream mutexes locked */
 static int start_output_stream (struct aml_stream_out *out)
 {
@@ -6576,9 +6587,9 @@ hwsync_rewrite:
             if (is_dts_format(aml_out->hal_internal_format)) {
                 /*when switch from ms12 to dts, we should clean ms12 first*/
                 if (adev->dolby_lib_type == eDolbyMS12Lib) {
-                    adev_ms12_cleanup((struct audio_hw_device *)adev);
+                    switch_to_nonms12_case(adev);
+                    aml_out->restore_dolby_lib_type = true;
                 }
-                adev->dolby_lib_type = eDolbyDcvLib;
             }
 
 #ifdef ADD_AUDIO_DELAY_INTERFACE
@@ -6618,14 +6629,9 @@ hwsync_rewrite:
                 aml_out->is_dtscd = false;
             }
             if (adev->dolby_lib_type == eDolbyMS12Lib) {
-                if (adev->continuous_audio_mode) {
-                    aml_out->restore_continuous = true;
-                    adev_ms12_cleanup((struct audio_hw_device *)adev);
-                    adev->continuous_audio_mode = 0;
-                }
+                switch_to_nonms12_case(adev);
+                aml_out->restore_dolby_lib_type = true;
             }
-            aml_out->restore_dolby_lib_type = true;
-            adev->dolby_lib_type = eDolbyDcvLib;
         }
 
         if (cur_audio_type != LPCM && cur_audio_type != PAUSE && cur_audio_type != MUTE) {
@@ -6634,19 +6640,6 @@ hwsync_rewrite:
         } else {
             return return_bytes;
         }
-        /*
-        if (cur_aformat == AUDIO_FORMAT_DTS || cur_aformat == AUDIO_FORMAT_AC3) {
-            aml_out->hal_internal_format = cur_aformat;
-            if (aml_out->hal_internal_format == AUDIO_FORMAT_DTS) {
-                adev->dolby_lib_type = eDolbyDcvLib;
-                aml_out->restore_dolby_lib_type = true;
-            } else if (aml_out->hal_internal_format == AUDIO_FORMAT_AC3) {
-                adev->dolby_lib_type = adev->dolby_lib_type_last;
-            }
-        } else {
-            return return_bytes;
-        }
-        */
     }
     else if (!is_bypass_dolbyms12(stream)) {
         adev->dolby_lib_type = adev->dolby_lib_type_last;
@@ -6903,7 +6896,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
     }
 
     pthread_mutex_unlock(&adev->lock);
-    if (eDolbyMS12Lib == adev->dolby_lib_type) {
+    if (eDolbyMS12Lib == adev->dolby_lib_type && !adev->switching_dolby_lib) {
         if (adev->a2dp_no_reconfig_ms12 > 0) {
             uint64_t curr = aml_audio_get_systime();
             if (adev->a2dp_no_reconfig_ms12 <= curr)
@@ -6952,7 +6945,8 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
             }
         }
         /* here to check if ms12 is already enabled, if main stream is doing init ms12, we don't need do it */
-        if (!adev->ms12.dolby_ms12_enable && !adev->doing_reinit_ms12 && !adev->doing_cleanup_ms12) {
+        /*coverity[missing_lock]*/
+        if (!adev->ms12.dolby_ms12_enable && !adev->doing_reinit_ms12) {
             ALOGI("%s(), 0x%x, Switching system output to MS12, need MS12 reconfig output", __func__, aml_out->out_device);
             need_reconfig_output = true;
             need_reset_decoder = true;
@@ -7587,10 +7581,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
         if (adev->dolby_lib_type_last == eDolbyMS12Lib) {
             /*if these format can't be supported by ms12, we can bypass it*/
             if (is_bypass_dolbyms12(stream)) {
-                if (adev->ms12.dolby_ms12_enable) {
-                    adev_ms12_cleanup((struct audio_hw_device *)adev);
-                }
-                adev->dolby_lib_type = eDolbyDcvLib;
+                switch_to_nonms12_case(adev);
                 aml_out->restore_dolby_lib_type = true;
                 ALOGI("bypass ms12 change dolby dcv lib type");
             }

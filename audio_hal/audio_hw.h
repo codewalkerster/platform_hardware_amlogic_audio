@@ -422,7 +422,7 @@ struct aml_audio_device {
     bool atoms_lock_flag;
     int  exiting_ms12;
     bool doing_reinit_ms12;    /*we are doing reinit ms12*/
-    bool doing_cleanup_ms12;   /*we are doing cleanup ms12*/
+    bool switching_dolby_lib;   /*we are switching dolby lib*/
     bool ms12_to_be_cleanup;
     struct timespec ms12_exiting_start;
     int debug_flag;
