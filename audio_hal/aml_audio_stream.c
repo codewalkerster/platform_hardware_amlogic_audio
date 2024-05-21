@@ -440,7 +440,12 @@ void get_sink_format(struct audio_stream_out *stream)
 
     adev->bDVEnable = get_sink_dv_capability();
 
-    if (adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP || adev->out_device & AUDIO_DEVICE_OUT_ALL_USB) {
+    AM_LOGI("out:%p out devices:%#x cur_out_devices:%#x format:%s(%#x) digital_mode(%s) sink cap:%s(%#x)", aml_out,
+          adev->out_device, adev->cur_out_devices, audioFormat2Str(aml_out->hal_internal_format), aml_out->hal_internal_format,
+          digitalAudioModeType2Str(adev->digital_audio_mode), audioFormat2Str(sink_capability), sink_capability);
+
+
+    if (adev->cur_out_devices & AUDIO_DEVICE_OUT_ALL_A2DP || adev->cur_out_devices & AUDIO_DEVICE_OUT_ALL_USB) {
         ALOGD("get_sink_format: a2dp and usb set to pcm");
         adev->sink_format = AUDIO_FORMAT_PCM_16_BIT;
         adev->sink_capability = AUDIO_FORMAT_PCM_16_BIT;
@@ -471,9 +476,6 @@ void get_sink_format(struct audio_stream_out *stream)
     }
 
     /*when device is HDMI_ARC*/
-    AM_LOGI("out:%p cur_out_devices:%#x format:%s(%#x) digital_mode(%s) Sink format:%s(%#x)", aml_out,
-          adev->cur_out_devices, audioFormat2Str(aml_out->hal_internal_format), aml_out->hal_internal_format,
-          digitalAudioModeType2Str(adev->digital_audio_mode), audioFormat2Str(sink_capability), sink_capability);
 
     if ((source_format != AUDIO_FORMAT_PCM_16_BIT) && \
         (source_format != AUDIO_FORMAT_AC3) && \
