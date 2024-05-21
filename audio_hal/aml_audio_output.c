@@ -356,15 +356,14 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
         } else if (is_include_a2dp_out_port(adev->cur_out_devices) || is_include_usb_out_port(adev->cur_out_devices)) {
             memcpy(adev->out_16_buf, buffer, bytes);
             float volume = aml_audio_get_s_gain_by_src(adev, get_dev_patch_src(adev));
-            if (is_tvinput_source(get_dev_patch_src(adev)) && is_dev_patch_running(adev) &&
-                // the stb tvinput playback volume processing in
-                // dtv_set_ms12_volume_on_non_TV_device or aml_audio_stream_volume_process.
-                is_TV(adev)) {
-                float sink_gain = adev->sink_gain[is_include_a2dp_out_port(adev->cur_out_devices) ? OUTPORT_A2DP : OUTPORT_USB_HEADSET];
-                /* for dev->a2dp/usb path, volume control in audio hal. */
-                volume *= sink_gain;
-            } else {
-                /* for mix->a2dp/usb path, volume control in AudioFlinger. */
+            if (is_TV(adev)) {
+                if (is_include_a2dp_out_port(adev->cur_out_devices)) {
+                    if (!(adev->bt_avrcp_supported && adev->sink_gain[OUTPORT_A2DP] > FLOAT_ZERO)) {
+                        volume *= adev->sink_gain[OUTPORT_A2DP];
+                    }
+                } else if (is_include_usb_out_port(adev->cur_out_devices)){
+                    volume *= adev->sink_gain[OUTPORT_USB_HEADSET];
+                }
             }
             apply_volume(volume, adev->out_16_buf, sizeof(uint16_t), bytes);
             if (is_include_a2dp_out_port(adev->cur_out_devices)) {

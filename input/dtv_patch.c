@@ -5588,6 +5588,7 @@ int out_set_volume_for_tunerframework(struct audio_stream_out *stream, float lef
     int ret = 0, val = 0;
 
     if (is_cbs_dtv_audio) {
+        AM_LOGI("out:%p left:%f cbs_dtv_audio", stream, left);
         /*
             for none-ms12 case, as tuner framework passthrough mode will use this stream to
             control the dtv status such as volume,pause,resume,we need check if this direct stream

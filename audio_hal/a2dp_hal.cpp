@@ -126,7 +126,7 @@ static void dump_a2dp_output_data(aml_a2dp_hal *hal, const void *buffer, size_t 
         char acFilePathStr[ENUM_TYPE_STR_MAX_LEN];
         size_t out_per_sample_byte = audio_bytes_per_sample(hal->config.format);
         size_t out_channel_byte = audio_channel_count_from_out_mask(hal->config.channel_mask);
-        sprintf(acFilePathStr, "/data/audio/a2dp_%0.1fK_%zuC_%zuB.pcm", hal->config.sample_rate/1000.0, out_channel_byte, out_per_sample_byte);
+        sprintf(acFilePathStr, "/data/audio/a2dp_%d_%zuC_%zuB.pcm", hal->config.sample_rate, out_channel_byte, out_per_sample_byte);
         aml_audio_dump_audio_bitstreams(acFilePathStr, buffer, size);
     }
 }
@@ -380,23 +380,13 @@ static bool a2dp_state_process(struct aml_audio_device *adev, audio_config_base_
                 data_delta_time_us -= 2000;
             }
         }
-        AM_LOGI("a2dp state is %s",  a2dpStatus2String(cur_state));
+        AM_LOGI("a2dp state is %s", a2dpStatus2String(cur_state));
     } else if (cur_state == BluetoothStreamState::STARTED) {
-         if (is_dev_patch_exist(adev)&& adev->tv_mute) {
-            /* tv_mute for atv switch channel */
-            AM_LOGI("tv_mute:%d, start standby", adev->tv_mute);
-            a2dp_out_standby_l(adev);
-        } else {
-            prepared = true;
-        }
+        prepared = true;
     } else if (cur_state == BluetoothStreamState::DISABLED) {
         // TODO: A2DP is disconnected. do nothing.
     } else {
-        if (!(adev->tv_mute && is_dev_patch_exist(adev))) {
-            a2dp_out_resume_l(adev);
-        }
-        // a2dp_out_resume maybe cause over 100ms, so set last_write_time after resume,
-        // otherwise, the gap would always over 64ms, and always standby in dtv
+        a2dp_out_resume_l(adev);
         hal->last_write_time = aml_audio_get_systime();
     }
     return prepared;
@@ -418,8 +408,7 @@ static ssize_t a2dp_in_data_process(aml_a2dp_hal *hal, audio_config_base_t *conf
             tmp_buffer[2 * i]       = (tmp_buffer_8ch[8 *  i] >> 16);
             tmp_buffer[2 * i + 1]   = (tmp_buffer_8ch[8 * i + 1] >> 16);
         }
-    }
-    else if (config->channel_mask == AUDIO_CHANNEL_OUT_STEREO && config->format == AUDIO_FORMAT_PCM_32_BIT) {
+    } else if (config->channel_mask == AUDIO_CHANNEL_OUT_STEREO && config->format == AUDIO_FORMAT_PCM_32_BIT) {
         int sample_size = audio_bytes_per_sample(config->format);
         frames = bytes / sample_size / 2/*channels*/;
         realloc_ret = aml_audio_check_and_realloc((void **)&hal->buff_conv_format, &hal->buff_size_conv_format, bytes);
