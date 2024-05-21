@@ -913,6 +913,12 @@ static int _aml_dtsx_dualcore_init(dtsx_dec_t *p_dtsx_dec)
     _dtsx_config_params.pp_sink_dev_type = p_dtsx_dec->sink_dev_type;
     _dtsx_config_params.bPassthrough = p_dtsx_dec->passthroug_enable;
 
+    /*For stb case,decoder don't enable LnD*/
+    if (p_dtsx_dec->device_type == STB) {
+        _dtsx_config_params.drc_enable[DTSX_OUTPUT_SPK] = 0;
+        _dtsx_config_params.loudness_enable[DTSX_OUTPUT_SPK] = 0;
+    }
+
     /* Prepare the init argv for core1 decoder */
     snprintf(p_dtsx_dec->init_argv[cmd_count++], DTSX_PARAM_STRING_LEN, "dtsx_core1_max_spkrout=%d", _dtsx_config_params.core1_dec_out);
     snprintf(p_dtsx_dec->init_argv[cmd_count++], DTSX_PARAM_STRING_LEN, "dtsx_unalignedsyncword");

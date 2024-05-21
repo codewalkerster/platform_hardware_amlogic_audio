@@ -43,27 +43,19 @@ static void get_dts_hd_hardware_config_parameters(
     struct pcm_config *hardware_config
     , unsigned int channels
     , unsigned int rate
-    , bool platform_is_tv)
+    , bool platform_is_tv __unused)
 {
     hardware_config->channels = channels;
     hardware_config->format = PCM_FORMAT_S16_LE;
-    hardware_config->rate = 48000;
-    if (!(rate % 44100)) {
-        hardware_config->rate = 44100;
-    } else if (!(rate % 48000)) {
-        hardware_config->rate = 48000;
-    }
-    hardware_config->period_count = 8;
-    hardware_config->period_size = PERIOD_SIZE; // default 48K
-    if (channels > 2) {
-        hardware_config->period_size = 4096;
-    }
-    hardware_config->start_threshold = hardware_config->period_size * hardware_config->period_count / 2;
-    if (platform_is_tv) {
-        hardware_config->start_threshold = hardware_config->period_size * hardware_config->period_count;
-    }
-    hardware_config->avail_min = 0;
+    hardware_config->rate = rate;
 
+    hardware_config->period_size = 4096;
+    hardware_config->period_count = 8;
+    if (channels == 8) {
+        hardware_config->period_count = 4;
+    }
+    hardware_config->start_threshold = hardware_config->period_count * hardware_config->period_size / 2;
+    hardware_config->avail_min = 0;
 
     return ;
 }
