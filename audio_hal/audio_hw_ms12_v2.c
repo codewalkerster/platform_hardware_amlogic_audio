@@ -3614,6 +3614,10 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
             async_policy = &(aml_dtvsync->apolicy);
             ret = aml_audio_hwsync_lookup_apts(aml_out->hwsync, consume_payload, &apts);
             if (ret == 0 && aml_dtvsync->last_lookup_apts != apts) {
+                if (get_debug_value(AML_DEBUG_AUDIOHAL_AUT)) {
+                    AM_LOGI("[AUT_PRINT] pts lookup success.");
+                }
+
                 aml_dtvsync->last_lookup_apts = apts;
                 if (apts > delay_pts_diff) {
                     new_apts = apts - delay_pts_diff;
@@ -3621,6 +3625,10 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
                     new_apts = 0;
                 }
             } else {
+                if (get_debug_value(AML_DEBUG_AUDIOHAL_AUT)) {
+                    AM_LOGI("[AUT_PRINT] pts lookup fail.");
+                }
+
                 if (aml_dtvsync->cur_outapts && aml_dtvsync->cur_outapts != DTVSYNC_INIT_PTS) {
                     new_apts = aml_dtvsync->cur_outapts + (u64DecOutFrame - aml_out->last_decout_frame) * 90 / 48;
                 }
@@ -3663,6 +3671,10 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
                 ms12_do_dtv_sync(stream_out);
                 if (!skip_update_pts)
                     aml_dtvsync->cur_outapts = new_apts;
+
+                if (get_debug_value(AML_DEBUG_AUDIOHAL_AUT)) {
+                    AM_LOGI("[AUT_PRINT] output_pts:0x%" PRIx64 ".", aml_dtvsync->cur_outapts);
+                }
 
                 if (async_policy->audiopolicy != DTVSYNC_AUDIO_NORMAL_OUTPUT)
                     ALOGI("cur policy:%d, prm1:%d, prm2:%d\n", async_policy->audiopolicy,
