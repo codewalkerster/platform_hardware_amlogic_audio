@@ -274,7 +274,8 @@ void *audio_patch_input_threadloop(void *data)
             if (patch->aformat == AUDIO_FORMAT_MAT) {
                 read_bytes = read_bytes * 4;
             }
-        }
+        } else if (patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC && in->spdif_fmt_hw == MAT)
+            read_bytes *= 4;
 
         if (patch->input_src == AUDIO_DEVICE_IN_LINE) {
             read_threshold = 4 * read_bytes;
@@ -306,7 +307,17 @@ void *audio_patch_input_threadloop(void *data)
             /* case 1:we need keep read from arc so the format will be keep stable */
             /* case 2:For data type detect of hardware, it needs to read data from driver to help detecting quickly if it is HBR stream.   */
             if (is_HBR_stream(&in->stream) || (in->device & AUDIO_DEVICE_IN_HDMI_ARC) || (in->device & AUDIO_DEVICE_IN_SPDIF)) {
-                aml_alsa_input_read(&in->stream, patch->in_buf, read_bytes);
+                if (patch->arc_layout_b) {
+                    if (!in->input_tmp_buffer || in->input_tmp_buffer_size < read_bytes * 4) {
+                        in->input_tmp_buffer = aml_audio_realloc(in->input_tmp_buffer, read_bytes * 4);
+                        in->input_tmp_buffer_size = read_bytes * 4;
+                    }
+                    ret = aml_alsa_input_read(&in->stream, in->input_tmp_buffer, read_bytes * 4);
+                    /* remove the six IEC 60958 sub-frames contains zeros */
+                    adjust_channels(in->input_tmp_buffer, 8, patch->in_buf, 2, 2, read_bytes * 4);
+                } else {
+                    aml_alsa_input_read(&in->stream, patch->in_buf, read_bytes);
+                }
                 memset(patch->in_buf, 0, bytes_avail);
                 ring_buffer_clear(ringbuffer);
             } else {
@@ -326,6 +337,25 @@ void *audio_patch_input_threadloop(void *data)
         } else {
             if (is_same_patch_src(aml_dev, SRC_HDMIIN) && in->audio_packet_type == AUDIO_PACKET_AUDS && in->config.channels != 2) {
                 input_stream_channels_adjust(&in->stream, patch->in_buf, read_bytes);
+            } else if (is_same_patch_src(aml_dev, SRC_ARCIN) && (patch->arc_layout_b || in->config.channels > 2)) {
+                int in_channel_cnt = in->config.channels;
+
+                if (patch->arc_layout_b)
+                    in_channel_cnt = 8;
+                if (!in->input_tmp_buffer || in->input_tmp_buffer_size < read_bytes * 4) {
+                    in->input_tmp_buffer = aml_audio_realloc(in->input_tmp_buffer, read_bytes * 4);
+                    in->input_tmp_buffer_size = read_bytes * 4;
+                }
+                if (patch->arc_layout_b || (in_channel_cnt > 2))
+                    aml_alsa_input_read(&in->stream, in->input_tmp_buffer, read_bytes * 4);
+                else
+                    aml_alsa_input_read(&in->stream, in->input_tmp_buffer, read_bytes);
+                if (get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
+                    aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/tv_read_8ch.raw", in->input_tmp_buffer, read_bytes *4);
+                }
+                /* remove the six IEC 60958 sub-frames contains zeros */
+                if (patch->arc_layout_b || (in_channel_cnt > 2))
+                    adjust_channels(in->input_tmp_buffer, in_channel_cnt, patch->in_buf, 2, 2, read_bytes * 4);
             } else {
                 if (is_tv_mute(aml_dev) && (audio_is_linear_pcm(patch->aformat)) && is_game_mode(aml_dev)) {
                     ring_buffer_reset(ringbuffer);
@@ -391,6 +421,8 @@ void *audio_patch_input_threadloop(void *data)
                     if (ret == 0) {
                         break;
                     }
+                } else if (patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC) {
+                    reconfig_read_param_through_arcin(aml_dev, in, ringbuffer, ring_buffer_size);
                 }
 
                 if (get_buffer_write_space(ringbuffer) >= bytes_avail) {
@@ -438,6 +470,12 @@ void *audio_patch_input_threadloop(void *data)
     if (patch->in_buf) {
         aml_audio_free(patch->in_buf);
         patch->in_buf = NULL;
+    }
+
+    if (in->input_tmp_buffer) {
+        aml_audio_free(in->input_tmp_buffer);
+        in->input_tmp_buffer = NULL;
+        in->input_tmp_buffer_size = 0;
     }
     ALOGD("%s: exit", __func__);
 
@@ -767,6 +805,17 @@ int create_tv_patch(struct aml_audio_device *aml_dev,
         ALOGE("%s: init audio ringbuffer failed", __func__);
         goto err_ring_buf;
     }
+
+    if (IS_DIGITAL_IN_HW(patch->input_src)) {
+        //TODO add sample rate and channel information
+        ret = create_pthread_for_audio_type_parse(&patch->audio_parse_threadID,
+                &patch->audio_parse_para, &aml_dev->alsa_mixer, patch->input_src);
+        if (ret !=  0) {
+            ALOGE("%s: create format parse thread failed", __func__);
+            goto err_parse_thread;
+        }
+    }
+
     ret = pthread_create(&patch->audio_input_threadID, NULL,
                           &audio_patch_input_threadloop, patch);
 
@@ -781,16 +830,6 @@ int create_tv_patch(struct aml_audio_device *aml_dev,
         goto err_out_thread;
     }
 
-    if (IS_DIGITAL_IN_HW(patch->input_src)) {
-        //TODO add sample rate and channel information
-        ret = create_pthread_for_audio_type_parse(&patch->audio_parse_threadID,
-                &patch->audio_parse_para, &aml_dev->alsa_mixer, patch->input_src);
-        if (ret !=  0) {
-            ALOGE("%s: create format parse thread failed", __func__);
-            goto err_parse_thread;
-        }
-    }
-
     if (aml_dev->useSubMix) {
         float src_gain = aml_audio_get_s_gain_by_src(aml_dev, get_dev_patch_src(aml_dev));
 
@@ -803,13 +842,13 @@ int create_tv_patch(struct aml_audio_device *aml_dev,
     ALOGD("%s: exit", __func__);
 
     return 0;
-err_parse_thread:
-    patch->output_thread_exit = 1;
-    pthread_join(patch->audio_output_threadID, NULL);
 err_out_thread:
     patch->input_thread_exit = 1;
     pthread_join(patch->audio_input_threadID, NULL);
 err_in_thread:
+    if (IS_DIGITAL_IN_HW(patch->input_src))
+        exit_pthread_for_audio_type_parse(patch->audio_parse_threadID,&patch->audio_parse_para);
+err_parse_thread:
     ring_buffer_release(&patch->aml_ringbuffer);
 err_ring_buf:
     aml_audio_free(patch);
