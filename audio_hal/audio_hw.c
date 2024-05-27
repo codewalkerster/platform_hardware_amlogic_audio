@@ -8575,7 +8575,8 @@ static int adev_set_device_connected_state_v7(struct audio_hw_device *dev,
 
             if (is_HDMI_connected(aml_dev)) {
                 struct dolby_ms12_desc *ms12 = &(aml_dev->ms12);
-
+                /*update sink format when HDMI connected because its capability may be changed*/
+                update_sink_format_after_hotplug(aml_dev);
                 aml_audiohal_sch_state_2_ms12(ms12, MS12_SCHEDULER_RUNNING);
             }
         }
