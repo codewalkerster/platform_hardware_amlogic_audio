@@ -831,19 +831,13 @@ size_t aml_alsa_input_read(struct audio_stream_in *stream,
     size_t  read_bytes = 0;
     int nodata_count = 0;
     struct pcm *pcm_handle = in->pcm;
-    size_t frame_size = in->config.channels * pcm_format_to_bits(in->config.format) / 8;
-    bool hdmi_raw_in_flag = false;
-    if (in->is_tv_src_stream) {
-         hdmi_raw_in_flag = is_dev_patch_valid(aml_dev) && audio_patch &&
-                (audio_patch->input_src == AUDIO_DEVICE_IN_HDMI) && (!audio_is_linear_pcm(audio_patch->aformat));
-    }
 
     while (read_bytes < bytes) {
         if (in->is_tv_src_stream &&
             is_dev_patch_valid(aml_dev) &&
             is_dev_patch_exist(aml_dev) && audio_patch &&
             audio_patch->input_thread_exit) {
-            memset((void*)buffer,0,bytes);
+            memset((void*)buffer, 0, bytes);
             return 0;
         }
 
@@ -865,21 +859,17 @@ size_t aml_alsa_input_read(struct audio_stream_in *stream,
             memset((void*)buffer,0,bytes);
             return ret;
         } else {
-             if (hdmi_raw_in_flag) {
-                usleep((bytes - read_bytes) * 1000 / audio_stream_in_frame_size(stream) /
-                    (in->config.rate / 1000));
-            } else {
-                usleep((bytes - read_bytes) * 1000 / audio_stream_in_frame_size(stream) /
-                    (in->config.rate / 1000) / 2);
-            }
+            /* For some input device, the input stream sample rate and channel can't response the real data size,
+               so add a multiply factor */
+            usleep((bytes - read_bytes) * 1000 / audio_stream_in_frame_size(stream) /
+                (in->config.rate / 1000) / in->read_mul_factor);
 
-             ALOGV("bytes %zu bytes - read_bytes %zu nodata_count %d",bytes, bytes - read_bytes, nodata_count);
-             nodata_count++;
-             if (nodata_count >= WAIT_COUNT_MAX) {
-                 AM_LOGW("read timeout, in:%p read_bytes:%zu need:%zu", in, read_bytes, bytes);
-                 memset((void*)buffer, 0, bytes);
-                 return 0;
-             }
+            nodata_count++;
+            if (nodata_count >= WAIT_COUNT_MAX) {
+                AM_LOGW("read timeout, in:%p read_bytes:%zu need:%zu", in, read_bytes, bytes);
+                memset((void*)buffer, 0, bytes);
+                return 0;
+            }
         }
     }
     return 0;

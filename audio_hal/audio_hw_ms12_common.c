@@ -263,16 +263,7 @@ static void *ms12_message_threadloop(void *data)
 
     adev = ms12_to_adev(ms12);
     prctl(PR_SET_NAME, (unsigned long)"MS12_CommThread");
-    aml_set_thread_priority("ms12_message_thread", pthread_self());
-
-    cpu_set_t cpuSet;
-    CPU_ZERO(&cpuSet);
-    CPU_SET(2, &cpuSet);
-    CPU_SET(3, &cpuSet);
-    int set_affinity = sched_setaffinity(0, sizeof(cpu_set_t), &cpuSet);
-    if (set_affinity) {
-        ALOGW("%s(), failed to set cpu affinity", __func__);
-    }
+    aml_set_thread_sched_priority("MS12_CommThread", pthread_self(), AUDIO_FIFO_THREAD_DEFAULT_PRIORITY - 1);
 
     do {
         struct ms12_mesg_desc *mesg_p = NULL;

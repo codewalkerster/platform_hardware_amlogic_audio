@@ -447,7 +447,6 @@ static ssize_t out_write_hwsync_lpcm(struct audio_stream_out *stream, const void
     }
     if (out->standby) {
         AM_LOGI("io %d: out:%p usecase:%s standby to unstandby", out->io_handle, out, usecase2Str(out->usecase));
-        aml_audio_set_cpu23_affinity();
         out->hwsync_extractor = new_hw_avsync_header_extractor(consume_meta_data,
                 consume_output_data, out);
         out->first_pts_set = false;

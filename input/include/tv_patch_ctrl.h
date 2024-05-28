@@ -19,8 +19,8 @@
 
 
 /*==================================input commands=========================================*/
-int input_stream_channels_adjust(struct audio_stream_in *stream, void* buffer, size_t bytes);
-
+int input_stream_channels_adjust(struct audio_stream_in *stream,
+                        void* buffer, size_t bytes, bool downmix);
 bool is_HBR_stream(struct audio_stream_in *stream);
 bool is_game_mode(struct aml_audio_device *aml_dev);
 void aml_check_pic_mode(struct aml_audio_patch *patch);

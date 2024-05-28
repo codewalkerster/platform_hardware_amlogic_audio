@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "audio_hw_input_dtv"
+#define LOG_TAG "audio_hw_device_patchmgr"
 
 #include <sys/types.h>
 #include <sys/errno.h>
@@ -196,7 +196,7 @@ static int create_patch_internal(struct patch_manager *patch_mgr,
 {
     int ret = 0;
     int inport;
-    ALOGI("%s() type:%s patch_src:%s in_device:0x%x out_device:0x%x",__func__,
+    ALOGI("%s() type:%s patch_src:%s in_device:0x%x out_device:0x%x", __func__,
         patch_type_to_str(type), patchSrc2Str(patch_src), src_device, sink_device);
 
     acquire_patch_mgr_lock(patch_mgr);
@@ -204,9 +204,8 @@ static int create_patch_internal(struct patch_manager *patch_mgr,
     // 1.Release exist old patch
     if (is_patch_exist_mgr(patch_mgr)) {
         struct aml_audio_patch *old_patch = get_patch_from_mgr(patch_mgr);
-        ALOGD("%s: patch exists, first release it", __func__);
-        ALOGD("%s: new input %#x, old input %#x", __func__, src_device, old_patch->input_src);
-        if (type == PATCH_TYPE_TV) {
+        ALOGD("%s: patch exists, first release it. new input %#x, old input %#x", __func__, src_device, old_patch->input_src);
+        if (!patch_mgr->audio_patch->is_dtv_src) {
             /*coverity[sleep]*/
 #ifdef ENABLE_DVB_PATCH
             if (is_dtv_patch_exist_mgr(patch_mgr))  {

@@ -151,6 +151,7 @@ typedef struct audio_type_parse {
     audio_devices_t input_dev;
     bool fmt_change;
     bool pcpd_monitor_flag;
+    bool earc_mute;
 } audio_type_parse_t;
 
 int create_pthread_for_audio_type_parse(
@@ -213,4 +214,9 @@ void audio_pcpd_format_detect(audio_type_parse_t *status);
 
 int pcm_coding_type_to_channels(enum earc_audio_type type);
 int non_pcm_coding_type_to_codec(enum earc_audio_type type);
+void audio_fmt_check(audio_type_parse_t *status, void *buffer, size_t bytes);
+
+bool is_audio_parse_fmt_change(audio_type_parse_t *status);
+int clear_audio_parse_fmt_change(audio_type_parse_t *status);
+
 #endif

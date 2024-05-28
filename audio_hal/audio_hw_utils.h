@@ -155,7 +155,7 @@ uint32_t tspec_diff_to_us(struct timespec tval_old,
         struct timespec tval_new);
 int aml_audio_get_dolby_drc_mode(int *drc_mode, int *drc_cut, int *drc_boost);
 int aml_audio_get_dolby_dap_drc_mode(int *drc_mode, int *drc_cut, int *drc_boost);
-void aml_audio_set_cpu23_affinity();
+void aml_audio_set_cpu_affinity(bool APU);
 void * aml_audio_get_muteframe(audio_format_t output_format, int * frame_size, int bAtmos);
 void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format, AM_AOUT_OutputMode_t mode);
 bool aml_audio_data_detect(int16_t *buf, size_t bytes, int detect_value);

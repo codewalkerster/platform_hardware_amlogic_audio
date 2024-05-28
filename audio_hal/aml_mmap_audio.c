@@ -106,7 +106,7 @@ static void *outMmapThread(void *pArg) {
     R_CHECK_POINTER_LEGAL(NULL, pu8StartAddr, "")
     prctl(PR_SET_NAME, (unsigned long)"outMmapThread");
     aml_set_thread_priority("outMmapThread", pstThread->threadId);
-    aml_audio_set_cpu23_affinity();
+    aml_audio_set_cpu_affinity(true);
 
     pu8TempBufferAddr = (unsigned char *)aml_audio_malloc(u32BurstSizeByte);
     while (false == pstThread->bExitThread) {
@@ -346,8 +346,8 @@ static void *outMmapThread(void *pArg) {
     u64BufferFrameNs = pstMananger->u64WritePeriodTimeNano * pstMananger->s32BufferBurstNum;
 
     prctl(PR_SET_NAME, (unsigned long)"outMmapThread");
-    aml_set_thread_priority("outMmapThread", pstThread->threadId);
-    aml_audio_set_cpu23_affinity();
+    aml_set_thread_sched_priority("outMmapThread", pstThread->threadId, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY);
+    aml_audio_set_cpu_affinity(true);
 
     while (false == pstThread->bExitThread) {
         if (mmap_audio_has_active_client(pstMananger)) {

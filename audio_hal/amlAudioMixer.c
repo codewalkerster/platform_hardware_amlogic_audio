@@ -1808,7 +1808,7 @@ static void *mixer_32b_threadloop(void *data)
 
     audio_mixer->exit_thread = 0;
     prctl(PR_SET_NAME, "amlAudioMixer32");
-    aml_audio_set_cpu23_affinity();
+    aml_audio_set_cpu_affinity(true);
     while (!audio_mixer->exit_thread) {
         //pthread_mutex_lock(&audio_mixer->lock);
         //mixer_procs_msg_queue(audio_mixer);
@@ -1904,8 +1904,8 @@ static void *mixer_16b_threadloop(void *data)
     audio_mixer->run_count = 0;
     audio_mixer->reset_virtual_buf = false;
     prctl(PR_SET_NAME, "amlAudioMixer16");
-    aml_audio_set_cpu23_affinity();
-    aml_set_thread_priority("amlAudioMixer16", audio_mixer->out_mixer_tid);
+    aml_audio_set_cpu_affinity(true);
+    aml_set_thread_sched_priority("amlAudioMixer16", audio_mixer->out_mixer_tid, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY);
     while (!audio_mixer->exit_thread) {
         mixer_config_low_latency_mode(audio_mixer, adev->aaudio_low_latency, &pstVirtualBuffer);
 

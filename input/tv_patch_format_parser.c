@@ -979,6 +979,7 @@ static void* audio_type_parse_threadloop(void *data)
         } else {
             if (auge_chip || txlx_chip) {
                 bool layout_b = false;
+                bool mute = false;
                 // get audio format from hw.
                 if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
                     audio_type_status->cur_audio_type = hdmiin_audio_format_detection(audio_type_status->mixer_handle);
@@ -986,19 +987,23 @@ static void* audio_type_parse_threadloop(void *data)
                     audio_type_status->cur_audio_type = spdifin_audio_format_detection(audio_type_status->mixer_handle);
                 } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
                     type = non_pcm_coding_type_to_codec(eArcIn_coding_type_detection(audio_type_status->mixer_handle));
+                    mute = eArcIn_get_cs_mute(audio_type_status->mixer_handle);
                     if (type != NOT_READY)
                         audio_type_status->cur_audio_type = type;
                 }
 
                 if (audio_type_status->audio_type != LPCM && audio_type_status->cur_audio_type == LPCM) {
                     enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
-                    audio_type_status->reset_input = true;
+                    audio_type_status->fmt_change = true;
                 } else if (audio_type_status->audio_type == LPCM && audio_type_status->cur_audio_type != LPCM){
                     ALOGV("Raw data found: type(%d)\n", audio_type_status->cur_audio_type);
                     enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
-                    audio_type_status->reset_input = true;
+                    audio_type_status->fmt_change = true;
+                } else if (audio_type_status->earc_mute != mute) {
+                    audio_type_status->fmt_change = true;
                 }
 
+                audio_type_status->earc_mute = mute;
                 audio_type_status->audio_type = audio_type_status->cur_audio_type;
                 if (audio_type_status->hdmi_packet != cur_audio_packet) {
                     audio_type_status->hdmi_packet = cur_audio_packet;
@@ -1202,5 +1207,38 @@ hdmiin_audio_packet_t audio_parse_get_audio_packet_type(audio_type_parse_t *stat
         return AUDIO_PACKET_AUDS;
     }
     return status->hdmi_packet;
+}
+
+void audio_fmt_check(audio_type_parse_t *status, void *buffer, size_t bytes)
+{
+    audio_type_parse_t *audio_type_status = status;
+
+    audio_type_status->cur_audio_type = hdmiin_audio_format_detection(audio_type_status->mixer_handle);
+    if (audio_type_status->audio_type == LPCM && audio_type_status->cur_audio_type != LPCM) {
+        ALOGI("audio_fmt_check Raw data found: type(%d)\n", audio_type_status->cur_audio_type);
+        enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
+        memset(buffer, 0, bytes);
+        audio_type_status->audio_type = audio_type_status->cur_audio_type;
+    }
+}
+
+bool is_audio_parse_fmt_change(audio_type_parse_t *status)
+{
+    if (!status) {
+        ALOGV("%s, NULL pointer\n", __FUNCTION__);
+        return false;
+    }
+    return status->fmt_change;
+}
+
+int clear_audio_parse_fmt_change(audio_type_parse_t *status)
+{
+    if (!status) {
+        ALOGV("%s, NULL pointer\n", __FUNCTION__);
+        return -1;
+    }
+
+    status->fmt_change = false;
+    return 0;
 }
 

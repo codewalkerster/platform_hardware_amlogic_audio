@@ -56,7 +56,6 @@
 
 #define INVALID_TYPE                -1
 #define MINUS_3_DB_IN_FLOAT M_SQRT1_2 // -3dB = 0.70710678
-#define HDMIIN_MULTICH_DOWNMIX
 
 typedef enum AML_INPUT_STREAM_CONFIG_TYPE {
     AML_INPUT_STREAM_CONFIG_TYPE_CHANNELS   = 0,
@@ -86,20 +85,34 @@ static inline int find_61937_sync_word(char *buffer, int size)
 }
 
 /* expand channels or contract channels*/
-int input_stream_channels_adjust(struct audio_stream_in *stream, void* buffer, size_t bytes)
+int input_stream_channels_adjust(struct audio_stream_in *stream, void* buffer, size_t bytes, bool downmix)
 {
     struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct aml_audio_device *adev = in->dev;
+    struct aml_audio_patch *patch = get_dev_patch(adev);
+    /* for earc layoutB which should discard 6 ch data for every 8ch */
+    int norminal_channel_cnt = 0;
     int ret = -1;
 
     if (!in || !bytes)
         return ret;
+    if (!patch) {
+        AM_LOGE("%s(),get_dev_patch is fail",__func__);
+        return ret;
+    }
 
     int channel_count = audio_channel_count_from_in_mask(in->hal_channel_mask);
 
     if (!channel_count)
         return ret;
 
-    size_t read_bytes = in->config.channels * bytes / channel_count;
+    norminal_channel_cnt = in->config.channels;
+    if (is_same_patch_src(adev, SRC_ARCIN) && patch->arc_layout_b) {
+        norminal_channel_cnt = 8;
+        in->read_mul_factor = 4;
+    }
+
+    size_t read_bytes = norminal_channel_cnt * bytes / channel_count;
     if (!in->input_tmp_buffer || in->input_tmp_buffer_size < read_bytes) {
         in->input_tmp_buffer = aml_audio_realloc(in->input_tmp_buffer, read_bytes * 2);
         if (!in->input_tmp_buffer) {
@@ -111,37 +124,36 @@ int input_stream_channels_adjust(struct audio_stream_in *stream, void* buffer, s
 
     ret = aml_alsa_input_read(stream, in->input_tmp_buffer, read_bytes);
     if (in->config.format == PCM_FORMAT_S16_LE) {
-#ifdef HDMIIN_MULTICH_DOWNMIX
-        int samples = read_bytes / 2;
-        int output_samples = bytes / 2;
-        memcpy_by_audio_format(in->input_tmp_buffer, AUDIO_FORMAT_PCM_FLOAT,
-            in->input_tmp_buffer, AUDIO_FORMAT_PCM_16_BIT, samples);
-        Downmix_foldFrom7Point1((float *)in->input_tmp_buffer,
-            (float *)in->input_tmp_buffer, samples >> 3, false);
-        memcpy_by_audio_format(buffer, AUDIO_FORMAT_PCM_16_BIT,
-            in->input_tmp_buffer, AUDIO_FORMAT_PCM_FLOAT, output_samples);
-#else
-        adjust_channels(in->input_tmp_buffer, in->config.channels,
-            buffer, channel_count, 2, read_bytes);
-#endif
+        if (downmix) {
+            int samples = read_bytes / 2;
+            int output_samples = bytes / 2;
+            memcpy_by_audio_format(in->input_tmp_buffer, AUDIO_FORMAT_PCM_FLOAT,
+                in->input_tmp_buffer, AUDIO_FORMAT_PCM_16_BIT, samples);
+            Downmix_foldFrom7Point1((float *)in->input_tmp_buffer,
+                (float *)in->input_tmp_buffer, samples >> 3, false);
+            memcpy_by_audio_format(buffer, AUDIO_FORMAT_PCM_16_BIT,
+                in->input_tmp_buffer, AUDIO_FORMAT_PCM_FLOAT, output_samples);
+        } else {
+            adjust_channels(in->input_tmp_buffer, norminal_channel_cnt,
+                buffer, channel_count, 2, read_bytes);
+        }
     } else if (in->config.format == PCM_FORMAT_S32_LE) {
-#ifdef HDMIIN_MULTICH_DOWNMIX
-        int samples = read_bytes / 4;
-        int output_samples = bytes / 4;
-        memcpy_by_audio_format(in->input_tmp_buffer, AUDIO_FORMAT_PCM_FLOAT,
-            in->input_tmp_buffer, AUDIO_FORMAT_PCM_32_BIT, samples);
-        Downmix_foldFrom7Point1((float *)in->input_tmp_buffer,
-            (float *)in->input_tmp_buffer, samples >> 3, false);
-        memcpy_by_audio_format(buffer, AUDIO_FORMAT_PCM_32_BIT,
-            in->input_tmp_buffer, AUDIO_FORMAT_PCM_FLOAT, output_samples);
-#else
-        adjust_channels(in->input_tmp_buffer, in->config.channels,
-            buffer, channel_count, 4, read_bytes);
-#endif
+        if (downmix) {
+            int samples = read_bytes / 4;
+            int output_samples = bytes / 4;
+            memcpy_by_audio_format(in->input_tmp_buffer, AUDIO_FORMAT_PCM_FLOAT,
+                in->input_tmp_buffer, AUDIO_FORMAT_PCM_32_BIT, samples);
+            Downmix_foldFrom7Point1((float *)in->input_tmp_buffer,
+                (float *)in->input_tmp_buffer, samples >> 3, false);
+            memcpy_by_audio_format(buffer, AUDIO_FORMAT_PCM_32_BIT,
+                in->input_tmp_buffer, AUDIO_FORMAT_PCM_FLOAT, output_samples);
+        } else {
+            adjust_channels(in->input_tmp_buffer, norminal_channel_cnt,
+                buffer, channel_count, 4, read_bytes);
+        }
     }
-   return ret;
+    return ret;
 }
-
 
 bool is_HBR_stream(struct audio_stream_in *stream)
 {
@@ -161,13 +173,15 @@ bool is_HBR_stream(struct audio_stream_in *stream)
                 ret = true;
             }
         }
+    } else if (in->device == AUDIO_DEVICE_IN_HDMI_ARC) {
+        return (in->spdif_fmt_hw == MAT);
     }
     return ret;
 }
 
 bool is_game_mode(struct aml_audio_device *aml_dev)
 {
-    if (is_same_patch_src(aml_dev, SRC_HDMIIN) ||
+    if (!is_same_patch_src(aml_dev, SRC_HDMIIN) ||
         !is_dev_patch_exist(aml_dev) ||
         (is_dev_patch_valid(aml_dev) && is_dev_patch_exist(aml_dev) && (get_dev_patch(aml_dev)->input_src != AUDIO_DEVICE_IN_HDMI ||
         get_dev_patch(aml_dev)->IEC61937_format == true))) {
@@ -302,7 +316,7 @@ bool check_tv_stream_signal(struct audio_stream_in *stream)
             /* The data of ALSA has not been read for a long time in the muted state,
              * resulting in the accumulation of data. So, cache of capture needs to be cleared.
              */
-            if (!(in->device & AUDIO_DEVICE_IN_HDMI_ARC || in->device & AUDIO_DEVICE_IN_SPDIF))
+            if (in->pcm && !(in->device & AUDIO_DEVICE_IN_HDMI_ARC || in->device & AUDIO_DEVICE_IN_SPDIF))
                 pcm_stop(in->pcm);
             in->mute_log_cntr = 0;
             in->mute_flag = false;

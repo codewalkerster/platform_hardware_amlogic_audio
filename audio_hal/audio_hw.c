@@ -5167,6 +5167,7 @@ int adev_open_input_stream(struct audio_hw_device *dev,
         goto err;
     }
     memset(in->buffer, 0, in->config.period_size * audio_stream_in_frame_size(&in->stream));
+    in->read_mul_factor = 2;
 
     if (!(in->device & AUDIO_DEVICE_IN_WIRED_HEADSET) &&
         in->requested_rate != in->config.rate && in->requested_rate != 0) {
@@ -6618,19 +6619,10 @@ exit:
             } else {
                 goto hwsync_rewrite;
             }
-        }
-        else if (return_bytes < 0) {
-            submix_post_sleep(aml_out);
-            if (adev->debug_flag) {
-                AM_LOGI("return");
-            }
-            return return_bytes;
+        } else if (return_bytes < 0) {
+            //do nothing
         } else {
-            submix_post_sleep(aml_out);
-            if (adev->debug_flag) {
-                AM_LOGI("return");
-            }
-            return total_bytes;
+            return_bytes = total_bytes;
         }
     }
 

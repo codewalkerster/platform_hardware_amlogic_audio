@@ -4028,8 +4028,8 @@ static void *dolby_ms12_threadloop(void *data)
     prctl(PR_SET_NAME, (unsigned long)"DOLBY_MS12");
     aml_set_thread_priority("DOLBY_MS12", ms12->dolby_ms12_threadID);
 
-    /*affinity the thread to cpu 2/3 which has few IRQ*/
-    aml_audio_set_cpu23_affinity();
+    /*affinity the thread to cpu/apu which has few IRQ*/
+    aml_audio_set_cpu_affinity(true);
 
     while ((ms12->dolby_ms12_thread_exit == false) && (ms12->dolby_ms12_enable)) {
         ALOGV("%s() goto dolby_ms12_scheduler_run", __FUNCTION__);

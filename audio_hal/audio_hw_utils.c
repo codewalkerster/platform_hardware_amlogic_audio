@@ -1510,7 +1510,7 @@ int aml_audio_get_dolby_dap_drc_mode(int *drc_mode, int *drc_cut, int *drc_boost
     return 0;
 }
 
-void aml_audio_set_cpu23_affinity()
+void aml_audio_set_cpu_affinity(bool APU)
 {
     cpu_set_t cpuSet;
 
@@ -1518,7 +1518,7 @@ void aml_audio_set_cpu23_affinity()
     struct audio_board_config *bd_config = &aml_dev->board_config;
     CPU_ZERO(&cpuSet);
 
-    if (bd_config->cpux_affinity_support > 0) {
+    if (APU == true && bd_config->cpux_affinity_support > 0) {
         CPU_SET(bd_config->cpux_affinity_support, &cpuSet);
         ALOGI("%s(), set affinity for some chips which support cpu %d.\n", __FUNCTION__, bd_config->cpux_affinity_support);
     } else {

@@ -2200,9 +2200,9 @@ void *audio_dtv_patch_output_threadloop(void *data)
           __FUNCTION__, patch->output_thread_exit);
 
     prctl(PR_SET_NAME, (unsigned long)"dtv_output_patch");
-    aml_set_thread_priority("dtv_output_patch", patch->audio_output_threadID);
-    /*affinity the thread to cpu 2/3 which has few IRQ*/
-    aml_audio_set_cpu23_affinity();
+    aml_set_thread_sched_priority("dtv_output_patch", patch->audio_output_threadID, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY - 2);
+    /*affinity the thread to cpu/apu which has few IRQ*/
+    aml_audio_set_cpu_affinity(true);
 
     while (!patch->output_thread_exit) {
         if (patch->dtv_decoder_state == AUDIO_DTV_PATCH_DECODER_STATE_PAUSE) {
@@ -3174,10 +3174,10 @@ void *audio_dtv_patch_input_threadloop(void *data)
           __FUNCTION__, patch->input_thread_exit);
 
     prctl(PR_SET_NAME, (unsigned long)"dtv_input_patch");
-    aml_set_thread_priority("dtv_input_patch", patch->audio_input_threadID);
-    /*affinity the thread to cpu 2/3 which has few IRQ*/
-    aml_audio_set_cpu23_affinity();
-    dtv_package_list_init(patch->dtv_package_list);
+    aml_set_thread_sched_priority("dtv_input_patch", patch->audio_input_threadID, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY - 1);
+    /*affinity the thread to cpu/apu which has few IRQ*/
+    aml_audio_set_cpu_affinity(false);
+    dtv_package_list_init(list);
 
     while (!patch->input_thread_exit) {
 
@@ -4017,9 +4017,10 @@ void *audio_dtv_patch_output_threadloop_v2(void *data)
           __FUNCTION__, patch->output_thread_exit);
 
     prctl(PR_SET_NAME, (unsigned long)"dtv_output_patch");
-    aml_set_thread_sched_priority("dtv_output_patch", patch->audio_output_threadID, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY - 1);
-    /*affinity the thread to cpu 2/3 which has few IRQ*/
-    aml_audio_set_cpu23_affinity();
+
+    aml_set_thread_sched_priority("dtv_output_patch", patch->audio_output_threadID, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY - 2);
+    /*affinity the thread to cpu/apu which has few IRQ*/
+    aml_audio_set_cpu_affinity(true);
     aml_out->output_speed = 1.0f;
     aml_out->dtvsync_enable =  property_get_int32("vendor.media.dtvsync.enable", 1);
     ALOGI("output_speed=%f,dtvsync_enable=%d\n", aml_out->output_speed, aml_out->dtvsync_enable);
