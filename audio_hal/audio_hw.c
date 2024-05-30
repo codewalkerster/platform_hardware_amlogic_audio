@@ -4425,10 +4425,16 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         goto exit;
     }
 
+    //This is not runtime parameter.
     //For ott support soundbar project, using Enable Soundbar Mode UI to switch soundbar or OTT mode.
     ret = str_parms_get_int(parms, "hal_param_soundbar_mode", &val);
     if (ret >= 0) {
-        adev->enable_soundbar_mode = (val != 0);
+        bool enable  = (val != 0) ? true : false;
+        if (adev->enable_soundbar_mode != enable) {
+            adev->enable_soundbar_mode = enable;
+            ALOGI(" enable_soundbar_mode = %d\n", enable);
+            adev_ms12_cleanup((struct audio_hw_device *)adev);
+        }
         goto exit;
     }
 
@@ -4547,6 +4553,9 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         }
         goto exit;
     }
+
+
+
 
     set_param_kara(dev, parms);
 
@@ -8961,6 +8970,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     }
     adev->sink_gain[OUTPORT_HEADPHONE] = 0;
     adev->continuous_audio_mode_default = 0;
+    adev->enable_soundbar_mode = 0;
     adev->dual_spdif_support = property_get_bool("ro.vendor.platform.is.dualspdif", false);
     adev->ms12_force_ddp_out = property_get_bool("ro.vendor.platform.is.forceddp", false);
     adev->spdif_enable = true;

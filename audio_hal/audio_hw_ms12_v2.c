@@ -837,7 +837,7 @@ static void set_dolby_ms12_dap_init_mode(struct aml_audio_device *adev)
 
     /* Dolby MS12 V2 uses DAP Tuning file */
     if (adev->is_ms12_tuning_dat) {
-        dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || is_SBR(adev));
+        dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || (is_SBR(adev) && (adev->enable_soundbar_mode == 1)));
     }
     if (adev->dolby_ms12_dap_init_mode) {
         dap_init_mode = adev->dolby_ms12_dap_init_mode;
@@ -1031,9 +1031,10 @@ int get_the_dolby_ms12_prepared(
             output_config |= MS12_OUTPUT_MASK_DDP;
         }
     }
-    /* for soundbar, we only need speaker output */
-    if (is_SBR(adev))
-        output_config = MS12_OUTPUT_MASK_SPEAKER | MS12_OUTPUT_MASK_STEREO;
+    /* for soundbar, we only need speaker output, remove stereo pcm*/
+    if (is_SBR(adev) && (adev->enable_soundbar_mode == 1))
+        output_config = MS12_OUTPUT_MASK_SPEAKER;
+
 
     /* earc AVR connected, so we enable multi channel pcm out*/
     if (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev)) {
@@ -4409,7 +4410,9 @@ int dolby_ms12_main_flush(struct audio_stream_out *stream) {
     ALOGI("%s exit", __func__);
     return 0;
 }
-
+/* This API only changes the encoder graph's config, but now we only have ms12->output_config,
+ * so when change the output_config, we need keep the continuous graph's config
+ */
 int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
     struct aml_audio_device *adev = NULL;
     int output_config = MS12_OUTPUT_MASK_STEREO;
@@ -4438,7 +4441,7 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
         if (adev->sink_format == AUDIO_FORMAT_PCM_16_BIT &&
             b_encoder_enable != 0) {
             /*only enable the pcm output*/
-            output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+            output_config = MS12_OUTPUT_MASK_STEREO;
             b_reset = 1;
         }
     } else {
@@ -4449,7 +4452,7 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
             }
         } else if (adev->sink_capability == AUDIO_FORMAT_E_AC3 || adev->sink_capability == AUDIO_FORMAT_DOLBY_TRUEHD) {
             /*for sink only support truehd, it can't support MAT, so need to convert DDP*/
-            output_config = MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+            output_config = MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO;
             if (!current_ddp_encoder_enable) {
                 b_reset = 1;
             }
@@ -4461,12 +4464,12 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
                 }
             }
         } else if (adev->sink_capability == AUDIO_FORMAT_AC3) {
-            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO;
             if (!current_dd_encoder_enable || current_ddp_encoder_enable) {
                 b_reset = 1;
             }
         } else if (adev->sink_capability == AUDIO_FORMAT_PCM_16_BIT) {
-            output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+            output_config = MS12_OUTPUT_MASK_STEREO;
             if (current_ddp_encoder_enable || current_mat_encoder_enable) {
                 b_reset = 1;
             }
@@ -4481,7 +4484,7 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
 
     if (adev->is_netflix && adev->aaudio_low_latency) {
         // LLP only request pcm, turn off encoder to reduce cpu loading.
-        output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+        output_config = MS12_OUTPUT_MASK_STEREO;
         b_reset = 1;
     }
 
@@ -4517,6 +4520,10 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
         ms12->optical_format = adev->optical_format;
         ms12->sink_format    = adev->sink_format;
 
+        /*keep the original speaker config in encoder reconfig*/
+        if (ms12->output_config & MS12_OUTPUT_MASK_SPEAKER) {
+            output_config |= MS12_OUTPUT_MASK_SPEAKER;
+        }
         ALOGI("%s new out config =0x%x", __func__, output_config);
         aml_ms12_main_encoder_reconfig(ms12, output_config);
         ms12->b_encoder_reset = true;

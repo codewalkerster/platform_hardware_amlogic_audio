@@ -791,6 +791,7 @@ struct aml_stream_out {
     bool is_heaac_changed;
     bool is_ddp_offload_use_split;
     bool is_preempt_deep_buffer_stream;
+    bool enable_soundbar_mode;
 };
 
 typedef ssize_t (*write_func)(struct audio_stream_out *stream, const void *buffer, size_t bytes);
