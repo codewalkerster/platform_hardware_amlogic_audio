@@ -4388,13 +4388,14 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
-
+#ifndef AUDIO_HAL_DISABLE_MS12
         ret = str_parms_get_int(parms, "legacy_ddplus_out", &val);
         if (ret >= 0) {
             bool legacy_ddplus_out_falg = val ? true : false;
             dolby_ms12_set_ddp_5_1_out(legacy_ddplus_out_falg);
             ALOGI("-legacy_ddplus_out = %s\n", val ? "true" : "false");
         }
+#endif
     }
 
     if (eDTSXLib == adev->dts_lib_type) {
