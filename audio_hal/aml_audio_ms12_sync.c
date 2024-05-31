@@ -949,7 +949,7 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
     //ALOGI("latency_frames =%d", latency_frames);
     tuning_delay = get_ms12_tunnel_latency_offset(get_output_by_devices(adev->cur_out_devices),
                                                       out->hal_internal_format,
-                                                      adev->ms12.optical_format,
+                                                      adev->sink_format,
                                                       adev->is_netflix,
                                                       is_output_ddp_atmos,
                                                       platform_type,
