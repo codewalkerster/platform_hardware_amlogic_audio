@@ -6666,20 +6666,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
         AM_LOGI("io %d: out:%p usecase:%s standby to unstandby", aml_out->io_handle, aml_out, usecase2Str(aml_out->usecase));
         aml_out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
         aml_out->standby = false;
-        /* for asdk14 cases:
-         * atmos_stickiness_usage_media_ddp_out-no_cfg-v241-HDMI (6581)
-         * atmos_stickiness_usage_media_mat_out-no_cfg-v241-HDMI (6612)
-         */
-        if (is_deep_buf && !adev->is_netflix) {
-            struct aml_stream_out *out = NULL;
-            for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
-                out = adev->active_outputs[i];
-                if (out && out->is_ms12_main_decoder && out->standby) {
-                    close_ms12_output_main_stream((struct audio_stream_out *)out);
-                }
-            }
-        }
-
+#ifndef AUDIO_HAL_DISABLE_MS12
         // NTS PCM mode: volume-tunel-nontunel/audio-lat-heaac testcase.
         if ((eDolbyMS12Lib == adev->dolby_lib_type) && !dolby_stream_active(adev)) {
             ALOGI("%s : without dolby_stream, pcm drc use line mode", __func__);
@@ -6688,6 +6675,21 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
                 , ms12
                 , AUDIO_FORMAT_PCM_16_BIT //treat as PCM format when stream is end.
                 );
+        }
+#endif
+    }
+    /* for asdk14 cases:
+     * atmos_stickiness_usage_media_ddp_out-no_cfg-v241-HDMI (6581)
+     * atmos_stickiness_usage_media_mat_out-no_cfg-v241-HDMI (6612)
+     */
+    if (is_deep_buf && !adev->is_netflix && !aml_out->hw_sync_mode &&
+        !aml_out->is_tv_src_stream && !is_dev_patch_exist(adev)) {
+        struct aml_stream_out *out = NULL;
+        for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
+            out = adev->active_outputs[i];
+            if (out && out->is_ms12_main_decoder) {
+                close_ms12_output_main_stream((struct audio_stream_out *)out);
+            }
         }
     }
 
@@ -7224,8 +7226,28 @@ ssize_t out_write_new(struct audio_stream_out *stream,
     ssize_t ret = 0;
     write_func  write_func_p = NULL;
     size_t frame_size = audio_stream_out_frame_size(stream);
-    size_t in_frames = bytes / frame_size;
     struct aml_audio_device *adev = aml_out->dev;
+
+    if ((aml_out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) &&
+        ((aml_out->hal_format == AUDIO_FORMAT_AC3) || (aml_out->hal_format == AUDIO_FORMAT_E_AC3) || (aml_out->hal_format == AUDIO_FORMAT_E_AC3_JOC)) &&
+        !adev->is_netflix && !aml_out->hw_sync_mode &&
+        !aml_out->is_tv_src_stream &&
+        !is_dev_patch_exist(adev) &&
+        (eDolbyMS12Lib == adev->dolby_lib_type)) {
+        if (adev->debug_flag > 1) {
+            AM_LOGI("+++ io %d: out(%p) original bytes (%zu)", aml_out->io_handle, stream, bytes);
+        }
+        if (aml_out->total_write_size == 0) {
+            aml_out->is_ddp_offload_use_split = is_ddp_contain_six_block(buffer, (int32_t)bytes);
+            ALOGI("%s is_ddp_offload_use_split %d\n", __FUNCTION__, aml_out->is_ddp_offload_use_split);
+        }
+        if (aml_out->is_ddp_offload_use_split && (bytes >= DIRECT_DDP_BUFSIZE)) {
+            bytes = DIRECT_DDP_BUFSIZE;
+        }
+    }
+
+    size_t in_frames = bytes / frame_size;
+
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
     bool is_dolby_truehd = (aml_out->hal_internal_format == AUDIO_FORMAT_DOLBY_TRUEHD);
 

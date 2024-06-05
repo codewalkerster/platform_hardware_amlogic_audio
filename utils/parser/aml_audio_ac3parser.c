@@ -398,6 +398,29 @@ error:
     return 1;
 }
 
+bool is_ddp_contain_six_block(const void *in_buffer, int32_t numBytes)
+{
+    struct ac3_parser_info ac3_info = {0};
+    int32_t frame_offset = 0;
+
+    const unsigned char *frameBuf = (const unsigned char *)in_buffer;
+
+    int ret = aml_ac3_parser_frame_header(frameBuf, numBytes,  &frame_offset, &ac3_info.frame_size,
+                                   &ac3_info.channel_num, &ac3_info.numblks, &ac3_info.timeslice_61937,
+                                   &ac3_info.framevalid_flag,
+                                   &ac3_info.frame_dependent,
+                                   &ac3_info.sample_rate,
+                                   &ac3_info.nIsEc3);
+
+    if ((ret == 0) && (ac3_info.frame_size > 0)) {
+        ALOGI("%s frame_offset %d frame_size %d channel_num %d numblks %d\n",
+              __FUNCTION__, frame_offset, ac3_info.frame_size, ac3_info.channel_num, ac3_info.numblks);
+        return ac3_info.nIsEc3 && (ac3_info.numblks == 6);
+    }
+    else {
+        return false;
+    }
+}
 
 int aml_ac3_parser_process(void *parser_handle, const void *in_buffer, int32_t numBytes, int32_t *used_size, void **output_buf, int32_t *out_size, struct ac3_parser_info * ac3_info)
 {

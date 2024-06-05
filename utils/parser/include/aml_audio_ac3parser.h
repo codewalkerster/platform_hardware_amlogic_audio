@@ -33,6 +33,7 @@ int aml_ac3_parser_open(void **pparser_handle);
 int aml_ac3_parser_close(void *parser_handle);
 int aml_ac3_parser_process(void *parser_handle, const void *buffer, int32_t numBytes, int32_t *used_size, void **output_buf, int32_t *out_size, struct ac3_parser_info * ac3_info);
 int aml_ac3_parser_reset(void *parser_handle);
+bool is_ddp_contain_six_block(const void *buffer, int32_t nBytes);
 
 
 #endif
