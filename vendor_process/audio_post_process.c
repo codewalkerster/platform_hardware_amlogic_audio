@@ -281,7 +281,7 @@ int aml_remove_audio_effect(struct aml_native_postprocess *native_postprocess, e
             native_postprocess->postprocessors[i].itfe = NULL;
             native_postprocess->postprocessors[i].index = -1;
             native_postprocess->postprocessors[i].idesc = NULL;
-            native_postprocess->postprocessors[i - 1].port = -1;
+            native_postprocess->postprocessors[i].port = -1;
             status = 0;
             found = true;
         }
