@@ -272,12 +272,12 @@ ifeq ($(strip $(TARGET_BOOTLOADER_BOARD_NAME)), atom)
 endif
 
 #For ATV Far Field AEC
-#ifeq ($(BOARD_ENABLE_FAR_FIELD_AEC), true)
+ifeq ($(BOARD_ENABLE_FAR_FIELD_AEC), true)
     LOCAL_CFLAGS += -DENABLE_AEC_APP
     LOCAL_SRC_FILES += \
         ../vendor_process/audio_aec.c \
         ../vendor_process/fifo_wrapper.cpp
-#endif
+endif
 
 # AML_ASYNC_WRITE_COMPRESS_ENABLE = true
 ifeq ($(AML_ASYNC_WRITE_COMPRESS_ENABLE), true)
