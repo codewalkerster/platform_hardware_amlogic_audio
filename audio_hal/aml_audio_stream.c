@@ -40,6 +40,7 @@
 #include "audio_hw_ms12_common.h"
 #include "audio_hw_resource_mgr.h"
 #include "dtv_private_object.h"
+#include "aml_audio_ms12_sync.h"
 
 #ifdef MS12_V24_ENABLE
 #include "audio_hw_ms12_v2.h"
@@ -1559,4 +1560,42 @@ exit:
     return ret;
 }
 
+void aml_netflix_volume_correction(struct aml_stream_out *aml_out)
+{
+    int tune_frames = 0;
+    int estimate_frames = 0;
+    struct aml_audio_device *adev = aml_out->dev;
+
+#if ANDROID_PLATFORM_SDK_VERSION > 33
+    /*
+     * Android U volumeshaper will refer to aml_out->last_frames_position,
+     * add some patch to make volume easing curve better.
+    */
+    if (!adev->is_netflix || (eDolbyMS12Lib != adev->dolby_lib_type) || aml_out->nts_volume_correction != false) {
+        return;
+    }
+
+    tune_frames = aml_audio_get_ms12_nontunel_tune_latency((const struct audio_stream_out *)aml_out);
+    if (audio_get_main_format(aml_out->hal_format) == AUDIO_FORMAT_E_AC3) {
+        if (tune_frames >= 96 * 48) {        // 96 ms
+            estimate_frames = 64 * 48 - 1;
+        } else if (tune_frames >= 64 * 48) { // 64 ms
+            estimate_frames = 32 * 48 - 1;
+        }
+    } else if (audio_is_linear_pcm(aml_out->hal_format)) {
+        if (tune_frames >= 2048 * 3) {        // 128 ms
+            estimate_frames = 2048 * 2 - 1;
+        } else if (tune_frames >= 2048 * 2) { // 84 ms
+            estimate_frames = 2048 - 1;
+        }
+    }
+
+    if (adev->ms12.last_ms12_pcm_out_position > estimate_frames) {
+        set_ms12_main_volume(&adev->ms12, aml_out->volume_l);
+        aml_out->nts_volume_correction = true;
+        ALOGI("%s volume %f, last_ms12_pcm_out_position %" PRIu64 ", tune_frames %d, estimate_frames %d",
+            __func__, aml_out->volume_l, adev->ms12.last_ms12_pcm_out_position, tune_frames, estimate_frames);
+    }
+#endif
+}
 

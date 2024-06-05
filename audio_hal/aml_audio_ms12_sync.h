@@ -49,5 +49,7 @@ int aml_audio_dtv_get_ms12_latency(struct audio_stream_out *stream);
  */
 int aml_audio_dtv_get_nonms12_latency(struct audio_stream_out * stream);
 
+int aml_audio_get_ms12_nontunel_tune_latency(const struct audio_stream_out * stream);
+
 #endif
 

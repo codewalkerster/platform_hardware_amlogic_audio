@@ -31,6 +31,7 @@
 #include "aml_audio_spdifout.h"
 #include "aml_audio_ms12_sync.h"
 #include "audio_hw_resource_mgr.h"
+#include "dolby_lib_api.h"
 
 #define MS12_OUTPUT_5_1_DDP "vendor.media.audio.ms12.output.5_1_ddp"
 
@@ -1328,6 +1329,51 @@ static int get_ms12_tunnel_xts_latency(void) {
     return latency_ms;
 }
 
+int aml_audio_get_ms12_nontunel_tune_latency(const struct audio_stream_out * stream)
+{
+    struct aml_stream_out *out = (struct aml_stream_out *) stream;
+    struct aml_audio_device *adev = out->dev;
+    bool is_output_ddp_atmos = aml_audio_output_ddp_atmos((struct audio_stream_out *)stream);
+    bool is_earc = is_earc_connected(adev);
+    bool b_deepbuffer = (out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER);
+    int frame_latency = 0;
+    device_type_t platform_type = STB;
+    bool is_netflix = adev->is_netflix;
+
+    if (eDolbyMS12Lib != adev->dolby_lib_type) {
+        return 0;
+    }
+
+    if (is_STB(adev)) {
+        platform_type = STB;
+    } else if (is_TV(adev)) {
+        platform_type = TV;
+    } else if (is_SBR(adev)) {
+        platform_type = SBR;
+    }
+
+    if (adev->ms12.is_bypass_ms12) {
+        frame_latency = get_ms12_bypass_latency_offset(false, is_netflix) * 48;
+        if (adev->bDVEnable && !is_TV(adev)) {
+            frame_latency += get_sink_dv_latency_offset(false, is_netflix) * 48;
+        }
+    } else {
+        frame_latency = get_ms12_nontunnel_latency_offset(get_output_by_devices(adev->cur_out_devices),
+                                                           out->hal_internal_format,
+                                                           adev->sink_format,
+                                                           is_netflix,
+                                                           platform_type,
+                                                           is_earc) * 48;
+        if (out->is_normal_pcm && b_deepbuffer) {
+            frame_latency += get_ms12_nontunel_deepbuffer_latency_offset(is_netflix) * 48;
+        }
+        if (adev->ms12.is_dolby_atmos || adev->atoms_lock_flag) {
+            frame_latency += get_ms12_atmos_latency_offset(false, is_netflix) * 48;
+        }
+    }
+
+    return frame_latency;
+}
 
 int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stream, uint64_t *frames, struct timespec *timestamp)
 {
@@ -1347,19 +1393,7 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
     bool b_raw_in = false;
     bool b_raw_out = false;
     uint64_t frames_written_hw = out->last_frames_position;
-    device_type_t platform_type = STB;
     bool b_deepbuffer = (out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER);
-    bool is_earc = is_earc_connected(adev);
-
-    if (is_STB(adev)) {
-        platform_type = STB;
-    }
-    else if (is_TV(adev)) {
-        platform_type = TV;
-    }
-    else if (is_SBR(adev)) {
-        platform_type = SBR;
-    }
 
     if (frames_written_hw == 0) {
         ALOGV("%s(), not ready yet", __func__);
@@ -1405,26 +1439,7 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
         }
 
         *frames = frames_written_hw;
-
-        if (adev->ms12.is_bypass_ms12) {
-            frame_latency = get_ms12_bypass_latency_offset(false, adev->is_netflix) * 48;
-            if (adev->bDVEnable && !is_TV(adev)) {
-                frame_latency += get_sink_dv_latency_offset(false, adev->is_netflix) * 48;
-            }
-        } else {
-            frame_latency = get_ms12_nontunnel_latency_offset(get_output_by_devices(adev->cur_out_devices),
-                                                               out->hal_internal_format,
-                                                               adev->sink_format,
-                                                               adev->is_netflix,
-                                                               platform_type,
-                                                               is_earc) * 48;
-            if (out->is_normal_pcm && b_deepbuffer) {
-                frame_latency += get_ms12_nontunel_deepbuffer_latency_offset(adev->is_netflix) * 48;
-            }
-            if (adev->ms12.is_dolby_atmos || adev->atoms_lock_flag) {
-                frame_latency += get_ms12_atmos_latency_offset(false, adev->is_netflix) * 48;
-            }
-        }
+        frame_latency = aml_audio_get_ms12_nontunel_tune_latency(stream);
     }
 
     ALOGV("[%s]cur_devices %#x out->hal_internal_format %x adev->ms12.sink_format %x adev->continuous_audio_mode %d \n",

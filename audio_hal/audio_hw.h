@@ -800,6 +800,7 @@ struct aml_stream_out {
     bool is_system_audio_usage_media; //it's a system sound, and the audio usage is media
     bool enable_soundbar_mode;
     bool is_ms12_main_decoder_disable;
+    bool nts_volume_correction;
 };
 
 typedef ssize_t (*write_func)(struct audio_stream_out *stream, const void *buffer, size_t bytes);

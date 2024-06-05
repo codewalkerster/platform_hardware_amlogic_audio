@@ -6749,6 +6749,8 @@ hwsync_rewrite:
 
 exit:
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
+        aml_netflix_volume_correction(aml_out);
+
         if (continuous_mode(adev)) {
             aml_out->timestamp = adev->ms12.timestamp;
             aml_out->lasttimestamp = adev->ms12.timestamp;
