@@ -6823,10 +6823,10 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
 
                 if (is_deep_buf) {
                     ms12->deep_buf_audio_skip += bytes_remaining / frame_size;
-                    AM_LOGI("deep buf : bytes_remaining =%d total skip =%lld", bytes_remaining, ms12->deep_buf_audio_skip);
+                    AM_LOGI("deep buf : bytes_remaining =%zu total skip =%" PRId64 "", bytes_remaining, ms12->deep_buf_audio_skip);
                 } else {
                     ms12->sys_audio_skip += bytes_remaining / frame_size;
-                    AM_LOGI("sys audio : bytes_remaining =%d total skip =%lld", bytes_remaining, ms12->sys_audio_skip);
+                    AM_LOGI("sys audio : bytes_remaining =%zu total skip =%" PRId64 "", bytes_remaining, ms12->sys_audio_skip);
                 }
             }
         }
