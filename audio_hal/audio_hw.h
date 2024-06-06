@@ -323,6 +323,7 @@ struct aml_audio_device {
     bool spdif_enable;
     int hdmi_is_pth_active;
     int disable_pcm_mixing;
+    bool enable_soundbar_mode;
 
     int a2dp_updated;
     void * a2dp_hal;

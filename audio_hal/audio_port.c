@@ -895,6 +895,9 @@ static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, 
     int16_t *buf16 = buffer;
     int frames = bytes / FRAMESIZE_16BIT_STEREO;
     port->processed_buf = buffer;
+    struct audioCfg *src_cfg = &port->src_cfg;
+    struct audioCfg *target_cfg = &port->cfg;
+    struct aml_audio_device *adev = (struct aml_audio_device *)adev_get_handle();
 
     if (get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
         aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/port_befor_postprocess.raw", buf16, bytes);
@@ -902,7 +905,16 @@ static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, 
 
     if (port->postprocess)
         audio_post_process(port->postprocess, buffer, frames);
-
+    if (adev->enable_soundbar_mode) {
+        float port_gain = 1.0;
+        if ((adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI) != 0) {
+            port_gain = adev->sink_gain[OUTPORT_HDMI];
+        } else if ((adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER) != 0) {
+            port_gain = adev->sink_gain[OUTPORT_SPEAKER];
+        }
+        int samples = bytes / audio_bytes_per_sample(src_cfg->format);
+        apply_volume_2ch_by_format(port_gain, port->processed_buf, samples, src_cfg->format, target_cfg->format);
+    }
     port->processed_bytes = bytes;
     if (get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
         aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/port_processed.raw",

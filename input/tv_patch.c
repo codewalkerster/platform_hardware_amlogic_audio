@@ -686,7 +686,7 @@ void *audio_patch_output_threadloop(void *data)
             /* avsync for dev->dev patch*/
             if ((patch->need_do_avsync == true) && (patch->input_signal_stable == true) &&
                     (is_same_patch_src(aml_dev, SRC_ATV) ||
-                     is_same_patch_src(aml_dev, SRC_HDMIIN)||
+                     is_same_patch_src(aml_dev, SRC_HDMIIN) ||
                      is_same_patch_src(aml_dev, SRC_LINEIN))) {
 
                 if (!txlx_chip && !is_game_mode(aml_dev)) {

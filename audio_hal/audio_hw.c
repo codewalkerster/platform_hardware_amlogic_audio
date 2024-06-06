@@ -4428,6 +4428,13 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         goto exit;
     }
 
+    //For ott support soundbar project, using Enable Soundbar Mode UI to switch soundbar or OTT mode.
+    ret = str_parms_get_int(parms, "hal_param_soundbar_mode", &val);
+    if (ret >= 0) {
+        adev->enable_soundbar_mode = (val != 0);
+        goto exit;
+    }
+
     ret = str_parms_get_str(parms, "VX_SET_DTS_Mode", value, sizeof(value));
     if (ret >= 0) {
         int dts_decoder_output_mode = atoi(value);
@@ -8979,6 +8986,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     /* get the device Loudness level */
     adev->loudness_level = get_loudness_level();
     adev->ms12_dynamic_sleep = property_get_bool("ro.vendor.media.audio.ms12.dynamic_sleep", false);
+    adev->enable_soundbar_mode = false;
 
     /*for ms12 case, we set default continuous mode*/
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
