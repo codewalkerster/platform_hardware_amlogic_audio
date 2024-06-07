@@ -414,9 +414,9 @@
 #define  AVSYNC_NONMS12_TV_NETFLIX_TUNNEL_DDP_LATENCY                (0)  // 20
 
 
-
-#define  AVSYNC_DV_NETFLIX_TUNNEL_LATENCY                   (-15)
-#define  AVSYNC_DV_NETFLIX_NONTUNNEL_LATENCY                (-25)
+// This dv parameter based on Eleven device
+#define  AVSYNC_DV_NETFLIX_TUNNEL_LATENCY                   (0)
+#define  AVSYNC_DV_NETFLIX_NONTUNNEL_LATENCY                (-8)
 
 #define  AVSYNC_DV_NETFLIX_TUNNEL_LATENCY_PROPERTY                  "vendor.media.audio.hal.dv.netflix.tunnel"
 #define  AVSYNC_DV_NETFLIX_NONTUNNEL_LATENCY_PROPERTY               "vendor.media.audio.hal.dv.netflix.nontunnel"
