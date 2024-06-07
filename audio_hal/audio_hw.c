@@ -6471,23 +6471,6 @@ hwsync_rewrite:
             write_bytes = outsize;
             //in_frames = outsize / frame_size;
             write_buf = hw_sync->hw_sync_body_buf;
-
-            /* PCM use the Tunnel mode */
-            if (audio_is_linear_pcm(aml_out->hal_internal_format)) {
-                bool is_dtv_patch = (get_dev_patch(adev) && is_same_patch_src(adev, SRC_DTV));
-                bool is_local_out_bitstream = !get_dev_patch(adev) && (adev->sink_format > AUDIO_FORMAT_PCM_16_BIT);
-
-                pcm_data_do_pre_attenuation(
-                    write_buf
-                    , write_bytes
-                    , adev->ms12.dolby_ms12_enable
-                    , (is_dtv_patch || is_local_out_bitstream)
-                    , (adev->ms12.stereo_drc.mode == DOLBY_DRC_RF_MODE)
-                    , adev->ms12.system_sound_target
-                    , audio_bytes_per_sample(aml_out->hal_internal_format)
-                    );
-            }
-
         } else {
             return_bytes = hwsync_cost_bytes;
             if (need_reconfig_output) {
@@ -6498,6 +6481,22 @@ hwsync_rewrite:
     } else {
         write_buf = (void *) buffer;
         write_bytes = bytes;
+    }
+
+    /* PCM use the Tunnel mode */
+    if (audio_is_linear_pcm(aml_out->hal_internal_format)) {
+        bool is_dtv_patch = (get_dev_patch(adev) && is_same_patch_src(adev, SRC_DTV));
+        bool is_local_out_bitstream = !get_dev_patch(adev) && (adev->sink_format > AUDIO_FORMAT_PCM_16_BIT);
+
+        pcm_data_do_pre_attenuation(
+            write_buf
+            , write_bytes
+            , adev->ms12.dolby_ms12_enable
+            , (is_dtv_patch || is_local_out_bitstream)
+            , (adev->ms12.stereo_drc.mode == DOLBY_DRC_RF_MODE)
+            , adev->ms12.system_sound_target
+            , audio_bytes_per_sample(aml_out->hal_internal_format)
+            );
     }
 
     if (write_bytes > 0) {
