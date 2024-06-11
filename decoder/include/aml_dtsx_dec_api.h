@@ -134,6 +134,7 @@ typedef struct dtsx_dec_s {
     int passthroug_enable;
     int auto_config_out_for_vx;
     int loudness_enable;
+    int output_bitwidth;
     unsigned char *inbuf;
     unsigned int inbuf_size;
     unsigned char *a_dtsx_pp_output[3];
@@ -142,6 +143,9 @@ typedef struct dtsx_dec_s {
     int is_hdmi_output;
     ring_buffer_t input_ring_buf;
     ring_buffer_t spdif_ring_buffer;
+    unsigned char *sample_convert_buf;
+    int sample_convert_buf_size;
+    int device_type;
 } dtsx_dec_t;
 
 int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config);

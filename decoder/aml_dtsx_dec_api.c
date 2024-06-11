@@ -1057,6 +1057,7 @@ int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
     dtsx_dec->is_dtscd = dtsx_config->is_dtscd;
     dtsx_dec->is_iec61937 = dtsx_config->is_iec61937;
     dtsx_dec->is_hdmi_output = dtsx_config->is_hdmi_output;
+    dtsx_dec->device_type = dtsx_config->device_type;
     aml_dec->frame_cnt = 0;
     aml_dec->format = dtsx_config->format;
     dtsx_dec->stream_type = 0;

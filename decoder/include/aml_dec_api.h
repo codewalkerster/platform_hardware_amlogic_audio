@@ -69,6 +69,14 @@ typedef enum {
     AML_DEC_CONFIG_OUTPUT_BITWIDTH
 } aml_dec_config_type_t;
 
+enum Output_format {
+    FMT_16BIT = 1,
+    FMT_24BIT,
+    FMT_32BIT,
+    FMT_FLOAT,
+    FMT_DOUBLE
+};
+
 typedef enum {
     AML_DEC_REMAIN_SIZE, //runtime param
     AML_DEC_STREAM_INFO,
@@ -147,6 +155,9 @@ typedef struct aml_dec {
     bool debug_synced_frame_pts_flag;
     int dts_decode_enable;
     int dts_lib_type;   // #eDTSLibType_t
+    int output_format;
+    void* sample_convert_buf;
+    size_t convert_buf_size;
 } aml_dec_t;
 
 typedef struct aml_dcv_config {
@@ -155,6 +166,7 @@ typedef struct aml_dcv_config {
     bool is_iec61937;
     int decoding_mode;
     int nIsEc3;
+    int is_pcmout_32bits;
 } aml_dcv_config_t;
 
 typedef struct aml_dca_config {
@@ -176,6 +188,8 @@ typedef struct aml_dtsx_config {
     bool is_dtscd;
     bool is_iec61937;
     int output_ch;
+    int output_bw;
+    int device_type;
     void *dev;
 } aml_dtsx_config_t;
 
