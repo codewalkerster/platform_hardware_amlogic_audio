@@ -2149,7 +2149,7 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
                 out, *frames, timestamp->tv_sec, timestamp->tv_nsec, origin_tv_nsec, timems_latency, frame_latency, video_delay_frames);
         }
 
-        int64_t  frame_diff_ms =  (*frames - out->last_frame_reported) * 1000 / out->hal_rate;
+        int64_t  frame_diff_ms =  ((int64_t)*frames - (int64_t)out->last_frame_reported) * 1000 / out->hal_rate;
         int64_t  system_time_ms = 0;
         int delay = 0;
 
@@ -2163,7 +2163,7 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
         if  (llabs(jitter_diff) > JITTER_DURATION_MS && adev->debug_flag) {
             ALOGI("%s jitter out last pos info: %p %"PRIu64", sec = %ld, nanosec = %ld\n",__func__,out, out->last_frame_reported,
                 out->last_timestamp_reported.tv_sec, out->last_timestamp_reported.tv_nsec);
-            ALOGI("%s jitter  system time diff %"PRIu64" ms, position diff %"PRIu64" ms, jitter %"PRId64" ms \n",
+            ALOGI("%s jitter  system time diff %"PRIu64" ms, position diff %"PRId64" ms, jitter %"PRId64" ms \n",
                 __func__,system_time_ms,frame_diff_ms,jitter_diff);
         }
 

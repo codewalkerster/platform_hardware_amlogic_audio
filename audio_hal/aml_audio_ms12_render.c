@@ -275,7 +275,7 @@ static int aml_audio_ms12_process(struct audio_stream_out *stream, const void *w
          * Issue:
          * SWPL-60957: passthrough TrueHD format in Movie player.
          */
-        int process_bytes = (aml_out->hal_format == AUDIO_FORMAT_DOLBY_TRUEHD) ? (write_bytes) : MS12_TRUNK_SIZE;
+        int process_bytes = (aml_out->hal_format == AUDIO_FORMAT_DOLBY_TRUEHD) ? (write_bytes / 2) : MS12_TRUNK_SIZE;
         while (1) {
             process_size = left_bytes > process_bytes ? process_bytes : left_bytes;
             ret = aml_audio_ms12_process_wrapper(stream, (char *)write_buf + used_bytes, process_size);

@@ -85,13 +85,17 @@
 
 #define NANO_SECOND_PER_SECOND 1000000000LL
 #define NANO_SECOND_PER_MILLISECOND 1000000LL
+#define MICRO_SECOND_PER_MILLISECOND 1000LL
+
 
 #define CONVERT_NS_TO_48K_FRAME_NUM(ns)    (ns * 48 / NANO_SECOND_PER_MILLISECOND)
+#define CONVERT_US_TO_48K_FRAME_NUM(us)    (us * 48 / MICRO_SECOND_PER_MILLISECOND)
 
 #define MS12_MAIN_BUF_INCREASE_TIME_MS (1000)
 #define MS12_SYS_BUF_INCREASE_TIME_MS (1000)
 #define MS12_DEEP_BUF_INCREASE_TIME_MS (1000)
 #define DDPI_UDC_COMP_LINE 2
+
 
 #define MS12_PCM_FRAME_SIZE         (6144)
 #define MS12_DD_FRAME_SIZE          (6144)
@@ -2621,6 +2625,7 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
             /*
              * if the format/sample-rate are changed, restart the alsa-card.
              */
+            pthread_mutex_lock(&adev->bitstream_lock);
             if ((bitstream_out->spdifout_handle != NULL )&&
                 (bitstream_out->audio_format != output_format)) {
                 aml_audio_spdifout_close(bitstream_out->spdifout_handle);
@@ -2648,10 +2653,12 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
                 ret = aml_audio_spdifout_open(&bitstream_out->spdifout_handle, &spdif_config);
                 if (ret != 0) {
                     ALOGE("%s open spdif out failed\n", __func__);
+                    pthread_mutex_unlock(&adev->bitstream_lock);
                     return ret;
                 }
                 bitstream_out->is_bypass_ms12 = ms12->is_bypass_ms12;
             }
+            pthread_mutex_unlock(&adev->bitstream_lock);
         }
 
         bitstream_out->audio_format = output_format;
@@ -2675,11 +2682,18 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
             int nbytes_consumed = 0;
             unsigned char *pbuf = (unsigned char *)buffer;
             memset(ms12->mat_enc_out_buffer, 0, ms12->matenc_maxoutbufsize);
+            int write_size = 0;
             while (offset < bytes) {
+                /*if the size is too big, mat encoder will meet error*/
+                if ((bytes - offset) >= 4096) {
+                    write_size = 4096;
+                } else {
+                    write_size = (bytes - offset);
+                }
                 ret = dolby_ms12_mat_encoder_process
                     (ms12->mat_enc_handle
                     , (const unsigned char *)(pbuf + offset)
-                    , (bytes - offset)
+                    , write_size
                     , (const unsigned char *)ms12->mat_enc_out_buffer
                     , &ms12->mat_enc_out_bytes
                     , ms12->matenc_maxoutbufsize
@@ -2705,6 +2719,7 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
 
                 /* when (mat encoder output data(mat_enc_out_bytes) not 0), send them to alsa */
                 if (ms12->mat_enc_out_bytes) {
+                    pthread_mutex_lock(&adev->bitstream_lock);
                     endian16_convert(ms12->mat_enc_out_buffer, ms12->mat_enc_out_bytes);
                     aml_audio_spdifout_process
                                 (bitstream_out->spdifout_handle
@@ -2723,6 +2738,7 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
                     }
                     /* after write the IEC61937 data to hardware, reset it to zero position. */
                     ms12->mat_enc_out_bytes = 0;
+                    pthread_mutex_unlock(&adev->bitstream_lock);
                 }
 
             }
@@ -3430,6 +3446,92 @@ static int ms12_debug_out_stereo_pcm_synced_frame_pts
     return ret;
 }
 
+static Aml_MS12_SyncPolicy_t truehd_sync_callback(void *priv_data, unsigned long long u64DecOutFrame, Aml_MS12_Delay_t stDelay) {
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)priv_data;
+    struct audio_stream_out *stream_out = (struct audio_stream_out *)aml_out;
+    struct aml_audio_device *adev = aml_out->dev;
+    struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    Aml_MS12_SyncPolicy_t audio_sync_policy = {MS12_SYNC_AUDIO_NORMAL_OUTPUT, 0, 0};
+    struct timespec ts;
+    uint64_t current_frames_positions = 0;
+    int64_t  frame_diff_us =  0;
+    int64_t  system_time_us = 0;
+    int64_t  jitter_diff_us = 0;
+    uint64_t current_time_us = 0;
+    uint64_t time_diff_ms = 0;
+    /*Dolby MAT is 20ms for one frame*/
+    uint32_t jitter_threshold_us = 20 * MICRO_SECOND_PER_MILLISECOND;
+    uint64_t decoded_frame = 0;
+    int delay_frame = 0;
+    int delay_pts_diff = 0;
+
+    /*currently for truhe bypass, we drop the pcm data, otherwise it will causes conflict issue*/
+    if (ms12->is_bypass_ms12) {
+        /*MAT one frame is 20ms*/
+        audio_sync_policy.s32TagFrame = 960;
+        audio_sync_policy.s32CurFrame = 0;
+        audio_sync_policy.eSyncPolicy = MS12_SYNC_AUDIO_DROP_PCM;
+        if (adev->debug_flag) {
+            ALOGI("%s Drop PCM data", __func__);
+        }
+    }
+    current_time_us = aml_audio_get_systime();
+    time_diff_ms = (current_time_us - stDelay.u64DelayTimeStamp) / MICRO_SECOND_PER_MILLISECOND;
+
+    if (adev->debug_flag) {
+        ALOGI("%s dec frame =%" PRId64 " out frame =%lld decoded_delay =%d ms12 delay=%d total delay =%d  =%d ms time_diff =%"PRIu64"",
+            __func__, decoded_frame, u64DecOutFrame, delay_frame, stDelay.u32DelayFrame, (delay_frame + stDelay.u32DelayFrame), delay_pts_diff / 90, time_diff_ms);
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    /*according to the delay and decoded frame to calculate frame position*/
+    if (u64DecOutFrame > stDelay.u32DelayFrame) {
+        current_frames_positions = (uint64_t)(u64DecOutFrame - stDelay.u32DelayFrame);
+        adev->ms12.ms12_position_update = true;
+    } else {
+        current_frames_positions = 0;
+        adev->ms12.ms12_position_update = false;
+    }
+
+    /*check whether there is any jitter between position and timestamp*/
+    frame_diff_us =  ((int64_t)current_frames_positions - (int64_t)adev->ms12.last_frames_position) * MICRO_SECOND_PER_MILLISECOND / 48;
+    system_time_us = calc_time_interval_us(&adev->ms12.timestamp, &ts);
+    jitter_diff_us = frame_diff_us - system_time_us;
+    if  (adev->debug_flag) {
+        ALOGI("%s ms12 jitter out cur pos: %"PRIu64", last pos info: %"PRIu64", sec = %ld, nanosec = %ld\n",__func__, current_frames_positions, adev->ms12.last_frames_position,
+            adev->ms12.timestamp.tv_sec, adev->ms12.timestamp.tv_nsec);
+        ALOGI("%s jitter  system time diff %"PRIu64" ms, position diff %"PRId64" ms, jitter %"PRId64" ms \n",
+            __func__,(int64_t)(system_time_us / MICRO_SECOND_PER_MILLISECOND), (int64_t)(frame_diff_us / MICRO_SECOND_PER_MILLISECOND), (int64_t)(jitter_diff_us / MICRO_SECOND_PER_MILLISECOND));
+    }
+
+    /*if bypass mode, increase the jitter threshold, because we drop the pcm data and pos is not accurate*/
+    if (ms12->is_bypass_ms12) {
+        jitter_threshold_us = 50 * MICRO_SECOND_PER_MILLISECOND;
+    }
+
+    if (llabs(jitter_diff_us) > jitter_threshold_us) {
+        ALOGI("%s ms12 jitter out cur pos: %"PRIu64", last pos info: %"PRIu64", sec = %ld, nanosec = %ld\n",__func__, current_frames_positions, adev->ms12.last_frames_position,
+                       adev->ms12.timestamp.tv_sec, adev->ms12.timestamp.tv_nsec);
+        ALOGI("%s jitter  system time diff %"PRIu64" ms, position diff %"PRId64" ms, jitter %"PRId64" ms \n",
+                       __func__,(int64_t)(system_time_us / MICRO_SECOND_PER_MILLISECOND), (int64_t)(frame_diff_us / MICRO_SECOND_PER_MILLISECOND), (int64_t)(jitter_diff_us / MICRO_SECOND_PER_MILLISECOND));
+    }
+    /*currently the position is not accurate, we need compensate it*/
+    if (llabs(jitter_diff_us) <= jitter_threshold_us && current_frames_positions > CONVERT_US_TO_48K_FRAME_NUM(llabs(jitter_diff_us))) {
+        if (jitter_diff_us > 0) {
+            current_frames_positions -= CONVERT_US_TO_48K_FRAME_NUM(jitter_diff_us);
+        } else {
+            current_frames_positions += CONVERT_US_TO_48K_FRAME_NUM(llabs(jitter_diff_us));
+        }
+    }
+    pthread_mutex_lock(&adev->ms12.main_apts_update_lock);
+    adev->ms12.last_frames_position = current_frames_positions;
+    adev->ms12.timestamp.tv_sec = ts.tv_sec;
+    adev->ms12.timestamp.tv_nsec = ts.tv_nsec;
+    pthread_mutex_unlock(&adev->ms12.main_apts_update_lock);
+
+    return audio_sync_policy;
+}
 
 Aml_MS12_SyncPolicy_t ms12_sync_callback(void *priv_data, unsigned long long u64DecOutFrame, Aml_MS12_Delay_t stDelay, Aml_MS12_SyncPolicy_t syncpolicy_status __unused) {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)priv_data;
@@ -3454,6 +3556,12 @@ Aml_MS12_SyncPolicy_t ms12_sync_callback(void *priv_data, unsigned long long u64
     struct timespec ms12_main_ts;
     uint64_t ms12_main_position = 0;
     uint64_t main_current_frame = 0;
+
+
+    /*when it is dolby truehd and bypass mode, we don't need send pcm output*/
+    if (aml_out->hal_internal_format == AUDIO_FORMAT_DOLBY_TRUEHD) {
+        audio_sync_policy = truehd_sync_callback(priv_data, u64DecOutFrame, stDelay);
+    }
 
     if (!aml_out->hw_sync_mode) {
         return audio_sync_policy;
@@ -4241,7 +4349,7 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
         ALOGI("%s set dtv sync callback %p", __func__, stream);
     } else
 #endif
-    if (aml_out->hw_sync_mode) {
+    if (aml_out->hw_sync_mode || (aml_out->hal_internal_format == AUDIO_FORMAT_DOLBY_TRUEHD)) {
         dolby_ms12_register_ms12sync_callback(ms12->dolby_ms12_ptr, ms12_sync_callback, (void *)stream);
         aml_out->b_install_sync_callback = true;
     }

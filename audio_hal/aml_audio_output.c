@@ -898,7 +898,7 @@ ssize_t hw_write (struct audio_stream_out *stream
         pthread_mutex_unlock(&aml_out->apts_update_lock);
         //ALOGI("position =%lld time sec = %ld, nanosec = %ld", aml_out->last_frames_position, aml_out->lasttimestamp.tv_sec , aml_out->lasttimestamp.tv_nsec);
     }
-    if (eDolbyMS12Lib == adev->dolby_lib_type) {
+    if (eDolbyMS12Lib == adev->dolby_lib_type && (aml_out->hal_internal_format != AUDIO_FORMAT_DOLBY_TRUEHD)) {
         if (continuous_mode(adev)) {
             if (adev->ms12.is_continuous_paused) {
                 if (total_frame == adev->ms12.last_ms12_pcm_out_position) {
