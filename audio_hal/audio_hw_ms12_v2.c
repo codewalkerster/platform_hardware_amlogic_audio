@@ -4124,6 +4124,19 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
     }
     get_sink_format (stream);
 
+    {
+        /*SWPL-173341: if the deef buffer is active, this main stream can preempt it*/
+        struct aml_stream_out *active_out = NULL;
+        for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
+            active_out = adev->active_outputs[i];
+            if (active_out && (active_out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER) && !active_out->standby) {
+                aml_out->is_preempt_deep_buffer_stream = true;
+                ALOGI("%s it can preempt the deep buffer", __func__);
+            }
+        }
+    }
+
+
     ms12->ms12_main_stream_out = aml_out;
     ms12->main_input_fmt = hal_internal_format;
     ms12->main_input_insert_zero = 0;

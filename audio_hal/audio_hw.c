@@ -6683,12 +6683,11 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
      * atmos_stickiness_usage_media_ddp_out-no_cfg-v241-HDMI (6581)
      * atmos_stickiness_usage_media_mat_out-no_cfg-v241-HDMI (6612)
      */
-    if (is_deep_buf && !adev->is_netflix && !aml_out->hw_sync_mode &&
-        !aml_out->is_tv_src_stream && !is_dev_patch_exist(adev)) {
+    if (is_deep_buf && !adev->is_netflix && !aml_out->is_tv_src_stream && !is_dev_patch_exist(adev)) {
         struct aml_stream_out *out = NULL;
         for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
             out = adev->active_outputs[i];
-            if (out && out->is_ms12_main_decoder) {
+            if (out && out->is_ms12_main_decoder && !out->is_preempt_deep_buffer_stream) {
                 close_ms12_output_main_stream((struct audio_stream_out *)out);
             }
         }
