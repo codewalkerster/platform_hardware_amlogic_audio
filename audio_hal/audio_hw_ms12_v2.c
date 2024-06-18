@@ -4337,6 +4337,15 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
             dolby_ms12_set_enforce_timeslice(true);
             ALOGI("hdmi in ddp/dd case, use enforce timeslice");
         }
+
+        if (hal_internal_format == AUDIO_FORMAT_E_AC3 ||
+            hal_internal_format == AUDIO_FORMAT_E_AC3_JOC ||
+            hal_internal_format == AUDIO_FORMAT_MAT) {
+            int start_threshold = 1536;
+            /* For MAT HBR, set ms12 start threshold about 2 frames */
+            set_ms12_set_main_start_threshold(ms12, start_threshold);
+            ALOGI("hdmi in ddp/mat case, set start threshold %d", start_threshold);
+        }
     }
 
     aml_ms12_main_decoder_open(ms12, hal_internal_format, aml_out->hal_channel_mask, sample_rate);
@@ -4449,6 +4458,7 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
 
     aml_ms12_main_decoder_close(ms12);
     set_ms12_main_audio_mute(ms12, false, 0);
+    set_ms12_set_main_start_threshold(ms12, 0);
     adev->ms12.main_input_fmt = AUDIO_FORMAT_INVALID;
     ms12->ms12_main_stream_out = NULL;
     ms12->mat_stream_profile = 0;
@@ -5155,6 +5165,16 @@ void set_ms12_scheduler_sleep(struct dolby_ms12_desc *ms12, bool enable_sleep)
     if (ms12) {
         dolby_ms12_set_scheduler_sleep(enable_sleep);
         ms12->scheduler_sleep_enable = enable_sleep;
+    }
+}
+
+void set_ms12_set_main_start_threshold(struct dolby_ms12_desc *ms12, int start_threshold)
+{
+    char parm[64] = "";
+
+    sprintf(parm, "%s %d", "-main_start_threshold", start_threshold);
+    if ((strlen(parm)) > 0 && ms12) {
+        aml_ms12_update_runtime_params(ms12, parm);
     }
 }
 
