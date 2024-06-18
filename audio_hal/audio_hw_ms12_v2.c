@@ -4316,6 +4316,8 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
         ALOGD("%s  aml_out is not equal with ms12_main_stream_out, ms12 resource not release.", __func__);
     }
 #endif
+    pthread_mutex_lock(&ms12->lock);
+
     if (aml_out->virtual_buf_handle) {
         audio_virtual_buf_close(&aml_out->virtual_buf_handle);
     }
@@ -4356,6 +4358,7 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
             , AUDIO_FORMAT_PCM_16_BIT //treat as PCM format when stream is end.
             );
     }
+    pthread_mutex_unlock(&ms12->lock);
 
     return 0;
 }
