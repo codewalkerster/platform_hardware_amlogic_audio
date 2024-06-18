@@ -804,6 +804,15 @@ struct aml_stream_out {
 typedef ssize_t (*write_func)(struct audio_stream_out *stream, const void *buffer, size_t bytes);
 
 #define MAX_PREPROCESSORS 3 /* maximum one AGC + one NS + one AEC per input stream */
+
+struct tv_stream_param {
+    hdmiin_audio_packet_t audio_packet_type;
+    hdmiin_audio_packet_t cur_audio_packet_type;
+    int read_mul_factor;
+    bool is_HBR_stream;
+    bool change_to_HBR_stream;
+};
+
 struct aml_stream_in {
     struct audio_stream_in stream;
     pthread_mutex_t lock;       /* see note below on mutex acquisition order */
@@ -848,13 +857,9 @@ struct aml_stream_in {
     size_t tmp_buffer_8ch_size;
     unsigned int frames_read;
     uint64_t timestamp_nsec;
-    hdmiin_audio_packet_t audio_packet_type;
-    hdmiin_audio_packet_t last_audio_packet_type;
-    int data_type;
-    int hdmi_in_samplerate;
     bool is_tv_src_stream;
-    int read_mul_factor;
     aml_audio_resample_t *resample_handle;
+    struct tv_stream_param tv_param;
 };
 typedef  int (*do_standby_func)(struct aml_stream_out *out);
 typedef  int (*do_startup_func)(struct aml_stream_out *out);

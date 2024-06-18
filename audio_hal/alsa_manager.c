@@ -862,7 +862,7 @@ size_t aml_alsa_input_read(struct audio_stream_in *stream,
             /* For some input device, the input stream sample rate and channel can't response the real data size,
                so add a multiply factor */
             usleep((bytes - read_bytes) * 1000 / audio_stream_in_frame_size(stream) /
-                (in->config.rate / 1000) / in->read_mul_factor);
+                (in->config.rate / 1000) / in->tv_param.read_mul_factor);
 
             nodata_count++;
             if (nodata_count >= WAIT_COUNT_MAX) {

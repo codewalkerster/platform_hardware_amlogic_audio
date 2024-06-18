@@ -127,6 +127,75 @@ void audio_digital_input_format_check(struct aml_audio_patch *patch)
     }
 }
 
+bool reconfig_stream_param(struct aml_stream_in *stream_in, struct aml_audio_patch *patch)
+{
+    int period_size = 0;
+    int buf_size = 0;
+    int channel = 2;
+    int ring_buffer_size;
+    ring_buffer_t *ringbuffer = NULL;
+    int read_bytes = 0, ret = 0;
+
+    if (patch) {
+        ring_buffer_size = patch->ringbuffer_size;
+        ringbuffer = & (patch->aml_ringbuffer);
+    }
+
+    patch->in_buf_size = read_bytes = stream_in->config.period_size * audio_stream_in_frame_size(&stream_in->stream);
+    ret = aml_audio_check_and_realloc((void **)&patch->in_buf, &patch->in_buf_size, read_bytes);
+    R_CHECK_RET(ret, "alloc patch->in_buf size:%d fail", read_bytes);
+
+    if (patch->input_src != AUDIO_DEVICE_IN_HDMI)
+        return 0;
+
+    stream_in->tv_param.audio_packet_type = patch->param_config.audio_packet_type_tmp;
+
+    ALOGI("%s Reconfig stream parameters audio_packet_type %d change_to_none_HBR %d size %d", __func__, stream_in->tv_param.audio_packet_type, patch->param_config.change_to_none_HBR, ringbuffer->size);
+
+    if (stream_in->tv_param.audio_packet_type == AUDIO_PACKET_HBR) {
+        // if it is high bitrate bitstream, use PAO and increase the buffer size
+        period_size = DEFAULT_CAPTURE_PERIOD_SIZE * 4;
+        // increase the buffer size
+        buf_size = ring_buffer_size * 8;
+        channel = 8;
+        if (patch->param_config.change_to_HBR) {
+            stream_in->tv_param.is_HBR_stream = true;
+            patch->param_config.change_to_HBR = false;
+        }
+    } else {
+        period_size = DEFAULT_CAPTURE_PERIOD_SIZE;
+        // reset to original one
+        buf_size = ring_buffer_size;
+    }
+
+    if (patch->param_config.change_to_none_HBR) {
+        period_size = DEFAULT_CAPTURE_PERIOD_SIZE;
+        // reset to original one
+        buf_size = ring_buffer_size;
+        channel = 2;
+        patch->param_config.change_to_none_HBR = false;
+    }
+
+    if (ringbuffer) {
+        ring_buffer_reset_size(ringbuffer, buf_size);
+    }
+    stream_in->config.period_size = period_size;
+    stream_in->config.channels = channel;
+
+    return 0;
+}
+
+bool check_stream_reconfigure(struct aml_stream_in *stream_in, struct aml_audio_patch *patch)
+{
+     if (patch && (patch->input_src == AUDIO_DEVICE_IN_HDMI) && is_data_packet_change_to_HBR(stream_in)) {
+         stream_in->tv_param.change_to_HBR_stream = true;
+         ALOGI("%s Change to HBR stream %d", __func__, stream_in->tv_param.change_to_HBR_stream);
+         return true;
+     }
+
+     return false;
+}
+
 /*==================================patch & threadloops=========================================*/
 // buffer/period ratio, bigger will add more latency
 int teardown_input_format_change(struct aml_audio_patch *patch, struct audio_stream_in *old_stream, struct audio_stream_in **new_stream)
@@ -136,24 +205,14 @@ int teardown_input_format_change(struct aml_audio_patch *patch, struct audio_str
     struct audio_stream_in *stream_in = NULL;
     struct aml_stream_in *new_aml_in = NULL;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *)patch->dev;
-    int read_bytes = 0;
     int ret = 0;
+    patch->param_config.audio_packet_type_tmp = AUDIO_PACKET_AUDS;
 
     if (!old_stream) {
         AM_LOGW("old_stream_in is NULL, return!");
         return -1;
     }
-
-    //TODO: temporary solution for MS12 not support PCM32 input
-    if ((aml_dev->dolby_lib_type == eDolbyMS12Lib  || aml_dev->dolby_lib_type_last == eDolbyMS12Lib) &&
-            !is_same_patch_src(aml_dev, SRC_ARCIN)) {
-        *new_stream = old_stream;
-        AM_LOGW("do nothing for ms12 case");
-        return 0;
-    }
-    //END
-
-    if (!audio_is_linear_pcm(patch->aformat) && old_aml_in->hal_format == AUDIO_FORMAT_PCM_16_BIT && !is_same_patch_src(aml_dev, SRC_ARCIN)) {
+    if (!old_aml_in->tv_param.change_to_HBR_stream && !audio_is_linear_pcm(patch->aformat) && old_aml_in->hal_format == AUDIO_FORMAT_PCM_16_BIT && !is_same_patch_src(aml_dev, SRC_ARCIN)) {
         *new_stream = old_stream;
         AM_LOGW("StreamIn already foramt:AUDIO_FORMAT_PCM_16_BIT for RAW patch->foramt:%x", patch->aformat);
         return 0;
@@ -179,6 +238,28 @@ int teardown_input_format_change(struct aml_audio_patch *patch, struct audio_str
         AM_LOGI("old_format:%x new_format:%x for RAW", old_aml_in->hal_format, stream_config.format);
     }
 
+    if (patch->input_src == AUDIO_DEVICE_IN_HDMI) {
+
+       if (old_aml_in->hal_format == AUDIO_FORMAT_PCM_32_BIT && stream_config.format == AUDIO_FORMAT_PCM_16_BIT &&
+                 old_aml_in->tv_param.cur_audio_packet_type == AUDIO_PACKET_HBR) {
+           old_aml_in->tv_param.change_to_HBR_stream = true;
+           ALOGI("%s Format Change to HBR stream %d", __func__);
+       }
+        /* For HDMI case, it needs to change stream to 16bit to reconfigure ALSA device first when it switch to HBR stream. */
+        if (old_aml_in->tv_param.change_to_HBR_stream) {
+            stream_config.format = AUDIO_FORMAT_PCM_16_BIT;
+            patch->param_config.change_to_HBR = old_aml_in->tv_param.change_to_HBR_stream;
+        }
+
+        /* For HDMI case, it needs to update packet type to the new stream. */
+        patch->param_config.audio_packet_type_tmp = old_aml_in->tv_param.cur_audio_packet_type;
+
+        /* It needs to reconfigure alsa device when it switch from HBR stream to none HBR stream. */
+        if (old_aml_in->tv_param.is_HBR_stream) {
+            patch->param_config.change_to_none_HBR = true;
+            ALOGI("%s Change to none HBR stream %d", __func__, patch->param_config.change_to_none_HBR);
+        }
+    }
     do_input_standby(old_aml_in);
     adev_close_input_stream(patch->dev, old_stream);
 
@@ -189,9 +270,8 @@ int teardown_input_format_change(struct aml_audio_patch *patch, struct audio_str
     }
 
     new_aml_in = (struct aml_stream_in *)stream_in;
-    patch->in_buf_size = read_bytes = new_aml_in->config.period_size * audio_stream_in_frame_size(&new_aml_in->stream);
-    ret = aml_audio_check_and_realloc((void **)&patch->in_buf, &patch->in_buf_size, read_bytes);
-    R_CHECK_RET(ret, "alloc patch->in_buf size:%d fail", read_bytes);
+
+    reconfig_stream_param(new_aml_in, patch);
 
     *new_stream = stream_in;
     return 0;
@@ -258,6 +338,7 @@ void *audio_patch_input_threadloop(void *data)
 
     if (ringbuffer) {
         ring_buffer_size = ringbuffer->size;
+        patch->ringbuffer_size = ring_buffer_size;
     }
 
     while (!patch->input_thread_exit) {
@@ -265,7 +346,7 @@ void *audio_patch_input_threadloop(void *data)
         int period_mul = 1;
         int read_threshold = 0;
 
-        if (patch->format_change && !patch->input_teardown_over) {
+        if ((patch->format_change && !patch->input_teardown_over) || check_stream_reconfigure(in, patch)) {
             struct audio_stream_in *new_stream = NULL;
             ret = teardown_input_format_change(patch, (struct audio_stream_in *)in, &new_stream);
             if (ret == 0) {
@@ -280,15 +361,15 @@ void *audio_patch_input_threadloop(void *data)
                 (audio_parse_get_audio_packet_type(patch->audio_parse_para) == AUDIO_PACKET_HBR || in->spdif_fmt_hw == MAT)) {
             period_mul = 4;
             if (!is_same_patch_src(aml_dev, SRC_ARCIN))
-                in->read_mul_factor = EAC3_MULTIPLIER;
+                in->tv_param.read_mul_factor = EAC3_MULTIPLIER;
             else
-                in->read_mul_factor = HBR_MULTIPLIER;
+                in->tv_param.read_mul_factor = HBR_MULTIPLIER;
         } else if (patch->aformat == AUDIO_FORMAT_E_AC3 || patch->aformat == AUDIO_FORMAT_DTS_HD) {
             period_mul = 1;
-            in->read_mul_factor = EAC3_MULTIPLIER;
+            in->tv_param.read_mul_factor = EAC3_MULTIPLIER;
         } else {
             period_mul = 1;
-            in->read_mul_factor = 2;
+            in->tv_param.read_mul_factor = 2;
         }
 
         aml_check_pic_mode(patch);
@@ -328,30 +409,16 @@ void *audio_patch_input_threadloop(void *data)
         if (aml_dev->tv_mute || !stable_flag) {
             /* case 1:we need keep read from arc so the format will be keep stable */
             /* case 2:For data type detect of hardware, it needs to read data from driver to help detecting quickly if it is HBR stream.   */
-            if (is_HBR_stream(&in->stream) || (in->device & AUDIO_DEVICE_IN_HDMI_ARC) || (in->device & AUDIO_DEVICE_IN_SPDIF)) {
-                if ((in->device & AUDIO_DEVICE_IN_HDMI_ARC) && patch->arc_layout_b) {
-                    input_stream_channels_adjust(&in->stream, patch->in_buf, read_bytes, false);
-                } else {
-                    aml_alsa_input_read(&in->stream, patch->in_buf, read_bytes);
-                }
-                memset(patch->in_buf, 0, bytes_avail);
-                ring_buffer_clear(ringbuffer);
+            if ((in->device & AUDIO_DEVICE_IN_HDMI_ARC) && patch->arc_layout_b) {
+                input_stream_channels_adjust(&in->stream, patch->in_buf, read_bytes, false);
             } else {
-                /* For game mode, the sleep time is different with normal mode when play pcm stream. */
-                /* Because it reads about 10ms data from driver when it is in game mode. Otherwise it */
-                /* is about 20ms for normal mode. To avoid underrun happen, change sleep time to  */
-                /* corresponding mode. */
-                if (is_game_mode(aml_dev)) {
-                    usleep(10*1000);
-                } else {
-                    usleep(20*1000);
-                }
+                aml_alsa_input_read(&in->stream, patch->in_buf, read_bytes);
                 memset(patch->in_buf, 0, bytes_avail);
                 ring_buffer_clear(ringbuffer);
                 enable_tv_mute(aml_dev, true);
             }
         } else {
-            if (is_same_patch_src(aml_dev, SRC_HDMIIN) && in->audio_packet_type == AUDIO_PACKET_AUDS && in->config.channels != 2) {
+            if (is_same_patch_src(aml_dev, SRC_HDMIIN) && in->tv_param.audio_packet_type == AUDIO_PACKET_AUDS && in->config.channels != 2) {
                 /* we now don't downmix multich pcm of input */
                 input_stream_channels_adjust(&in->stream, patch->in_buf, read_bytes, false);
             } else if (is_same_patch_src(aml_dev, SRC_ARCIN) && (patch->arc_layout_b || in->config.channels > 2)) {
@@ -391,7 +458,7 @@ void *audio_patch_input_threadloop(void *data)
             /* Todo: when pcpd monitor is used, don't check 61937 data*/
             if (IS_DIGITAL_IN_HW(patch->input_src)) {
                 cur_aformat = audio_parse_get_audio_type (patch->audio_parse_para);
-                if (in->data_type == DATA_NON_PCM) {
+                if (patch->param_config.data_type == DATA_NON_PCM) {
                     if (audio_is_linear_pcm(cur_aformat))
                         bytes_avail = 0;
                     audio_raw_data_continuous_check(aml_dev, patch->audio_parse_para, patch->in_buf, read_bytes);
@@ -419,11 +486,8 @@ void *audio_patch_input_threadloop(void *data)
                 if (patch->input_src == AUDIO_DEVICE_IN_HDMI)
                 {
                     pthread_mutex_lock(&in->lock);
-                    ret = reconfig_read_param_through_hdmiin(aml_dev, in, ringbuffer, ring_buffer_size);
+                    reconfig_read_param_through_hdmiin(aml_dev, in, ringbuffer, ring_buffer_size);
                     pthread_mutex_unlock(&in->lock);
-                    if (ret == 0) {
-                        break;
-                    }
                 }
 
                 if (get_buffer_write_space(ringbuffer) >= bytes_avail) {

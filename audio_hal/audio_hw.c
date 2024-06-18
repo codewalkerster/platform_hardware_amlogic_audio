@@ -5301,7 +5301,7 @@ int adev_open_input_stream(struct audio_hw_device *dev,
         goto err;
     }
     memset(in->buffer, 0, in->config.period_size * audio_stream_in_frame_size(&in->stream));
-    in->read_mul_factor = 2;
+    in->tv_param.read_mul_factor = 2;
 
     if (!(in->device & AUDIO_DEVICE_IN_WIRED_HEADSET) &&
         in->requested_rate != in->config.rate && in->requested_rate != 0) {

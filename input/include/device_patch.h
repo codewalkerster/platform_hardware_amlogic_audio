@@ -76,6 +76,27 @@ struct audio_patch_latency_detail
     unsigned int total_latency;
 };
 
+struct tv_param_config
+{
+    /* Mute time process */
+    struct timespec mute_start_ts;
+    int mute_log_cntr;
+    int mute_mdelay;
+    bool mute_flag;
+    /* Packet type for mute process */
+    hdmiin_audio_packet_t last_audio_packet_type;
+    /* Channel status of audio package from hdmirx */
+    int data_type;
+    /* HW parser audio format */
+    int spdif_fmt_hw;
+    /* Sample rate change for mute process */
+    int hdmi_in_samplerate;
+    bool change_to_HBR;
+    bool change_to_none_HBR;
+    /* Temporary variable to save packet type. */
+    hdmiin_audio_packet_t audio_packet_type_tmp;
+};
+
 struct aml_audio_patch
 {
     struct audio_hw_device *dev;
@@ -246,6 +267,7 @@ struct aml_audio_patch
     int audio_pts_dts_flag;
 #endif
     bool skip_amadec_flag;
+    int in_read_frame_size;
     int sync_type;
     /*add a new flag to check the patch is created from tuner framework*/
     bool cbs_patch;
@@ -280,7 +302,8 @@ struct aml_audio_patch
     bool format_change;
     bool input_teardown_over;
     bool output_teardown_over;
-    int in_read_frame_size;
+    int ringbuffer_size;
+    struct tv_param_config param_config;
 };
 
 void create_tvin_buffer(struct aml_audio_patch *patch);
