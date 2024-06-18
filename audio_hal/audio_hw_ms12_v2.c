@@ -3532,7 +3532,9 @@ Aml_MS12_SyncPolicy_t ms12_sync_callback(void *priv_data, unsigned long long u64
     aml_audio_hwsync_audio_process(aml_out->hwsync, new_apts, &adjust_ms);
 
     /*pts is bigger than pts, we need wait some time*/
-    if (adjust_ms > 0) {
+    // SWPL-171731 : netflix stream playing --> press HOME key, then video/pcr slowly stop.
+    // but audio don't receive in time pause signal due to poor system performance.
+    if (adjust_ms > 0 && !adev->is_netflix) {
         uint64_t target_time = aml_audio_get_systime() + adjust_ms * 1000 + stDelay.u32DelayFrame / 48 * 1000;
         uint64_t current_time = 0;
         uint64_t time_left = 0;
