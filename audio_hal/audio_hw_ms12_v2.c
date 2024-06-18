@@ -581,6 +581,17 @@ void set_ms12_chmod_lock(struct dolby_ms12_desc *ms12, bool is_lock_on)
         aml_ms12_update_runtime_params(ms12, parm);
     }
 }
+
+void set_ms12_mch_enable(struct dolby_ms12_desc *ms12, bool enable)
+{
+    char parm[64] = "";
+
+    sprintf(parm, "%s %d", "-mch_enable", enable);
+    if ((strlen(parm)) > 0 && ms12) {
+        aml_ms12_update_runtime_params(ms12, parm);
+    }
+}
+
 void set_ms12_main_volume(struct dolby_ms12_desc *ms12, float volume) {
     //if (fabs(ms12->main_volume - volume) > 1e-06) {
         dolby_ms12_set_main_volume(volume);
@@ -4406,6 +4417,7 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
     bool current_ddp_encoder_enable = false;
     bool current_dd_encoder_enable  = false;
     bool b_reset = 0;
+    bool b_encoder_enable = false;
     struct aml_arc_hdmi_desc* hdmi_descs = NULL;
 
     ALOGI("+%s()", __FUNCTION__);
@@ -4417,23 +4429,53 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
     current_mat_encoder_enable = ms12->output_config & MS12_OUTPUT_MASK_MAT;
     current_ddp_encoder_enable = ms12->output_config & MS12_OUTPUT_MASK_DDP;
     current_dd_encoder_enable  = ms12->output_config & MS12_OUTPUT_MASK_DD;
+    b_encoder_enable = current_mat_encoder_enable | current_ddp_encoder_enable | current_dd_encoder_enable;
     adev = ms12_to_adev(ms12);
     hdmi_descs = get_arc_hdmi_cap(adev);
 
-    if (adev->sink_capability == AUDIO_FORMAT_MAT) {
-        output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_MAT;
-        if (current_ddp_encoder_enable || !current_mat_encoder_enable) {
-            b_reset = 1;
-        }
-    } else if (adev->sink_capability == AUDIO_FORMAT_E_AC3) {
-        output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
-        if (!current_ddp_encoder_enable || !current_dd_encoder_enable) {
+    /*pcm only output, disable encoder*/
+    if (adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_PCM) {
+        if (adev->sink_format == AUDIO_FORMAT_PCM_16_BIT &&
+            b_encoder_enable != 0) {
+            /*only enable the pcm output*/
+            output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
             b_reset = 1;
         }
     } else {
-        output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
-        if (!current_dd_encoder_enable) {
-            b_reset = 1;
+        if (adev->sink_capability == AUDIO_FORMAT_MAT) {
+            output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_MAT;
+            if (!current_mat_encoder_enable) {
+                b_reset = 1;
+            }
+        } else if (adev->sink_capability == AUDIO_FORMAT_E_AC3 || adev->sink_capability == AUDIO_FORMAT_DOLBY_TRUEHD) {
+            /*for sink only support truehd, it can't support MAT, so need to convert DDP*/
+            output_config = MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+            if (!current_ddp_encoder_enable) {
+                b_reset = 1;
+            }
+            /*dual spdif for ott case, optical_format == AUDIO_FORMAT_AC3 for tv case*/
+            if (adev->dual_spdif_support || adev->optical_format == AUDIO_FORMAT_AC3) {
+                output_config = output_config | MS12_OUTPUT_MASK_DD;
+                if (!current_dd_encoder_enable) {
+                    b_reset = 1;
+                }
+            }
+        } else if (adev->sink_capability == AUDIO_FORMAT_AC3) {
+            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+            if (!current_dd_encoder_enable || current_ddp_encoder_enable) {
+                b_reset = 1;
+            }
+        } else if (adev->sink_capability == AUDIO_FORMAT_PCM_16_BIT) {
+            output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
+            if (current_ddp_encoder_enable || current_mat_encoder_enable) {
+                b_reset = 1;
+            }
+            if (adev->optical_format == AUDIO_FORMAT_AC3) {
+                output_config = output_config | MS12_OUTPUT_MASK_DD;
+                if (!current_dd_encoder_enable) {
+                    b_reset = 1;
+                }
+            }
         }
     }
 
@@ -4442,8 +4484,13 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
         output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
         b_reset = 1;
     }
+
+    /*only enable mc output when it supports multi channel*/
     if (hdmi_descs->pcm_fmt.max_channels >= 6) {
         output_config |= MS12_OUTPUT_MASK_MC;
+        set_ms12_mch_enable(ms12, true);
+    } else {
+        set_ms12_mch_enable(ms12, false);
     }
 
     /* SWPL-152241 [legacyDevice] play Dolby_Atmos_ChannelCheck_321_ddp.mp4 Lb/Rb no silent */
