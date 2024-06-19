@@ -348,6 +348,16 @@ static int dtv_patch_handle_event(struct audio_hw_device *dev, int cmd, int val)
             break;
         case AUDIO_DTV_PATCH_CMD_SET_OUTPUT_MODE:
             ALOGI("DTV sound mode %d ", val);
+            //FIXME. In the SWPL-173108, when play the special stream, Left and right channel are mixed together
+            //and lost some channel information.
+            //1. Actually, dtv_output_mode is the acmod(Audio Code Mode) which transmit from the dtvkit
+            //2. We Erroneously means that it is equal to the sound track mode.
+            //3. If the code mode is equal to mono or dual mono, dtvkit will send LRmix to audohal,
+            //therefore, Left and right channel are mixed together.
+            //4. Depend on the UI and reference TV, LR mix is useless in the dtv case.Therefore, when the dtv_output_mode is equal to
+            //   LR mix, it need be stero output.
+            if (val == AM_AOUT_OUTPUT_LRMIX)
+                val = AM_AOUT_OUTPUT_STEREO;
             demux_info->output_mode = val;
             adev->sound_track_mode = val;
             if (patch && path_id == dtv_audio_instances->demux_index_working) {
