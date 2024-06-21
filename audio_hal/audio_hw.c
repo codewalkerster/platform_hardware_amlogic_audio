@@ -3470,7 +3470,9 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
 
         ALOGI("when open aaudio stream, send RUNNING msg to submix & ms12");
         aml_audiohal_sch_state_2_ms12(ms12, MS12_SCHEDULER_RUNNING);
-        aml_audiohal_sch_state_2_submix(audio_mixer, SUBMIX_SCHEDULER_RUNNING);
+        if (adev->useSubMix) {
+           aml_audiohal_sch_state_2_submix(audio_mixer, SUBMIX_SCHEDULER_RUNNING);
+        }
         if (outMmapInit(out) != 0) {
             AM_LOGE("outMmapInit out %p fail !", out);
             ret = -1;
@@ -3715,8 +3717,10 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         }
 #endif
         ALOGI("when close aaudio stream, send STANDBY msg to submix & ms12");
-        aml_audiohal_sch_state_2_submix(audio_mixer, SUBMIX_SCHEDULER_STANDBY);
         aml_audiohal_sch_state_2_ms12(ms12, MS12_SCHEDULER_STANDBY);
+        if (adev->useSubMix) {
+            aml_audiohal_sch_state_2_submix(audio_mixer, SUBMIX_SCHEDULER_STANDBY);
+        }
     }
 
     if (out->hal_format == AUDIO_FORMAT_AC4) {
