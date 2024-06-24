@@ -5994,8 +5994,12 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, const void *buf
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
         if (ms12->ms12_main_stream_out != NULL && ms12->ms12_main_stream_out != aml_out) {
             ALOGI("%s main stream is not same, release the old one =%p  new =%p ", __func__, ms12->ms12_main_stream_out, aml_out);
-            out_standby_new((struct audio_stream *)ms12->ms12_main_stream_out);
-            close_ms12_output_main_stream((struct audio_stream_out *)ms12->ms12_main_stream_out);
+            pthread_mutex_lock(&ms12->ms12_main_stream_out->lock);
+            if (ms12->ms12_main_stream_out->is_ms12_main_decoder) {
+                out_standby_new((struct audio_stream *)ms12->ms12_main_stream_out);
+                close_ms12_output_main_stream((struct audio_stream_out *)ms12->ms12_main_stream_out);
+            }
+            pthread_mutex_unlock(&ms12->ms12_main_stream_out->lock);
         }
     }
 
@@ -6820,7 +6824,11 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
         for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
             out = adev->active_outputs[i];
             if (out && out->is_ms12_main_decoder && !out->is_preempt_deep_buffer_stream) {
-                close_ms12_output_main_stream((struct audio_stream_out *)out);
+                pthread_mutex_lock(&out->lock);
+                if (out->is_ms12_main_decoder) {
+                    close_ms12_output_main_stream((struct audio_stream_out *)out);
+                }
+                pthread_mutex_unlock(&out->lock);
             }
         }
     }
