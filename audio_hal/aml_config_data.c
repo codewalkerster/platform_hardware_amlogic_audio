@@ -105,6 +105,9 @@ void aml_audio_board_config_init(struct audio_board_config *config)
 #else
     /* for stb/ott, fixed 2 channels speaker output for alsa*/
     config->default_alsa_ch = 2;
+    if (aml_audio_check_sbr_product()) {
+        config->default_alsa_ch = aml_audio_get_default_alsa_output_ch();
+    }
 #endif
 
     if (aml_audio_config_parser() == 0) {

@@ -751,7 +751,9 @@ void confirm_platform_type(audio_hw_resource_mgr *mgr)
     AM_LOGI("TV platform,soundbar platform %d", mgr->platform_types.is_SBR);
 #else
     mgr->platform_types.is_STB = true;//property_get_bool("ro.vendor.platform.is.stb", false);
-    AM_LOGI("OTT platform");
+    mgr->platform_types.is_SBR = aml_audio_check_sbr_product();
+    mgr->platform_types.is_STB = !mgr->platform_types.is_SBR;
+    AM_LOGI("OTT platform(%d) Soundbar platform %d", mgr->platform_types.is_STB, mgr->platform_types.is_SBR);
 #endif
 }
 

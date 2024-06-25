@@ -115,13 +115,27 @@ ssize_t processing_multich_pcm(struct audio_stream_out *stream,
             ret = aml_audio_check_and_realloc((void **)&adev->tmp_buffer_8ch, &adev->tmp_buffer_8ch_size,
                     out_frames * 4 * bd_config->default_alsa_ch);
             R_CHECK_RET(ret, "alloc tmp_buffer_8ch size:%zu fail", out_frames * 4 * bd_config->default_alsa_ch);
-
-            for (i = 0; i < out_frames; i++) {
-                for (j = 0; j < nchannels; j++) {
-                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + j] = adev->out_32_buf[nchannels * i + j];
+            //special routing code
+            if (nchannels == 5) {
+                /*L R LFE LS RS --> L  R  LS  RS LEF 0 0 0*/
+                for (i = 0; i < out_frames; i++) {
+                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + 0] = adev->out_32_buf[nchannels * i + 0];
+                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + 1] = adev->out_32_buf[nchannels * i + 1];
+                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + 2] = adev->out_32_buf[nchannels * i + 3];
+                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + 3] = adev->out_32_buf[nchannels * i + 4];
+                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + 4] = adev->out_32_buf[nchannels * i + 2];
+                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + 5] = 0;
+                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + 6] = 0;
+                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + 7] = 0;
                 }
-                for (j = nchannels; j < bd_config->default_alsa_ch; j++) {
-                    adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + j] = 0;
+            } else {
+                for (i = 0; i < out_frames; i++) {
+                    for (j = 0; j < nchannels; j++) {
+                        adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + j] = adev->out_32_buf[nchannels * i + j];
+                    }
+                    for (j = nchannels; j < bd_config->default_alsa_ch; j++) {
+                        adev->tmp_buffer_8ch[bd_config->default_alsa_ch * i + j] = 0;
+                    }
                 }
             }
             *output_buffer = adev->tmp_buffer_8ch;
@@ -261,7 +275,7 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
     }
 
     /*if it is more than 2 ch, we need to use below channel map process*/
-    if (ch > 2) {
+    if (ch > 2 || is_SBR(adev)) {
         processing_multich_pcm(stream, buffer, bytes, in_data_info, output_buffer, output_buffer_bytes, out_data_info);
         return 0;
     }

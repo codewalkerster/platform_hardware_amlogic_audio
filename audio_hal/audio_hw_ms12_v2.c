@@ -826,7 +826,7 @@ static void set_dolby_ms12_dap_init_mode(struct aml_audio_device *adev)
 
     /* Dolby MS12 V2 uses DAP Tuning file */
     if (adev->is_ms12_tuning_dat) {
-        dap_init_mode = get_ms12_dap_init_mode(is_TV(adev));
+        dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || is_SBR(adev));
     }
     if (adev->dolby_ms12_dap_init_mode) {
         dap_init_mode = adev->dolby_ms12_dap_init_mode;
@@ -1022,7 +1022,7 @@ int get_the_dolby_ms12_prepared(
     }
     /* for soundbar, we only need speaker output */
     if (is_SBR(adev))
-        output_config = MS12_OUTPUT_MASK_SPEAKER|MS12_OUTPUT_MASK_STEREO;
+        output_config = MS12_OUTPUT_MASK_SPEAKER | MS12_OUTPUT_MASK_STEREO;
 
     /* earc AVR connected, so we enable multi channel pcm out*/
     if (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev)) {
@@ -3818,8 +3818,8 @@ int ms12_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_t 
     int ret = 0;
 
     if (adev->debug_flag > 1) {
-        ALOGI("+%s() output size %zu,out format 0x%x.dual_output = %d, optical_format = 0x%x, sink_format = 0x%x, out total=%d main in=%d",
-            __FUNCTION__, size,output_format, aml_out->dual_output_flag, adev->optical_format, adev->sink_format,
+        ALOGI("+%s() output size %zu,out format 0x%x. ch=%d dual_output = %d, optical_format = 0x%x, sink_format = 0x%x, out total=%d main in=%d",
+            __FUNCTION__, size,output_format, ms12_info->output_ch, aml_out->dual_output_flag, adev->optical_format, adev->sink_format,
             ms12->bitstream_cnt, ms12->input_total_ms);
     }
 
