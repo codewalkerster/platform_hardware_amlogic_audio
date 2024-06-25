@@ -1953,7 +1953,6 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
     int ret = 0;
     int video_delay_frames = 0;
     int64_t origin_tv_nsec = 0;
-    int origin_vdelay_frames = 0;
     bool is_earc = is_earc_connected(adev);
 
     /* add this code for VTS. */
@@ -2015,30 +2014,42 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
     /*here we need add video delay*/
     video_delay_frames = get_media_video_delay(&adev->alsa_mixer) * out->hal_rate / 1000;
     origin_tv_nsec = timestamp->tv_nsec;
-    origin_vdelay_frames = video_delay_frames;
 
     if (out->is_normal_pcm) {
-        //  AF::Track's Position should larger than hal, so minus DEFAULT_PLAYBACK_PERIOD_SIZE
-        int max_delay_frames = 0;
+        const int buffer_min_frames = 256;
+        uint64_t max_report_frames = 0;
         uint64_t stream_written_frames = adev->sys_audio_frame_written;
         int is_deep_buffer = out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER;
         if (is_deep_buffer) {
             stream_written_frames = adev->deep_buf_audio_frame_written;
         }
 
-        max_delay_frames = stream_written_frames - *frames - DEFAULT_PLAYBACK_PERIOD_SIZE;
-        max_delay_frames = (max_delay_frames < 0 ? 0 : max_delay_frames);
+        /*
+         * If report_frames >= audioflinger written_frames, the device data pipeline is idle.
+         * then timestamp.mTime = convertNsToTimespec(nowNs)
+         * resulting in avsync jitter frequently (mTime will be a fake value).
+         *
+         * currently minus 256 frames;
+        */
+        max_report_frames = stream_written_frames;
+        if (max_report_frames <= buffer_min_frames) {
+            max_report_frames = 0;
+        } else {
+            max_report_frames -= buffer_min_frames;
+        }
 
-        if (video_delay_frames > max_delay_frames) {
-            int offset_frames = video_delay_frames - max_delay_frames;
+        *frames += video_delay_frames;
+        if (*frames > max_report_frames) {
+            int offset_frames = *frames - max_report_frames;
             int offset_us = -(offset_frames * 1000 / (out->hal_rate/1000));
 
-            aml_audio_delay_timestamp(timestamp, offset_us);
-            video_delay_frames = max_delay_frames;
             if (adev->debug_flag) {
-                ALOGI("%s deep_buf:%d sys_audio_frame_written:%" PRId64 " frames:%" PRId64 " max_delay_frames:%d offset_frames:%d offset_us:%d", __func__,
-                    is_deep_buffer, adev->sys_audio_frame_written, *frames, max_delay_frames, offset_frames, offset_us);
+                AM_LOGI("timestamp_adjust : deep_buf=%d stream_written_frames=%" PRId64 " report_frames=%" PRId64 \
+                    " max_report_frames=%" PRId64 " video_delay_frames=%d offset_frames=%d offset_us=%d",
+                    is_deep_buffer, stream_written_frames, *frames, max_report_frames, video_delay_frames, offset_frames, offset_us);
             }
+            aml_audio_delay_timestamp(timestamp, offset_us);
+            *frames = max_report_frames;
         }
     }
     if (out->usecase == STREAM_PCM_HWSYNC) {
@@ -2055,13 +2066,13 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
         } else {
             //do nothing
         }
-    } else {
+    } else if (!out->is_normal_pcm) {
         *frames += video_delay_frames;
     }
     {
         if (adev->debug_flag) {
-            AM_LOGI("out:%p frames:%"PRIu64", sec:%ld, nanosec:%ld(origin:%" PRId64 ") tuned_latency_ms %d frame_latency %d video delay=%d(origin:%d)",
-                out, *frames, timestamp->tv_sec, timestamp->tv_nsec, origin_tv_nsec, timems_latency, frame_latency, video_delay_frames, origin_vdelay_frames);
+            AM_LOGI("out:%p frames:%"PRIu64", sec:%ld, nanosec:%ld(origin:%" PRId64 ") tuned_latency_ms %d frame_latency %d video delay=%d",
+                out, *frames, timestamp->tv_sec, timestamp->tv_nsec, origin_tv_nsec, timems_latency, frame_latency, video_delay_frames);
         }
 
         int64_t  frame_diff_ms =  (*frames - out->last_frame_reported) * 1000 / out->hal_rate;

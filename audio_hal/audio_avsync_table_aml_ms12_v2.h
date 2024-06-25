@@ -336,7 +336,7 @@
 #define  AVSYNC_MS12_NETFLIX_HDMI_ARC_OUT_DDP_LATENCY    (30)
 #define  AVSYNC_MS12_NETFLIX_HDMI_ARC_OUT_MAT_LATENCY    (0)
 #define  AVSYNC_MS12_NETFLIX_HDMI_OUT_LATENCY            (0)
-#define  AVSYNC_MS12_NETFLIX_SPEAKER_LATENCY             (-25)
+#define  AVSYNC_MS12_NETFLIX_SPEAKER_LATENCY             (-20)
 
 #define  AVSYNC_MS12_NETFLIX_HDMI_ARC_OUT_LATENCY_PROPERTY    "vendor.media.audio.hal.ms12.netflix.hdmiarcout"
 #define  AVSYNC_MS12_NETFLIX_HDMI_LATENCY_PROPERTY            "vendor.media.audio.hal.ms12.netflix.hdmiout"
@@ -360,7 +360,7 @@
 #define  AVSYNC_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY_PROPERTY       "vendor.media.audio.hal.ms12.netflix.tunnel.atmos"
 
 
-#define  AVSYNC_MS12_TV_NETFLIX_NONTUNNEL_PCM_LATENCY    (-40)
+#define  AVSYNC_MS12_TV_NETFLIX_NONTUNNEL_PCM_LATENCY    (-20)
 #define  AVSYNC_MS12_TV_NETFLIX_NONTUNNEL_DDP_LATENCY    (30)
 
 #define  AVSYNC_MS12_TV_NETFLIX_TUNNEL_PCM_LATENCY       (-10)
