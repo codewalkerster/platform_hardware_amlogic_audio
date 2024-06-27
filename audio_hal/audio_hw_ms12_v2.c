@@ -837,7 +837,7 @@ static void set_dolby_ms12_dap_init_mode(struct aml_audio_device *adev)
 
     /* Dolby MS12 V2 uses DAP Tuning file */
     if (adev->is_ms12_tuning_dat) {
-        dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || (is_SBR(adev) && (adev->enable_soundbar_mode == 1)));
+        dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || is_SBR(adev));
     }
     if (adev->dolby_ms12_dap_init_mode) {
         dap_init_mode = adev->dolby_ms12_dap_init_mode;
@@ -1031,9 +1031,9 @@ int get_the_dolby_ms12_prepared(
             output_config |= MS12_OUTPUT_MASK_DDP;
         }
     }
-    /* for soundbar, we only need speaker output, remove stereo pcm*/
-    if (is_SBR(adev) && (adev->enable_soundbar_mode == 1))
-        output_config = MS12_OUTPUT_MASK_SPEAKER;
+    /* for soundbar, we still need stereo pcm, sometimes the dap will be disabled*/
+    if (is_SBR(adev) /*&& (adev->enable_soundbar_mode == 1)*/)
+        output_config |= MS12_OUTPUT_MASK_SPEAKER | MS12_OUTPUT_MASK_STEREO;
 
 
     /* earc AVR connected, so we enable multi channel pcm out*/
@@ -4639,6 +4639,10 @@ bool is_audio_postprocessing_add_dolbyms12_dap(struct aml_audio_device *adev)
         else {
             is_dap_enable =  false;
         }
+    }
+
+    if (is_SBR(adev) && (adev->enable_soundbar_mode == 0)) {
+        is_dap_enable =  false;
     }
 
     return is_dap_enable;

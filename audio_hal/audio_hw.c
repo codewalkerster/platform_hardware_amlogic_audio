@@ -4457,7 +4457,9 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         if (adev->enable_soundbar_mode != enable) {
             adev->enable_soundbar_mode = enable;
             ALOGI(" enable_soundbar_mode = %d\n", enable);
-            adev_ms12_cleanup((struct audio_hw_device *)adev);
+            if (ms12->dolby_ms12_enable) {
+                set_ms12_full_dap_disable(ms12, !enable);
+            }
         }
         goto exit;
     }
@@ -8373,6 +8375,7 @@ int adev_ms12_prepare(struct audio_hw_device *dev) {
     audio_format_t aformat = AUDIO_FORMAT_E_AC3;
 
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    pthread_mutex_lock(&adev->ms12_init_lock);
 
     if (ms12->dap_only_enable) {
         aml_dap_close(ms12);
@@ -8380,6 +8383,7 @@ int adev_ms12_prepare(struct audio_hw_device *dev) {
 
     if (adev->ms12_out) {
         ALOGD("%s: ms12 stream exist", __func__);
+        pthread_mutex_unlock(&adev->ms12_init_lock);
         return 0;
     }
 
@@ -8397,6 +8401,7 @@ int adev_ms12_prepare(struct audio_hw_device *dev) {
                                       NULL);
     if (ret < 0) {
         ALOGE("%s: open output stream failed", __func__);
+        pthread_mutex_unlock(&adev->ms12_init_lock);
         return ret;
     }
 
@@ -8413,9 +8418,7 @@ int adev_ms12_prepare(struct audio_hw_device *dev) {
     adev->continuous_audio_mode = true;
     adev->ms12.is_continuous_paused = false;
     ret = get_the_dolby_ms12_prepared(aml_out, aformat, AUDIO_CHANNEL_OUT_STEREO, 48000);
-
-    /*the stream will be used in ms12, don't close it*/
-    //adev_close_output_stream_new(dev, stream_out);
+    pthread_mutex_unlock(&adev->ms12_init_lock);
     return 0;
 }
 
@@ -8424,13 +8427,15 @@ void adev_ms12_cleanup(struct audio_hw_device *dev) {
     struct aml_audio_device *adev = (struct aml_audio_device *) dev;
     struct audio_stream_out *stream_out = (struct audio_stream_out *)adev->ms12_out;
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream_out;
+    pthread_mutex_lock(&adev->ms12_init_lock);
     get_dolby_ms12_cleanup(&adev->ms12, true);
     if (stream_out) {
+        aml_out->hw_sync_mode = 0;
         aml_out->hwsync = NULL;
         adev_close_output_stream_new(dev, stream_out);
     }
     adev->ms12_out = NULL;
-
+    pthread_mutex_unlock(&adev->ms12_init_lock);
     return;
 }
 
@@ -8458,6 +8463,7 @@ static int adev_close(hw_device_t *device)
         ms12_mesg_thread_destroy(&adev->ms12);
         ALOGD("%s, ms12_mesg_thread_destroy finished!\n", __func__);
     }
+    pthread_mutex_destroy(&adev->ms12_init_lock);
     aml_audio_all_timer_delete();
     pthread_mutex_destroy(&adev->bitstream_lock);
 
@@ -9143,6 +9149,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
         goto err_vol_ease;
     }
     ALOGD("%s adev->dolby_lib_type:%d  !is_TV(adev):%d", __func__, adev->dolby_lib_type, !is_TV(adev));
+    pthread_mutex_init(&adev->ms12_init_lock, NULL);
     /* create thread for communication between Audio Hal and MS12 */
     if ((eDolbyMS12Lib == adev->dolby_lib_type)) {
         ret = ms12_mesg_thread_create(&adev->ms12);

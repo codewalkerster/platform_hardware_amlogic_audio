@@ -561,6 +561,8 @@ struct aml_audio_device {
     bool first_data;
 
     bool ms12_dynamic_sleep;
+
+    pthread_mutex_t ms12_init_lock;  /*this mutex is used for adev_ms12_prepare/adev_ms12_cleanup*/
 };
 
 struct meta_data {
