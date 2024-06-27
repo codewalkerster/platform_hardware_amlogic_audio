@@ -159,11 +159,19 @@ int teardown_input_format_change(struct aml_audio_patch *patch, struct audio_str
         return 0;
     }
 
+    if (is_same_patch_src(aml_dev, SRC_ARCIN)) {
+        int type = audio_parse_get_audio_type_direct(patch->audio_parse_para);
+        if (type == MULTICH_LPCM)
+            patch->in_chanmask = AUDIO_CHANNEL_INDEX_MASK_8;
+        else
+            patch->in_chanmask = AUDIO_CHANNEL_IN_STEREO;
+    }
+
     if (audio_is_linear_pcm(patch->aformat)) {
         stream_config.sample_rate = patch->in_sample_rate;
         stream_config.channel_mask = patch->in_chanmask;
         stream_config.format = patch->aformat;
-        AM_LOGI("old_format:%x new_format:%x for PCM", old_aml_in->hal_format, stream_config.format);
+        AM_LOGI("old_format:%x new_format:%x chmask %#x for PCM", old_aml_in->hal_format, stream_config.format, patch->in_chanmask);
     } else {
         stream_config.sample_rate = patch->in_sample_rate;
         stream_config.channel_mask = patch->in_chanmask;
@@ -200,7 +208,7 @@ void *audio_patch_input_threadloop(void *data)
     struct aml_stream_in *in;
     struct audio_config stream_config;
     struct timespec ts;
-    int aux_read_bytes, read_bytes;
+    int read_bytes;
     // FIXME: add calc for read_bytes;
     read_bytes = DEFAULT_CAPTURE_PERIOD_SIZE * CAPTURE_PERIOD_COUNT;
     int ret = 0, retry = 0;
@@ -212,6 +220,7 @@ void *audio_patch_input_threadloop(void *data)
     patch->sync_offset = -1;
     patch->start_mute = false;
     patch->mdelay = 0;
+    unsigned char *buffer = NULL;
 
     ALOGI("++%s", __FUNCTION__);
 
@@ -241,6 +250,7 @@ void *audio_patch_input_threadloop(void *data)
         adev_close_input_stream(patch->dev, &in->stream);
         return (void *)0;
     }
+    buffer = patch->in_buf;
 
     prctl(PR_SET_NAME, (unsigned long)"audio_input_patch");
     aml_set_thread_sched_priority("audio_input_patch", patch->audio_input_threadID, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY - 1);
@@ -299,6 +309,7 @@ void *audio_patch_input_threadloop(void *data)
             if (!patch->in_buf) {
                break;
             }
+            buffer = patch->in_buf;
             patch->in_buf_size = read_bytes;
             memset(patch->in_buf, 0, patch->in_buf_size);
         }
@@ -345,6 +356,7 @@ void *audio_patch_input_threadloop(void *data)
                 input_stream_channels_adjust(&in->stream, patch->in_buf, read_bytes, false);
             } else if (is_same_patch_src(aml_dev, SRC_ARCIN) && (patch->arc_layout_b || in->config.channels > 2)) {
                 input_stream_channels_adjust(&in->stream, patch->in_buf, read_bytes, false);
+                buffer = input_stream_do_resample(&in->stream, patch->in_buf, &bytes_avail);
             } else {
                 if (is_tv_mute(aml_dev)  && (audio_is_linear_pcm(patch->aformat)) && is_game_mode(aml_dev)) {
                     ring_buffer_reset(ringbuffer);
@@ -417,9 +429,7 @@ void *audio_patch_input_threadloop(void *data)
                 if (get_buffer_write_space(ringbuffer) >= bytes_avail) {
                     retry = 0;
                     aml_audio_trace_int("input_thread_write2buf", bytes_avail);
-                    ret = ring_buffer_write(ringbuffer,
-                                            (unsigned char*)patch->in_buf,
-                                            bytes_avail, UNCOVER_WRITE);
+                    ret = ring_buffer_write(ringbuffer, buffer, bytes_avail, UNCOVER_WRITE);
                     if (ret != bytes_avail) {
                         ALOGE("%s(), write buffer fails!", __func__);
                     }

@@ -455,6 +455,10 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
        return -ENOSYS; /*Currently System Not Supported.*/
     }
 
+    devices &= ~AUDIO_DEVICE_BIT_IN;
+    if ((devices & AUDIO_DEVICE_IN_ALL_USB) || (devices & AUDIO_DEVICE_IN_HDMI_ARC))
+        return 0;
+
     if (format != AUDIO_FORMAT_PCM_16_BIT && format != AUDIO_FORMAT_PCM_32_BIT) {
         ALOGE("%s: unsupported AUDIO FORMAT (%d)", __func__, format);
         return -EINVAL;
@@ -5317,6 +5321,12 @@ void adev_close_input_stream(struct audio_hw_device *dev,
         destroy_aec_mic_config(adev->aec);
     }
 #endif
+
+    if (in->resample_handle) {
+        aml_audio_resample_close(in->resample_handle);
+        in->resample_handle = NULL;
+    }
+
     pthread_mutex_destroy(&in->pre_lock);
     pthread_mutex_destroy(&in->lock);
     AM_LOGI("io %d: in:%p exit ------", in->io_handle, in);

@@ -35,6 +35,7 @@
 #include <aml_data_utils.h>
 #include <audio_utils/channels.h>
 #include <audio_utils/format.h>
+#include <hardware/audio_alsaops.h>
 #if ANDROID_PLATFORM_SDK_VERSION >= 25 // 8.0
 #include <system/audio-base.h>
 #endif
@@ -153,6 +154,39 @@ int input_stream_channels_adjust(struct audio_stream_in *stream, void* buffer, s
         }
     }
     return ret;
+}
+
+void *input_stream_do_resample(struct audio_stream_in *stream, void *buffer, int *bytes)
+{
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct aml_audio_device *adev = in->dev;
+    struct aml_audio_patch *patch = get_dev_patch(adev);
+    void *buf_ret = buffer;
+    int ret = 0;
+
+    if (in->config.channels > 2) {
+        /* only pcm support multi-ch config which needs SW resampler */
+        int cur_samplerate = audio_parse_get_audio_samplerate(patch->audio_parse_para);
+        int output_sr = 48000;
+
+        if (cur_samplerate != output_sr) {
+            audio_resample_config_t cfg = {
+                .aformat = audio_format_from_pcm_format(in->config.format),
+                .channels = in->config.channels,
+                .input_sr = cur_samplerate,
+                .output_sr = output_sr,
+            };
+            ret = aml_audio_resample_process_ex(&in->resample_handle, &cfg, buffer, *bytes);
+            if (ret == 0) {
+                buf_ret = in->resample_handle->resample_buffer;
+                *bytes = in->resample_handle->resample_size;
+            } else {
+                AM_LOGE("aml_audio_resample_process_ex fail ret=%d", ret);
+            }
+        }
+    }
+
+    return buf_ret;
 }
 
 bool is_HBR_stream(struct audio_stream_in *stream)
@@ -451,142 +485,6 @@ int in_reset_config_param(struct aml_stream_in *in, AML_INPUT_STREAM_CONFIG_TYPE
         ALOGW("start input stream failed! ret:%#x", s32Ret);
     }
     return s32Ret;
-}
-
-/*
- * Reopen extn/arc alsa input when channel numbers, channel allocation or audio format changes.
- * For arc input, if HBR is used then data come in fixed 8 channel layout.
- */
-int reconfig_read_param_through_arcin(struct aml_audio_device *aml_dev,
-                                       struct aml_stream_in *stream_in,
-                                       ring_buffer_t *ringbuffer, int buffer_size)
-{
-    struct aml_stream_in *in = (struct aml_stream_in *)stream_in;
-    int nChannels, ca, audio_packet = AUDIO_PACKET_AUDS;
-    bool packet_hbr = false;
-    audio_format_t aformat = AUDIO_FORMAT_PCM_16_BIT;
-    struct aml_audio_patch *audio_patch = NULL;
-    audio_type_parse_t *audio_parse_para = NULL;
-    int buf_size = 0;
-    int period_size = 0;
-
-    if (!aml_dev || !stream_in) {
-        ALOGE("%s line %d aml_dev %p stream_in %p\n", __func__, __LINE__, aml_dev, stream_in);
-        return -1;
-    }
-
-    audio_patch = get_dev_patch(aml_dev);
-    audio_parse_para = (audio_type_parse_t *)audio_patch->audio_parse_para;
-    if (audio_parse_para == NULL)
-        return 0;
-
-    bool is_pcm, reset = audio_parse_para->reset_input;
-    int type, codec;
-    bool mute = eArcIn_get_cs_mute(&aml_dev->alsa_mixer);
-
-    audio_parse_para->reset_input = false;
-    type = audio_patch->earcin_audio_type;
-    if (type == AUDIO_CODING_TYPE_UNDEFINED || type == AUDIO_CODING_TYPE_PAUSE) {
-        aformat = audio_patch->aformat;
-        nChannels = in->config.channels;
-        ca = audio_patch->ca;
-        AM_LOGV("audio type keep format = %#x", aformat);
-    } else if (type >= AUDIO_CODING_TYPE_STEREO_LPCM &&
-        type <= AUDIO_CODING_TYPE_MULTICH_32CH_LPCM) {
-        is_pcm = true;
-        aformat = AUDIO_FORMAT_PCM_16_BIT;
-        nChannels = pcm_coding_type_to_channels(type);
-        AM_LOGV("audio multi channels = %d", nChannels);
-        if (nChannels == AUDIO_CODING_TYPE_STEREO_LPCM ||
-                nChannels == AUDIO_CODING_TYPE_MULTICH_2CH_LPCM) {
-            ca = 0;
-        }
-    } else {
-        is_pcm = false;
-        codec = non_pcm_coding_type_to_codec(type);
-        aformat = audio_type_convert_to_android_audio_format_t(codec);
-        nChannels = 2;
-        AM_LOGV("audio raw aformat %#x", aformat);
-    }
-
-    if (audio_is_linear_pcm(aformat)) {
-        bool reconfig = reset || (nChannels != 0 && nChannels != in->config.channels) ||
-            (aformat != audio_patch->aformat) || (ca != audio_patch->ca) || audio_patch->cs_mute != mute;
-
-        if (reconfig) {
-            int nChans = nChannels;
-
-            ALOGI("%s(), PCM INPUT ch/format/cs mute/ca %d/%x/%d/%d -> %d/%x/%d/%d,, reset %d",
-                __func__,
-                in->config.channels, audio_patch->aformat, audio_patch->cs_mute, audio_patch->ca,
-                nChannels, aformat, mute, ca, reset);
-
-            audio_patch->cs_mute = mute;
-
-#ifdef HDMI_ARC_PCM_32BIT_INPUT
-            if (in->from_input_thread) {
-                in->hal_format = audio_is_linear_pcm(aformat) ? AUDIO_FORMAT_PCM_32_BIT : AUDIO_FORMAT_PCM_16_BIT;
-            }
-#endif
-
-            // re-configure ring buffer size
-            if ((audio_packet == AUDIO_PACKET_HBR) &&
-                (aml_dev->in_device & AUDIO_DEVICE_IN_HDMI_ARC)) {
-                if (!alsa_device_is_auge()) {
-                    set_spdifin_pao(&aml_dev->alsa_mixer, true);
-                }
-                period_size = DEFAULT_CAPTURE_PERIOD_SIZE * 2;
-                // increase the buffer size
-                buf_size = buffer_size * 8;
-                nChans = 8; // Fixed 8 channel for HBR HDMI ARC input
-            } else {
-                if (!alsa_device_is_auge()) {
-                    set_spdifin_pao(&aml_dev->alsa_mixer, false);
-                }
-                period_size = DEFAULT_CAPTURE_PERIOD_SIZE;
-                // reset to original one
-                buf_size = buffer_size;
-            }
-            if (ringbuffer) {
-                ring_buffer_reset_size(ringbuffer, buf_size);
-            }
-
-            // reconfigure ALSA device for capturing
-            in->config.period_size = period_size;
-            ALOGD("%s() %d here %#x", __func__, __LINE__, aformat);
-            in_reset_config_param(stream_in, AML_INPUT_STREAM_CONFIG_TYPE_CHANNELS, &nChans);
-
-            audio_patch->aformat = aformat;
-            audio_patch->ca = ca;
-
-            in->hal_format = audio_patch->aformat = aformat;
-            in->hal_channel_mask = /*(aml_dev->in_device & AUDIO_DEVICE_IN_HDMI_ARC) ? aml_map_ca_to_mask(ca) : */aml_map_ch_to_mask(nChannels);
-            return 0;
-        }
-    } else if ((aformat != audio_patch->aformat) || reset) {
-        if (aformat == AUDIO_FORMAT_MAT) {
-             period_size = DEFAULT_CAPTURE_PERIOD_SIZE * 4;
-             // increase the buffer size
-             buf_size = buffer_size * 8;
-         } else {
-             period_size = DEFAULT_CAPTURE_PERIOD_SIZE;
-             buf_size = buffer_size;
-         }
-         stream_in->config.period_size = period_size;
-
-        /* for bitstream input, reopen input with AUDIO_FORMAT_PCM_16_BIT 2 channel */
-        if (ringbuffer) {
-            ring_buffer_reset_size(ringbuffer, buf_size);
-        }
-
-        in->hal_format = audio_patch->aformat = aformat;
-        in->hal_channel_mask = AUDIO_CHANNEL_IN_STEREO;
-        nChannels = 2;
-        in_reset_config_param(stream_in, AML_INPUT_STREAM_CONFIG_TYPE_CHANNELS, &nChannels);
-        return 0;
-    }
-
-    return -1;
 }
 
 int reconfig_read_param_through_hdmiin(struct aml_audio_device *aml_dev,
@@ -1003,7 +901,7 @@ static int eArcIn_audio_format_detection(struct audio_stream_in *stream)
 
     patch->earcin_audio_type = type;
 
-    return non_pcm_coding_type_to_codec(type);
+    return earc_coding_type_to_codec(type);
 }
 
 bool is_spdif_in_stable_hw(struct audio_stream_in *stream)

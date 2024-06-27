@@ -32,6 +32,7 @@ enum audio_type {
     DTSCD,
     MUTE,
     MPEGH,
+    MULTICH_LPCM
 };
 
 /*
@@ -213,7 +214,7 @@ bool eArcIn_get_cs_mute(struct aml_mixer_handle *mixer_handle);
 void audio_pcpd_format_detect(audio_type_parse_t *status);
 
 int pcm_coding_type_to_channels(enum earc_audio_type type);
-int non_pcm_coding_type_to_codec(enum earc_audio_type type);
+int earc_coding_type_to_codec(enum earc_audio_type type);
 void audio_fmt_check(audio_type_parse_t *status, void *buffer, size_t bytes);
 
 bool is_audio_parse_fmt_change(audio_type_parse_t *status);

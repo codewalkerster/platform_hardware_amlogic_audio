@@ -21,6 +21,7 @@
 /*==================================input commands=========================================*/
 int input_stream_channels_adjust(struct audio_stream_in *stream,
                         void* buffer, size_t bytes, bool downmix);
+void *input_stream_do_resample(struct audio_stream_in *stream, void *buffer, int *bytes);
 bool is_HBR_stream(struct audio_stream_in *stream);
 bool is_game_mode(struct aml_audio_device *aml_dev);
 void aml_check_pic_mode(struct aml_audio_patch *patch);
@@ -55,9 +56,6 @@ enum hdmiin_audio_mode get_hdmiin_audio_mode(struct aml_mixer_handle *mixer_hand
 
 void audio_raw_data_continuous_check(struct aml_audio_device *aml_dev, audio_type_parse_t *status, char *buffer, int size);
 int reconfig_read_param_through_hdmiin(struct aml_audio_device *aml_dev,
-                                       struct aml_stream_in *stream_in,
-                                       ring_buffer_t *ringbuffer, int buffer_size);
-int reconfig_read_param_through_arcin(struct aml_audio_device *aml_dev,
                                        struct aml_stream_in *stream_in,
                                        ring_buffer_t *ringbuffer, int buffer_size);
 

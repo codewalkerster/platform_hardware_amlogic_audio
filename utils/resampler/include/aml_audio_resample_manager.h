@@ -25,7 +25,7 @@ typedef enum {
 
 
 typedef struct audio_resample_config {
-    int aformat;
+    audio_format_t aformat;
     unsigned int input_sr;
     unsigned int output_sr;
     unsigned int channels;

@@ -141,7 +141,7 @@ bool eArcIn_get_cs_mute(struct aml_mixer_handle *mixer_handle)
     return !!aml_mixer_ctrl_get_int(mixer_handle, AML_MIXER_ID_EARCRX_CS_MUTE);
 }
 
-int non_pcm_coding_type_to_codec(enum earc_audio_type type)
+int earc_coding_type_to_codec(enum earc_audio_type type)
 {
     int audio_codec = 0;
 
@@ -172,6 +172,9 @@ int non_pcm_coding_type_to_codec(enum earc_audio_type type)
         // TODO: test found that switching format get pause type, ignore it
         case EARC_UNDEFINED:
             audio_codec = NOT_READY;
+            break;
+        case EARC_MULTICH_8CH_LPCM:
+            audio_codec = MULTICH_LPCM;
             break;
         default:
             audio_codec = LPCM;
@@ -850,6 +853,7 @@ static void* audio_type_parse_threadloop(void *data)
             cur_samplerate = get_spdifin_samplerate(audio_type_status->mixer_handle);
         } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
             cur_samplerate = get_eArcIn_samplerate(audio_type_status->mixer_handle);
+            audio_type_status->audio_samplerate = audio_transfer_samplerate(cur_samplerate);
         }
 
         if (cur_samplerate == -1)
@@ -986,7 +990,7 @@ static void* audio_type_parse_threadloop(void *data)
                 } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_SPDIF) {
                     audio_type_status->cur_audio_type = spdifin_audio_format_detection(audio_type_status->mixer_handle);
                 } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
-                    type = non_pcm_coding_type_to_codec(eArcIn_coding_type_detection(audio_type_status->mixer_handle));
+                    type = earc_coding_type_to_codec(eArcIn_coding_type_detection(audio_type_status->mixer_handle));
                     mute = eArcIn_get_cs_mute(audio_type_status->mixer_handle);
                     if (type != NOT_READY)
                         audio_type_status->cur_audio_type = type;
@@ -1118,6 +1122,8 @@ audio_format_t audio_type_convert_to_android_audio_format_t(int codec_type)
         return AUDIO_FORMAT_PCM_16_BIT;
     case MPEGH:
         return (audio_format_t)AUDIO_FORMAT_MPEGH;
+    case MULTICH_LPCM:
+        return AUDIO_FORMAT_PCM_16_BIT;
     default:
         AM_LOGW("invalid codec_type:%d, return PCM.", codec_type);
         return AUDIO_FORMAT_PCM_16_BIT;
