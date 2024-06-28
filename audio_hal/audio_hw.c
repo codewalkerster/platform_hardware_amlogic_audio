@@ -2169,7 +2169,13 @@ static void update_alsa_config(struct aml_stream_in *in) {
         in->config.rate = in->requested_rate;
     }
 #else
-    (void)in;
+    struct aml_audio_device *adev = in->dev;
+
+    /* If board disable farfield and chip has no pdm, select analog dummy config. */
+    if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC &&
+            check_chip_name("s7", 2, &adev->alsa_mixer)) {
+        in->config.channels = 2;
+    }
 #endif
 
     /*add for vts: CapturePositionAdvancesWithReads/18_default_primary
@@ -2677,7 +2683,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
     struct aml_audio_patch* patch = get_dev_patch(adev);
     size_t cur_in_bytes, cur_in_frames;
 
-    ALOGV("%s(): stream: %p, source: %d, bytes %zu in->devices %0x", __func__, in, in->source, bytes, in->device);
+    ALOGV("%s(): stream: %p, source: %d, bytes %zu in_frames:%d in->devices %0x", __func__, in, in->source, bytes, in_frames, in->device);
 
     lock_input_stream(in);
 #ifdef ENABLE_AEC_APP
