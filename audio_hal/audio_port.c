@@ -146,6 +146,16 @@ void inport_reset(input_port *port)
     port->port_status = STOPPED;
     //port->is_hwsync = false;
     port->consumed_bytes = 0;
+    port->data_valid = 0;
+    port->bytes_to_insert = 0;
+    port->bytes_to_skip = 0;
+    port->initial_frames = 0;
+    port->mix_consumed_frames = 0;
+    port->presentation_frames = 0;
+    port->s64_negative_frames = 0;
+    port->padding_frames = 0;
+    port->pts_valid = false;
+    port->first_read = true;
 }
 
 int send_inport_message(input_port *port, PORT_MSG msg)
