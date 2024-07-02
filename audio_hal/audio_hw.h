@@ -563,6 +563,9 @@ struct aml_audio_device {
     bool ms12_dynamic_sleep;
 
     pthread_mutex_t ms12_init_lock;  /*this mutex is used for adev_ms12_prepare/adev_ms12_cleanup*/
+    int avsync_compensate_delay_ms; /*compensate the avsync audio delay*/
+    bool b_ott_tv_arc_connected;    /*the hdmitx connection is ott --> TV  --> ARC AVR/SOUNDBAR*/
+    int arc_delay_ms;               /*assume avr/soundbar delay of above connections is 100ms default value*/
 };
 
 struct meta_data {

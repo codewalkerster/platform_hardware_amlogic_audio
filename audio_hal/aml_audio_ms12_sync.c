@@ -645,6 +645,9 @@ static int get_ms12_nontunnel_latency_offset(enum OUT_PORT port
     } else {
         input_latency_ms  = get_ms12_nontunnel_input_latency(input_format);
         output_latency_ms = get_ms12_output_latency(output_format);
+        if (adev->compensate_video_enable) {
+            output_latency_ms = 0;
+        }
         port_latency_ms   = get_ms12_port_latency(port, output_format, is_eARC, is_tunnel);
     }
     latency_ms = input_latency_ms + output_latency_ms + port_latency_ms;
@@ -929,6 +932,27 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
     device_type_t platform_type = STB;
     bool is_earc = is_earc_connected(adev);
 
+    int hdmi_delay = 0;
+
+    /* if the hdmi delay is negative, then we should render video later.
+     * this latency calculation need a positive value to delay video,
+     * so we change the hdmi delay to positive one
+     */
+    //adev->active_outport == OUTPORT_HDMI
+    //active_outport has been removed, replace it with cur_out_devices
+    if (get_output_by_devices(adev->cur_out_devices) == OUTPORT_HDMI &&
+        adev->avsync_compensate_delay_ms < 0) {
+        hdmi_delay = abs(adev->avsync_compensate_delay_ms) * 48;
+    }
+
+    /*compensate the avr delay for raw data*/
+    if (adev->b_ott_tv_arc_connected &&
+        get_output_by_devices(adev->cur_out_devices) == OUTPORT_HDMI &&
+        adev->sink_format != AUDIO_FORMAT_PCM_16_BIT) {
+        hdmi_delay += abs(adev->arc_delay_ms) * 48;
+    }
+
+
     if (is_STB(adev)) {
         platform_type = STB;
     }
@@ -966,7 +990,7 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
         dv_delay = get_sink_dv_latency_offset(true, adev->is_netflix) * 48;
     }
 
-    latency_frames = tuning_delay + atmos_tuning_delay + bypass_delay - video_delay + dv_delay;
+    latency_frames = tuning_delay + atmos_tuning_delay + bypass_delay - video_delay + dv_delay + hdmi_delay;
 
     ALOGV("latency frames =%d tuning delay=%d ms atmos =%d ms video delay %d ms dv_delay %d ms",
         latency_frames, tuning_delay / 48, atmos_tuning_delay / 48, video_delay / 48, dv_delay / 48);

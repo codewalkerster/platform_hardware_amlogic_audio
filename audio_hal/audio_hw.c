@@ -1244,6 +1244,7 @@ static uint32_t audiohal_get_latency (const struct audio_stream_out *stream)
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
     uint32_t a2dp_delay = 0, alsa_latency = 0, whole_latency = 0;
+    int hdmi_delay = 0;
 
     if (out->out_device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE ||
         out->out_device & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
@@ -1253,6 +1254,21 @@ static uint32_t audiohal_get_latency (const struct audio_stream_out *stream)
         return a2dp_delay;
     } else if (out->out_device & AUDIO_DEVICE_OUT_USB_HEADSET) {
         //do nothing.
+    } else if (out->out_device & AUDIO_DEVICE_OUT_HDMI) {
+        if (adev->avsync_compensate_delay_ms < 0) {
+            hdmi_delay = abs(adev->avsync_compensate_delay_ms);
+            /*for youtube case, the delay can't set too big*/
+            if (adev->compensate_video_enable) {
+                if (hdmi_delay > 150) {
+                    hdmi_delay = 150;
+                }
+            }
+        }
+        /*compensate the avr delay for raw data*/
+        if (adev->b_ott_tv_arc_connected &&
+            adev->sink_format != AUDIO_FORMAT_PCM_16_BIT) {
+            hdmi_delay += abs(adev->arc_delay_ms);
+        }
     }
 
     snd_pcm_sframes_t frames = out_get_latency_frames (stream);
@@ -1268,7 +1284,7 @@ static uint32_t audiohal_get_latency (const struct audio_stream_out *stream)
     }
     alsa_latency = (frames * 1000) / out->config.rate;
 
-    whole_latency = alsa_latency;
+    whole_latency = alsa_latency + hdmi_delay;
     AM_LOGI("io %d: out:%p frames:%lu rate:%u whole_latency:%u alsa_latency:%u", out->io_handle,
            stream, frames, out->config.rate, whole_latency, alsa_latency);
     return whole_latency;
@@ -2021,6 +2037,34 @@ static int out_get_presentation_position (const struct audio_stream_out *stream,
     /*here we need add video delay*/
     video_delay_frames = get_media_video_delay(&adev->alsa_mixer) * out->hal_rate / 1000;
     origin_tv_nsec = timestamp->tv_nsec;
+    /*the user set delay*/
+    if (adev->avsync_compensate_delay_ms < 0 &&
+        get_output_by_devices(adev->cur_out_devices) == OUTPORT_HDMI) {
+        int hdmi_delay_frames = abs(adev->avsync_compensate_delay_ms) * (int)(out->hal_rate / 1000);
+        /*for youtube case, the delay can't set too big*/
+        if (adev->compensate_video_enable) {
+            if (hdmi_delay_frames > 150 * (int)(out->hal_rate / 1000)) {
+                hdmi_delay_frames = 150 * (int)(out->hal_rate / 1000);
+            }
+        }
+
+        if (*frames > hdmi_delay_frames) {
+            *frames = *frames - hdmi_delay_frames;
+        } else {
+            *frames = 0;
+        }
+    }
+    /*compensate the avr delay for raw data*/
+    if (adev->b_ott_tv_arc_connected &&
+        get_output_by_devices(adev->cur_out_devices) == OUTPORT_HDMI &&
+        adev->sink_format != AUDIO_FORMAT_PCM_16_BIT) {
+        int arc_delay_frames = abs(adev->arc_delay_ms) * (int)(out->hal_rate / 1000);
+        if (*frames > arc_delay_frames) {
+            *frames = *frames - arc_delay_frames;
+        } else {
+            *frames = 0;
+        }
+    }
 
     if (out->is_normal_pcm) {
         const int buffer_min_frames = 256;
@@ -4310,10 +4354,35 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
     ret = str_parms_get_int(parms, "hal_param_out_dev_delay_time_ms", &val);
     if (ret >= 0) {
         /* High 16 - bit expression type, low 16 - bit expression delay time */
-        aml_audio_delay_set_time(val >> 16, val & 0xffff);
+        short audio_delay = (short)(val & 0xffff);
+        if (audio_delay > AUDIO_DELAY_MAX)
+            audio_delay = AUDIO_DELAY_MAX;
+        else if (audio_delay < AUDIO_DELAY_MIN)
+            audio_delay = AUDIO_DELAY_MIN;
+
+        /*
+        * if audio_delay is a negative value,
+        * will save to variable "avsync_compensate_delay_ms" and compensate to frames with avsync.
+        * if audio_delay is a positive value, set to delay buffer and insert zero data to alsa buf.
+        */
+        ALOGI("%s set audio delay =%d", __func__, audio_delay);
+        adev->avsync_compensate_delay_ms = audio_delay;
+        if (audio_delay <= 0) {
+            audio_delay = 0;
+        }
+        aml_audio_delay_set_time(val >> 16, audio_delay);
+
         goto exit;
     }
 #endif
+
+    ret = str_parms_get_int(parms, "hal_param_ott_tv_arc_connected", &val);
+    if (ret >= 0) {
+        adev->b_ott_tv_arc_connected = (val != 0) ? true: false;
+        ALOGI("%s hal_param_ott_tv_arc_connected = %d", __func__, adev->b_ott_tv_arc_connected);
+        goto exit;
+    }
+
 
 #ifdef ENABLE_DVB_PATCH
     /* deal with dvb cmd */
@@ -8925,7 +8994,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->hi_pcm_mode = false;
     adev->last_sink_capability = 0;
     adev->first_data = false;
-
+    adev->avsync_compensate_delay_ms = 0;
     adev->eq_data.card = adev->card;
     if (eq_drc_init(&adev->eq_data) == 0) {
         ALOGI("%s() audio source gain: atv:%f, dtv:%f, hdmiin:%f, av:%f, media:%f", __func__,
@@ -9028,6 +9097,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->loudness_level = get_loudness_level();
     adev->ms12_dynamic_sleep = property_get_bool("ro.vendor.media.audio.ms12.dynamic_sleep", false);
     adev->enable_soundbar_mode = false;
+    adev->arc_delay_ms = property_get_int32("ro.vendor.platform.arc.delay", 100);
 
     /*for ms12 case, we set default continuous mode*/
     if (eDolbyMS12Lib == adev->dolby_lib_type) {

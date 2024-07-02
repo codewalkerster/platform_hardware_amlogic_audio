@@ -20,6 +20,13 @@
 #include <aml_ringbuffer.h>
 #include "alsa_manager.h"
 
+#define ALIGN(size, align) ((size + align - 1) & (~(align - 1)))
+
+#define  AUDIO_DELAY_MAX       (400)
+#define  AUDIO_DELAY_MIN       (-400)
+
+/*currently the delay process will have issue if the delay is max value, increase the buffer size by below value*/
+#define AML_AUDIO_DELAY_BUFSIZE_EXPANDING   (40)
 
 typedef struct AML_AUDIO_DELAY {
     int                 delay_time;
