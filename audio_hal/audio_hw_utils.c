@@ -834,11 +834,9 @@ bool aml_audio_check_sbr_product()
     char buf[PROPERTY_VALUE_MAX] ={'\0'};
     int ret = 0;
     char *sbr_str = NULL;
-    ret = property_get("ro.vendor.platform.hdmi.device_type", buf, NULL);
+    ret = property_get("persist.vendor.sys.soundbar_mode", buf, NULL);
     if (ret > 0) {
-        sbr_str = strstr(buf,"5");
-        if (sbr_str)
-            return true;
+        return strcmp(buf, "1") == 0;
     }
     return false;
 }
