@@ -1256,7 +1256,7 @@ static uint32_t audiohal_get_latency (const struct audio_stream_out *stream)
     }
 
     snd_pcm_sframes_t frames = out_get_latency_frames (stream);
-    if (eDolbyMS12Lib == adev->dolby_lib_type) {
+    if ((eDolbyMS12Lib == adev->dolby_lib_type) && (adev->ms12_out != NULL)) {
         frames = aml_alsa_output_get_delayframe((struct audio_stream_out*)adev->ms12_out);
     }
     // In the first pcm_open, and no data has been written, the latency of alsa is 0
