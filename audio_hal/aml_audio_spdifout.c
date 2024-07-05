@@ -335,6 +335,7 @@ static int spdifout_support_format(audio_format_t audio_format)
     case AUDIO_FORMAT_DOLBY_TRUEHD:
     case AUDIO_FORMAT_IEC61937:
     case AUDIO_FORMAT_PCM_16_BIT:
+    case AUDIO_FORMAT_PCM_32_BIT:
         return true;
     default:
         return false;

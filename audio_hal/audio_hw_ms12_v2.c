@@ -916,6 +916,7 @@ int get_the_dolby_ms12_prepared(
     unsigned int sink_max_channels = 2;
     int ret = 0, associate_audio_mixing_enable = 0 , media_presentation_id = -1,mixing_level = 0,ad_vol = 100;
     int ms12_init_count = 0;
+    struct aml_arc_hdmi_desc* hdmi_descs = NULL;
     bool output_5_1_ddp = getprop_bool(MS12_OUTPUT_5_1_DDP);
     ms12->tv_tuning_flag = getprop_bool(MS12_TV_TUNING);
 
@@ -1033,14 +1034,12 @@ int get_the_dolby_ms12_prepared(
 
     ms12->dual_bitstream_support = adev->dual_spdif_support;
     if (adev->sink_capability == AUDIO_FORMAT_MAT && !netflix_request_dd_output()) {
-        // MS12_OUTPUT_MASK_MC : NTS LLP-AUDIO-OUTPUT-LATENCY-STB-6CH
-        output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_MAT | MS12_OUTPUT_MASK_MC;
+        output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_MAT;
     } else {
         if (is_TV(adev)) {
             output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
         } else {
-            // MS12_OUTPUT_MASK_MC : NTS LLP-AUDIO-OUTPUT-LATENCY-STB-6CH
-            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_MC;
+            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO;
         }
         if (adev->sink_capability == AUDIO_FORMAT_E_AC3) {
             // output ddp when sink needs, to reduce cpu loading
@@ -1052,10 +1051,9 @@ int get_the_dolby_ms12_prepared(
         output_config |= MS12_OUTPUT_MASK_SPEAKER | MS12_OUTPUT_MASK_STEREO;
 
 
-    /* earc AVR connected, so we enable multi channel pcm out*/
-    if (ATTEND_TYPE_EARC == aml_audio_earctx_get_type(adev)) {
-        output_config |= MS12_OUTPUT_MASK_MC;
-    }
+    // MS12_OUTPUT_MASK_MC : NTS LLP-AUDIO-OUTPUT-LATENCY-STB-6CH
+    // mc-pcm file writer should be created, later we can turn it off by runtime parameters
+    output_config |= MS12_OUTPUT_MASK_MC;
 
     struct audio_board_config *bd_config = &adev->board_config;
     if (bd_config->ms12_output_mask)
@@ -1248,6 +1246,19 @@ int get_the_dolby_ms12_prepared(
     set_ms12_alsa_limit_frame(ms12, MS12_ALSA_DEFAULT_LIMIT_FRAME);
     set_ms12_scheduler_sleep(ms12, true);
     ms12->scheduler_run_count = 0;
+    hdmi_descs = get_arc_hdmi_cap(adev);
+
+    /* only enable mc output when it supports multi channel */
+    // For netflix apk, DDP/MAT and mc-pcm will not exist at the same time.
+    // currently, eARC always support 8ch pcm.
+    if ((hdmi_descs->pcm_fmt.max_channels >= 6 || is_earc_connected(adev))
+        && !(output_config & (MS12_OUTPUT_MASK_MAT|MS12_OUTPUT_MASK_DDP))) {
+        ms12->output_config |= MS12_OUTPUT_MASK_MC;
+        set_ms12_mch_enable(ms12, true);
+    } else {
+        ms12->output_config &= (~MS12_OUTPUT_MASK_MC);
+        set_ms12_mch_enable(ms12, false);
+    }
 
     /*ms12 related resources are prepared, we can start ms12 thread*/
     if (continuous_mode(adev) && ms12->dolby_ms12_enable) {
@@ -3431,6 +3442,15 @@ int mc_pcm_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_
         return 0;
     }
 
+    if (netflix_llp_mode && ch_mask == AUDIO_CHANNEL_OUT_STEREO) {
+        /*
+         * The first coming ch_mask is 2.0, then 5.1
+         * ch_mask will be used to "eMixerEARC_Channel_Allocation" when earc(spdif) open.
+        */
+        AM_LOGV("ch_mask change 0x%x to 5.1", ch_mask);
+        ch_mask = AUDIO_CHANNEL_OUT_5POINT1;
+    }
+
     if (is_same_patch_src(adev, SRC_DTV) && is_dev_patch_exist(adev) && get_dev_patch(adev)->need_drop_size > 0) {
         if (adev->debug_flag > 1)
             ALOGI("func:%s, av sync drop data,need_drop_size=%d\n",
@@ -4695,7 +4715,9 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
     }
 
     /*only enable mc output when it supports multi channel*/
-    if (hdmi_descs->pcm_fmt.max_channels >= 6) {
+    // For netflix apk, DDP/MAT and mc-pcm will not exist at the same time.
+    if ((hdmi_descs->pcm_fmt.max_channels >= 6 || is_earc_connected(adev))
+        && !(output_config & (MS12_OUTPUT_MASK_MAT|MS12_OUTPUT_MASK_DDP))) {
         output_config |= MS12_OUTPUT_MASK_MC;
         set_ms12_mch_enable(ms12, true);
     } else {

@@ -1880,6 +1880,7 @@ int halformat_convert_to_spdif(audio_format_t format, int ch_mask) {
     int aml_spdif_format = AML_STEREO_PCM;
     switch ((uint32_t)format) {
         case AUDIO_FORMAT_PCM_16_BIT:
+        case AUDIO_FORMAT_PCM_32_BIT:
             aml_spdif_format = AML_STEREO_PCM;
             if (audio_channel_count_from_out_mask(ch_mask) > 2) {
                 aml_spdif_format = AML_MULTI_CH_LPCM;
@@ -1924,6 +1925,7 @@ int halformat_convert_to_arcformat(audio_format_t format, int ch_mask) {
     int aml_spdif_format = AML_AUDIO_CODING_TYPE_STEREO_LPCM;
     switch ((uint32_t)format) {
         case AUDIO_FORMAT_PCM_16_BIT:
+        case AUDIO_FORMAT_PCM_32_BIT:
             aml_spdif_format = AML_AUDIO_CODING_TYPE_STEREO_LPCM;
             if (audio_channel_count_from_out_mask(ch_mask) > 2) {
                 aml_spdif_format = AML_AUDIO_CODING_TYPE_MULTICH_8CH_LPCM;

@@ -466,6 +466,10 @@ void get_sink_format(struct audio_stream_out *stream)
 
 #ifndef AUDIO_HAL_DISABLE_MS12
         if (eDolbyMS12Lib == adev->dolby_lib_type) {
+            if (adev->ms12.dolby_ms12_enable) {
+                // LLP not request dap
+                set_ms12_full_dap_disable(&adev->ms12, true);
+            }
             audiohal_send_msg_2_ms12(&adev->ms12, MS12_MESG_TYPE_RESET_MS12_ENCODER);
             set_ms12_alsa_limit_frame(&adev->ms12, MS12_ALSA_LOW_LIMIT_FRAME);
         }
