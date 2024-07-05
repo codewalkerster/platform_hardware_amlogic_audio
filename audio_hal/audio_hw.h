@@ -795,7 +795,9 @@ struct aml_stream_out {
     uint64_t submix_sleep_time_us;
     bool is_heaac_changed;
     bool is_ddp_offload_use_split;
-    bool is_preempt_deep_buffer_stream;
+    bool is_preempt_system_audio_usage_media_stream;
+    int track_base_usage;
+    bool is_system_audio_usage_media; //it's a system sound, and the audio usage is media
     bool enable_soundbar_mode;
 };
 

@@ -4145,9 +4145,9 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
         struct aml_stream_out *active_out = NULL;
         for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
             active_out = adev->active_outputs[i];
-            if (active_out && (active_out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER) && !active_out->standby) {
-                aml_out->is_preempt_deep_buffer_stream = true;
-                ALOGI("%s it can preempt the deep buffer", __func__);
+            if (active_out && !active_out->standby && (active_out->is_system_audio_usage_media || (active_out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER))) {
+                aml_out->is_preempt_system_audio_usage_media_stream = true;
+                ALOGI("%s() line %d it can preempt the system audio usage media (the deep buffer) stream", __func__, __LINE__);
             }
         }
     }

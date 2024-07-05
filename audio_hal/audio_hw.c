@@ -1944,6 +1944,29 @@ static int out_get_next_write_timestamp (const struct audio_stream_out *stream _
     return ESRCH;
 }
 
+/* Update Android Audio Attribute usage and content_type
+ * 1.usage
+ * AUDIO_USAGE_MEDIA: Usage value (1) to use when the usage is media, such as music, or movie soundtracks.
+ * AUDIO_USAGE_ASSISTANCE_SONIFICATION: Usage value (13) to use when the usage is sonification, such as with user interface sounds.
+ * AUDIO_USAGE_ASSISTANT: Usage value (16) to use for audio responses to user queries, audio instructions or help utterances.
+ * 2.content_type
+ * UNKNOWN/SPEECH/MUSIC(elementary streams)/MOVIE(.mp4)
+ */
+static void out_update_source_metadata_v7 (struct audio_stream_out *stream,
+                                        const struct source_metadata_v7* source_metadata)
+{
+    struct aml_stream_out *out = (struct aml_stream_out *) stream;
+    if (out && source_metadata) {
+        if (source_metadata->tracks) {
+            ALOGV("%s() line %d usage:%d content_type:%d", __func__, __LINE__, source_metadata->tracks->base.usage, source_metadata->tracks->base.content_type);
+            out->track_base_usage = source_metadata->tracks->base.usage;
+        } else {
+            //when source metadata track does not exist, we set is_preempt_system_audio_usage_media_stream as false
+            out->is_preempt_system_audio_usage_media_stream = false;
+        }
+    }
+}
+
 bool aml_get_speaker_mute_status(void)
 {
     struct aml_audio_device *adev = aml_adev_get_handle();
@@ -3385,6 +3408,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->stream.set_volume = out_set_volume;
     out->stream.get_render_position = out_get_render_position;
     out->stream.get_next_write_timestamp = out_get_next_write_timestamp;
+    out->stream.update_source_metadata_v7 = out_update_source_metadata_v7;
     //None MS12 version, pcm stream was connected to sub_mixing write_direct_pcm for dolby streams.
     //so get_presentation_position should be matched with sub_mixing to avsync.
     if (adev->useSubMix) {
@@ -6819,13 +6843,15 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
      * atmos_stickiness_usage_media_ddp_out-no_cfg-v241-HDMI (6581)
      * atmos_stickiness_usage_media_mat_out-no_cfg-v241-HDMI (6612)
      */
-    if (is_deep_buf && !adev->is_netflix && !aml_out->is_tv_src_stream && !is_dev_patch_exist(adev)) {
+    if (((aml_out->track_base_usage == AUDIO_USAGE_MEDIA) || is_deep_buf) && !adev->is_netflix && !aml_out->is_tv_src_stream && !is_dev_patch_exist(adev)) {
+        aml_out->is_system_audio_usage_media = true;
         struct aml_stream_out *out = NULL;
         for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
             out = adev->active_outputs[i];
-            if (out && out->is_ms12_main_decoder && !out->is_preempt_deep_buffer_stream) {
+            if (out && out->is_ms12_main_decoder && !out->is_preempt_system_audio_usage_media_stream) {
                 pthread_mutex_lock(&out->lock);
                 if (out->is_ms12_main_decoder) {
+                    ALOGI("%s() line %d close ms12 main stream", __func__, __LINE__);
                     close_ms12_output_main_stream((struct audio_stream_out *)out);
                 }
                 pthread_mutex_unlock(&out->lock);
