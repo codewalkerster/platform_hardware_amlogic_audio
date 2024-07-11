@@ -2731,7 +2731,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
     struct aml_audio_patch* patch = get_dev_patch(adev);
     size_t cur_in_bytes, cur_in_frames;
 
-    ALOGV("%s(): stream: %p, source: %d, bytes %zu in_frames:%d in->devices %0x", __func__, in, in->source, bytes, in_frames, in->device);
+    ALOGV("%s(): stream: %p, source: %d, bytes %zu in_frames:%zu in->devices %0x", __func__, in, in->source, bytes, in_frames, in->device);
 
     lock_input_stream(in);
 #ifdef ENABLE_AEC_APP
