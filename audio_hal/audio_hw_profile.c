@@ -699,10 +699,11 @@ char*  get_hdmi_sink_cap_new(const char *keys, audio_format_t format, struct aml
         ALOGE("malloc buffer failed\n");
         goto fail;
     }
-    if (is_HDMI_connected(adev)) {
-        aml_hdmi_audio_profile_parser();
-    } else {
+    /*only soundbar mode case we don't need get the sink cap*/
+    if (!is_HDMI_connected(adev) && is_SBR(adev) && adev->enable_soundbar_mode) {
         memset(&hdmi_audio_profile, 0, sizeof(struct hdmi_audio_profile_t));
+    } else {
+        aml_hdmi_audio_profile_parser();
     }
     memset(aud_cap, 0, 1024);
 
