@@ -107,7 +107,7 @@
 #include "tv_private_object.h"
 #include "hdmirx_utils.h"
 
-#define ENABLE_NANO_NEW_PATH 1
+#define ENABLE_NANO_NEW_PATH 0
 #if ENABLE_NANO_NEW_PATH
 #include "jb_nano.h"
 #endif
@@ -6620,9 +6620,8 @@ hwsync_rewrite:
             need_reconfig_samplerate = false;
         }
         aml_out->digital_input_fmt_change = false;
-    }
-    /*dts cd process need to discuss here */
-    else if (aml_out->hal_format == AUDIO_FORMAT_IEC61937 && !aml_out->iec_check) {
+    } else if (aml_out->hal_format == AUDIO_FORMAT_IEC61937 && !aml_out->iec_check) {
+        /* parsing sub format in IEC61937 for local MM playback case */
         audio_channel_mask_t cur_ch_mask;
         int package_size;
         int cur_audio_type = audio_type_parse(write_buf, write_bytes, &package_size, &cur_ch_mask);
@@ -6647,8 +6646,7 @@ hwsync_rewrite:
         } else {
             return return_bytes;
         }
-    }
-    else if (!is_bypass_dolbyms12(stream)) {
+    } else if (!is_bypass_dolbyms12(stream)) {
         adev->dolby_lib_type = adev->dolby_lib_type_last;
     }
 

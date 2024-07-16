@@ -746,28 +746,17 @@ static int update_audio_type(audio_type_parse_t *status, int update_bytes, int s
     return 0;
 }
 
-static int is_normal_config(hdmiin_audio_packet_t cur_audio_packet)
-{
-    return cur_audio_packet == AUDIO_PACKET_NONE ||
-        cur_audio_packet == AUDIO_PACKET_AUDS;
-}
-
 static int reconfig_pcm_by_packet_type(audio_type_parse_t *audio_type_status,
             hdmiin_audio_packet_t cur_audio_packet)
 {
     hdmiin_audio_packet_t last_packet_type = audio_type_status->hdmi_packet;
-    hdmiin_audio_packet_t last_reconfig_packet_type = audio_type_status->last_reconfig_hdmi_packet;
     bool reopen = false;
 
-    if (cur_audio_packet == AUDIO_PACKET_HBR && is_normal_config(last_packet_type)) {
+    if (cur_audio_packet == AUDIO_PACKET_HBR &&
+        (last_packet_type == AUDIO_PACKET_AUDS || last_packet_type == AUDIO_PACKET_NONE)) {
         get_config_by_params(&audio_type_status->config_in, 0);
         reopen = true;
-    } else if (is_normal_config(cur_audio_packet) && last_packet_type == AUDIO_PACKET_HBR) {
-        get_config_by_params(&audio_type_status->config_in, 1);
-        reopen = true;
-    } else if ((cur_audio_packet == AUDIO_PACKET_AUDS) && (last_reconfig_packet_type == AUDIO_PACKET_HBR)){
-        /* For this case,it just uses by DVD device. For DVD device,the packet type doesn't change from current value to the target directly. It will change for several type. Finally, it changes to the target value.
-        During this change, it will trigger pcm reconfig for the middle value. Use this process to recover the pcm config.*/
+    } else if (cur_audio_packet == AUDIO_PACKET_AUDS && last_packet_type == AUDIO_PACKET_HBR) {
         get_config_by_params(&audio_type_status->config_in, 1);
         reopen = true;
     }
@@ -780,8 +769,7 @@ static int reconfig_pcm_by_packet_type(audio_type_parse_t *audio_type_status,
             audio_type_status->in = NULL;
         }
 
-        ALOGI("%s(), reopen channels %d",
-            __func__, audio_type_status->config_in.channels);
+        ALOGI("%s(), reopen channels %d", __func__, audio_type_status->config_in.channels);
         in = pcm_open(audio_type_status->card, audio_type_status->device,
                       PCM_IN | PCM_NONEBLOCK, &audio_type_status->config_in);
         if (!pcm_is_ready(in)) {
@@ -789,14 +777,15 @@ static int reconfig_pcm_by_packet_type(audio_type_parse_t *audio_type_status,
             pcm_close(in);
             return -EINVAL;
         }
+        ALOGI("---HDMI Format Switch [audio_packet pre:%d->cur:%d]", audio_type_status->hdmi_packet, cur_audio_packet);
         audio_type_status->in = in;
-        audio_type_status->last_reconfig_hdmi_packet = cur_audio_packet;
+        audio_type_status->hdmi_packet = cur_audio_packet;
     }
 
     return 0;
 }
 
-#define WAIT_COUNT_MAX 30
+#define WAIT_COUNT_MAX 10
 static void* audio_type_parse_threadloop(void *data)
 {
     audio_type_parse_t *audio_type_status = (audio_type_parse_t *)data;
@@ -804,17 +793,17 @@ static void* audio_type_parse_threadloop(void *data)
     int cur_samplerate = HW_RESAMPLE_DISABLE;
     int last_cur_samplerate = HW_RESAMPLE_DISABLE;
     hdmiin_audio_packet_t cur_audio_packet = AUDIO_PACKET_NONE;
-    audio_type_status->last_reconfig_hdmi_packet = AUDIO_PACKET_NONE;
     int read_bytes = 0, read_back, nodata_count;
-    int txlx_chip = check_chip_name("txlx", 4, audio_type_status->mixer_handle);
-    int txl_chip = check_chip_name("txl", 3, audio_type_status->mixer_handle);
-    audio_type_status->pcpd_monitor_flag = false;
-    int chip_with_pcpd_monitor = check_chip_name("t5m", 3, audio_type_status->mixer_handle) ||
-                                     check_chip_name("t5w", 3, audio_type_status->mixer_handle);
-    audio_type_status->pcpd_monitor_flag = chip_with_pcpd_monitor;
-    int auge_chip = alsa_device_is_auge();
-    audio_type_status->fmt_change = false;
     int type = LPCM;
+
+    /* check whether pcpd monitor module is enable */
+    int chip_with_pcpd_monitor = aml_mixer_ctrl_get_int(audio_type_status->mixer_handle, AML_MIXER_ID_AUDIO_PCPD_MONITOR_ENABLE);
+    if (chip_with_pcpd_monitor >= 0) {
+        audio_pcpd_monitor_enable(audio_type_status->mixer_handle, 1);
+        audio_type_status->pcpd_monitor_flag = true;
+    } else {
+        audio_type_status->pcpd_monitor_flag = false;
+    }
 
     ret = audio_type_parse_init(audio_type_status);
     if (ret < 0) {
@@ -824,6 +813,7 @@ static void* audio_type_parse_threadloop(void *data)
 
     prctl(PR_SET_NAME, (unsigned long)"audio_type_parse");
 
+    audio_type_status->fmt_change = false;
     bytes = audio_type_status->period_bytes;
 
     ALOGV("Start thread loop for android audio data parse! data = %p, bytes = %d, in = %p\n",
@@ -841,9 +831,6 @@ static void* audio_type_parse_threadloop(void *data)
     } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_SPDIF) {
         cur_samplerate = set_resample_source(audio_type_status->mixer_handle, RESAMPLE_FROM_SPDIFIN);
     }
-
-    if (chip_with_pcpd_monitor)
-        audio_pcpd_monitor_enable(audio_type_status->mixer_handle, 1);
 
     while (audio_type_status->running_flag) {
         if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
@@ -876,11 +863,9 @@ static void* audio_type_parse_threadloop(void *data)
         }
 
         if (audio_type_status->soft_parser && audio_type_status->in) {
-            if (audio_type_status->hdmi_packet != cur_audio_packet) {
-                ALOGI("---HDMI Format Switch [audio_packet pre:%d->cur:%d]",
-                    audio_type_status->hdmi_packet, cur_audio_packet);
+            if (cur_audio_packet != AUDIO_PACKET_NONE &&
+                    audio_type_status->hdmi_packet != cur_audio_packet) {
                 reconfig_pcm_by_packet_type(audio_type_status, cur_audio_packet);
-                audio_type_status->hdmi_packet = cur_audio_packet;
             }
 
             //sw audio format detection.
@@ -928,16 +913,14 @@ static void* audio_type_parse_threadloop(void *data)
                 aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/tv_parser.raw", audio_type_status->parse_buffer + 3, read_bytes);
             }
 
-            if (chip_with_pcpd_monitor)
-            {
+            if (audio_type_status->pcpd_monitor_flag) {
                audio_type_status->cur_audio_type = audio_pcpd_monitor_format_detection(audio_type_status->mixer_handle);
                if (audio_type_status->audio_type == LPCM && audio_type_status->cur_audio_type != LPCM) {
                    ALOGI("%s() PcPd Monitor raw data found: type(%d)\n", __FUNCTION__, audio_type_status->cur_audio_type);
                    enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
                }
 
-               if (audio_type_status->cur_audio_type >= AC3 && audio_type_status->cur_audio_type <= MAT)
-               {
+               if (audio_type_status->cur_audio_type >= AC3 && audio_type_status->cur_audio_type <= MAT) {
                    int pos_sync_word = -1;
 
                    if (audio_type_status->audio_type != audio_type_status->cur_audio_type) {
@@ -952,9 +935,7 @@ static void* audio_type_parse_threadloop(void *data)
                            audio_type_status->fmt_change = false;
                        }
                    }
-               }
-
-               if (audio_type_status->cur_audio_type == LPCM) {
+               } else if (audio_type_status->cur_audio_type == LPCM) {
                    if (ret >= 0) {
                        audio_type_status->cur_audio_type = audio_type_parse(audio_type_status->parse_buffer,
                                                            read_bytes, &(audio_type_status->package_size),
@@ -971,7 +952,7 @@ static void* audio_type_parse_threadloop(void *data)
                    audio_type_status->read_bytes = 0;
                    audio_type_status->audio_type = audio_type_status->cur_audio_type;
                }
-            }else {
+            } else {
                if (ret >= 0) {
                    audio_type_status->cur_audio_type = audio_type_parse(audio_type_status->parse_buffer,
                                                     read_bytes, &(audio_type_status->package_size),
@@ -986,55 +967,49 @@ static void* audio_type_parse_threadloop(void *data)
                }
             }
         } else {
-            if (auge_chip || txlx_chip) {
-                bool mute = false;
-                // multi-pcm HW resample is not supported for some earcrx
-                bool bypass_hw_resample = false;
-                // get audio format from hw.
-                if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
-                    audio_type_status->cur_audio_type = hdmiin_audio_format_detection(audio_type_status->mixer_handle);
-                } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_SPDIF) {
-                    audio_type_status->cur_audio_type = spdifin_audio_format_detection(audio_type_status->mixer_handle);
-                } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
-                    mute = eArcIn_get_cs_mute(audio_type_status->mixer_handle);
-                    /* earc_mute is only for recording detect the cs mute status */
-                    if (mute)
-                        audio_type_status->earc_mute = mute;
-                    if (type != NOT_READY)
-                        audio_type_status->cur_audio_type = type;
-                    if (!is_earcrx_stable(audio_type_status->mixer_handle))
-                        audio_type_status->fmt_change = true;
-                    if (type == MULTICH_LPCM && !audio_type_status->earcrx_hw_resample)
-                        bypass_hw_resample = true;
-                }
-
-                if (!is_linear_pcm_type(audio_type_status->audio_type) && is_linear_pcm_type(audio_type_status->cur_audio_type)) {
-                    if (!bypass_hw_resample)
-                        enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
-                    audio_type_status->fmt_change = true;
-                    AM_LOGI("format_change: type %d->%d", audio_type_status->audio_type, audio_type_status->cur_audio_type);
-                } else if (is_linear_pcm_type(audio_type_status->audio_type) && !is_linear_pcm_type(audio_type_status->cur_audio_type)) {
-                    AM_LOGI("Raw data found: type(%d)\n", type);
-                    enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
-                    audio_type_status->fmt_change = true;
-                } else if (audio_type_status->earc_mute && !mute && type != NOT_READY) {
-                    /* If we record mute, and now it is unmute, and the type is NOT_READY,
-                     * need reset for channel swap */
-                    audio_type_status->fmt_change = true;
+            bool mute = false;
+            // multi-pcm HW resample is not supported for some earcrx
+            bool bypass_hw_resample = false;
+            // get audio format from hw.
+            if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
+                audio_type_status->cur_audio_type = hdmiin_audio_format_detection(audio_type_status->mixer_handle);
+            } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_SPDIF) {
+                audio_type_status->cur_audio_type = spdifin_audio_format_detection(audio_type_status->mixer_handle);
+            } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
+                mute = eArcIn_get_cs_mute(audio_type_status->mixer_handle);
+                /* earc_mute is only for recording detect the cs mute status */
+                if (mute)
                     audio_type_status->earc_mute = mute;
-                    AM_LOGI("earc mute reset\n");
-                }
-
-                audio_type_status->audio_type = audio_type_status->cur_audio_type;
-                if (audio_type_status->hdmi_packet != cur_audio_packet) {
-                    audio_type_status->hdmi_packet = cur_audio_packet;
-                }
-            } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
-                hdmiin_audio_packet_t audio_packet = get_hdmiin_audio_packet(audio_type_status->mixer_handle);
-                if (audio_packet == AUDIO_PACKET_HBR) {
-                    enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
-                }
+                if (type != NOT_READY)
+                    audio_type_status->cur_audio_type = type;
+                if (!is_earcrx_stable(audio_type_status->mixer_handle))
+                    audio_type_status->fmt_change = true;
+                if (type == MULTICH_LPCM && !audio_type_status->earcrx_hw_resample)
+                    bypass_hw_resample = true;
             }
+
+            if (!is_linear_pcm_type(audio_type_status->audio_type) && is_linear_pcm_type(audio_type_status->cur_audio_type)) {
+                if (!bypass_hw_resample)
+                    enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
+                audio_type_status->fmt_change = true;
+                AM_LOGI("format_change: type %d->%d", audio_type_status->audio_type, audio_type_status->cur_audio_type);
+            } else if (is_linear_pcm_type(audio_type_status->audio_type) && !is_linear_pcm_type(audio_type_status->cur_audio_type)) {
+                AM_LOGI("Raw data found: type(%d)\n", type);
+                enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
+                audio_type_status->fmt_change = true;
+            } else if (audio_type_status->earc_mute && !mute && type != NOT_READY) {
+                /* If we record mute, and now it is unmute, and the type is NOT_READY,
+                 * need reset for channel swap */
+                audio_type_status->fmt_change = true;
+                audio_type_status->earc_mute = mute;
+                AM_LOGI("earc mute reset\n");
+            }
+
+            audio_type_status->audio_type = audio_type_status->cur_audio_type;
+            if (audio_type_status->hdmi_packet != cur_audio_packet) {
+                audio_type_status->hdmi_packet = cur_audio_packet;
+            }
+
             usleep(10 * 1000);
             //ALOGE("fail to read bytes = %d\n", bytes);
         }

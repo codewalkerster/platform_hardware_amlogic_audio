@@ -652,7 +652,7 @@ void *audio_patch_output_threadloop(void *data)
     dev = patch->dev;
     struct aml_audio_device *aml_dev = (struct aml_audio_device *) dev;
     ring_buffer_t *ringbuffer = & (patch->aml_ringbuffer);
-    int txlx_chip = check_chip_name("txlx", 4, &aml_dev->alsa_mixer);
+
     ALOGD("%s: enter", __func__);
     stream_config.channel_mask = patch->out_chanmask;
     stream_config.sample_rate = patch->out_sample_rate;
@@ -783,7 +783,7 @@ void *audio_patch_output_threadloop(void *data)
                      is_same_patch_src(aml_dev, SRC_HDMIIN) ||
                      is_same_patch_src(aml_dev, SRC_LINEIN))) {
 
-                if (!txlx_chip && !is_game_mode(aml_dev)) {
+                if (!is_game_mode(aml_dev)) {
                     aml_dev_try_avsync(patch);
                     if (patch->skip_frames) {
                         ALOGD("%s(), skip this period data for avsync!", __func__);

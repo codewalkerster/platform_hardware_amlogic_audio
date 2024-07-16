@@ -967,12 +967,11 @@ bool is_hdmi_in_hw_format_change(struct audio_stream_in *stream)
     struct aml_audio_device *aml_dev = in->dev;
     struct aml_audio_patch *audio_patch = get_dev_patch(aml_dev);
     audio_type_parse_t *audio_type_status = (audio_type_parse_t *)audio_patch->audio_parse_para;
-    int tl1_chip = check_chip_name("tl1", 3, &aml_dev->alsa_mixer);
     int type = 0;
     bool ret = false;
 
     /* TL1 do not use HDMIIN_AUDIO_TYPE */
-    if (audio_type_status != NULL && audio_type_status->soft_parser != 1 && !tl1_chip) {
+    if (audio_type_status != NULL && audio_type_status->soft_parser != 1) {
         type = aml_mixer_ctrl_get_int (&aml_dev->alsa_mixer, AML_MIXER_ID_HDMIIN_AUDIO_TYPE);
         if ((type != INVALID_TYPE) && (type != audio_patch->param_config.spdif_fmt_hw)) {
             ALOGD ("%s(), in type changed from %d to %d", __func__, audio_patch->param_config.spdif_fmt_hw, type);
