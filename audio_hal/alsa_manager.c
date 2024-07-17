@@ -868,7 +868,7 @@ size_t aml_alsa_input_read(struct audio_stream_in *stream,
             if (nodata_count >= WAIT_COUNT_MAX) {
                 AM_LOGW("read timeout, in:%p read_bytes:%zu need:%zu", in, read_bytes, bytes);
                 memset((void*)buffer, 0, bytes);
-                return 0;
+                return -ENODATA;
             }
         }
     }

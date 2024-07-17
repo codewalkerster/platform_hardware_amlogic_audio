@@ -213,14 +213,6 @@ static const struct pcm_config pcm_config_in = {
     .format = PCM_FORMAT_S16_LE,
 };
 
-static const struct pcm_config pcm_config_earc_in = {
-    .channels = 2,
-    .rate = MM_FULL_POWER_SAMPLING_RATE,
-    .period_size = DEFAULT_CAPTURE_PERIOD_SIZE,
-    .period_count = EARC_CAPTURE_PERIOD_COUNT,
-    .format = PCM_FORMAT_S16_LE,
-};
-
 static const struct pcm_config pcm_config_bt = {
     .channels = 1,
     .rate = VX_NB_SAMPLING_RATE,
@@ -5268,10 +5260,7 @@ int adev_open_input_stream(struct audio_hw_device *dev,
         config->sample_rate = in->config.rate;
         in->requested_rate = in->config.rate;
     } else {
-        if (in->device & AUDIO_DEVICE_IN_HDMI_ARC)
-            memcpy(&in->config, &pcm_config_earc_in, sizeof(pcm_config_earc_in));
-        else
-            memcpy(&in->config, &pcm_config_in, sizeof(pcm_config_in));
+        memcpy(&in->config, &pcm_config_in, sizeof(pcm_config_in));
     }
     in->config.channels = channel_count;
     in->source = source;
