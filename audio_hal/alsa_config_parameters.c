@@ -223,8 +223,12 @@ static void get_pcm_hardware_config_parameters(
     the configuration will return fail when channel > 8 as need larger dma buffer size.
     to save mem, we use low buffer memory when 8 ch + speaker product.
    */
-    if (continuous_mode && channels <= 8) {
-        hardware_config->period_count = PLAYBACK_PERIOD_COUNT * 2;
+    if (continuous_mode) {
+        if (channels <= 8) {
+            hardware_config->period_count = PLAYBACK_PERIOD_COUNT * 2;
+        } else {
+            hardware_config->period_count = PLAYBACK_PERIOD_COUNT;
+        }
         hardware_config->start_threshold = hardware_config->period_size * hardware_config->period_count / 8;
     } else {
         if (!game_mode) {

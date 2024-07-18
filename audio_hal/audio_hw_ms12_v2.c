@@ -4184,6 +4184,11 @@ static void *dolby_ms12_threadloop(void *data)
         ALOGV("%s() goto dolby_ms12_scheduler_run", __FUNCTION__);
         if (ms12->dolby_ms12_ptr) {
             int delayframe = aml_alsa_output_get_delayframe((struct audio_stream_out*)adev->ms12_out);
+            /*if alsa is not running, set the delay to 0 and ms12 will feed more data*/
+            if (!adev->ms12_out->alsa_running_status) {
+                delayframe = 0;
+                ALOGI("%s alsa is not running", __func__);
+            }
             dolby_ms12_set_alsa_delay_frame(delayframe);
             dolby_ms12_scheduler_run(ms12->dolby_ms12_ptr);
 
