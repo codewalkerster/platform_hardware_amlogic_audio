@@ -607,6 +607,7 @@ int get_codec_type(int format)
         return TYPE_AAC;
     case AUDIO_FORMAT_HE_AAC_V1:
     case AUDIO_FORMAT_HE_AAC_V2:
+    case AUDIO_FORMAT_AAC_LATM:
         return TYPE_HEAAC;
     case AUDIO_FORMAT_PCM:
     case AUDIO_FORMAT_PCM_16_BIT:

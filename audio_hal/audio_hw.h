@@ -686,7 +686,7 @@ struct aml_stream_out {
     uint64_t last_pts;
     uint64_t last_payload_offset;
     uint64_t last_hwsync_header_pts;
-    uint64_t last_decout_frame;
+    uint64_t last_dec_out_frame;
     struct audio_config out_cfg;
     int debug_stream;
     uint64_t us_used_last_write;
@@ -904,7 +904,8 @@ static inline int dolby_stream_active(struct aml_audio_device *adev)
             || out->hal_internal_format == AUDIO_FORMAT_MAT
             || out->hal_internal_format == AUDIO_FORMAT_AAC
             || out->hal_internal_format == AUDIO_FORMAT_HE_AAC_V1
-            || out->hal_internal_format == AUDIO_FORMAT_HE_AAC_V2)) {
+            || out->hal_internal_format == AUDIO_FORMAT_HE_AAC_V2
+            || out->hal_internal_format == AUDIO_FORMAT_AAC_LATM)) {
             is_dolby = 1;
             break;
         }

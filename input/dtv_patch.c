@@ -3906,7 +3906,7 @@ void aml_audio_flush_dtv_output(struct aml_stream_out *aml_out) {
         }
         patch->decoder_offset = 0;
         patch->dtv_pcm_wrote =0;
-        aml_out->last_decout_frame = 0;
+        aml_out->last_dec_out_frame = 0;
         patch->dtvsync->cur_outapts = 0;
         aml_dev->ms12.dtv_decoder_offset_base = patch->decoder_offset;
     } else {

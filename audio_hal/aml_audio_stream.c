@@ -1076,6 +1076,10 @@ void get_audio_indicator(struct aml_audio_device *dev, char *temp_buf) {
         sprintf (temp_buf, "audioindicator=Dolby MAT");
     else if (adev->audio_hal_info.update_type == TYPE_AC4_ATMOS_PROMPT_ON_ATMOS)
         sprintf (temp_buf, "audioindicator=Dolby AC4");
+    else if (adev->audio_hal_info.update_type == TYPE_HEAAC)
+        sprintf (temp_buf, "audioindicator=HEAAC");
+    else if (adev->audio_hal_info.update_type == TYPE_AAC)
+        sprintf (temp_buf, "audioindicator=AAC");
 
     ALOGI("%s(), [%s]", __func__, temp_buf);
 }

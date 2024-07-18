@@ -48,7 +48,7 @@ void UpdateDecodedInfo_SampleRate_ChannelNum_ChannelConfiguration(int samplerate
 
 void UpdateDecodedInfo_DecodedFrames(uint64_t decoded_frames) {
     char sysfs_buf[VAL_LEN] = {0};
-    sprintf(sysfs_buf, "decoded_frames %" PRIu64 " ", decoded_frames);
+    sprintf(sysfs_buf, "decoded_frames %" PRId64 "", decoded_frames);
     sysfs_set_sysfs_str(REPORT_DECODED_INFO, sysfs_buf);
 }
 

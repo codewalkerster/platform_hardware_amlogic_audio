@@ -1641,7 +1641,7 @@ int dolby_ms12_main_process(
 
             }
         } else {
-              ms12_update_decoded_info_process(stream, input_buffer, input_bytes);
+            ms12_update_decoded_info_process(stream, input_buffer, input_bytes);
         }
 
         /* Passthrough Mode, only get the MAIN data as the single input */
@@ -3634,7 +3634,7 @@ Aml_MS12_SyncPolicy_t ms12_sync_callback(void *priv_data, unsigned long long u64
         }
     } else {
         if (aml_out->last_pts != 0) {
-            new_apts = aml_out->last_pts + (u64DecOutFrame - aml_out->last_decout_frame) * 90 / 48;
+            new_apts = aml_out->last_pts + (u64DecOutFrame - aml_out->last_dec_out_frame) * 90 / 48;
         }
     }
 
@@ -3677,7 +3677,7 @@ Aml_MS12_SyncPolicy_t ms12_sync_callback(void *priv_data, unsigned long long u64
 
     }
 
-    aml_out->last_decout_frame = u64DecOutFrame;
+    aml_out->last_dec_out_frame = u64DecOutFrame;
     aml_out->last_pts = new_apts;
 
     return audio_sync_policy;
@@ -3754,7 +3754,7 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
                 }
 
                 if (aml_dtvsync->cur_outapts && aml_dtvsync->cur_outapts != DTVSYNC_INIT_PTS) {
-                    new_apts = aml_dtvsync->cur_outapts + (u64DecOutFrame - aml_out->last_decout_frame) * 90 / 48;
+                    new_apts = aml_dtvsync->cur_outapts + (u64DecOutFrame - aml_out->last_dec_out_frame) * 90 / 48;
                 }
             }
 
@@ -3782,7 +3782,7 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
                     (syncpolicy_status.eSyncPolicy == DTVSYNC_AUDIO_INSERT)) {
                     /*we still need to do drop or insert*/
                     if (syncpolicy_status.s32TagFrame > syncpolicy_status.s32CurFrame) {
-                        aml_out->last_decout_frame = u64DecOutFrame;
+                        aml_out->last_dec_out_frame = u64DecOutFrame;
                         audio_sync_policy.eSyncPolicy = syncpolicy_status.eSyncPolicy;
                         audio_sync_policy.s32TagFrame = syncpolicy_status.s32TagFrame;
                         audio_sync_policy.s32CurFrame = syncpolicy_status.s32CurFrame;
@@ -3830,7 +3830,7 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
         }
 
     }
-    aml_out->last_decout_frame = u64DecOutFrame;
+    aml_out->last_dec_out_frame = u64DecOutFrame;
 
     if ((audio_sync_policy.eSyncPolicy == DTVSYNC_AUDIO_DROP_PCM || audio_sync_policy.eSyncPolicy == DTVSYNC_AUDIO_INSERT)
         && (audio_sync_policy.s32TagFrame < 0 || audio_sync_policy.s32CurFrame < 0 || audio_sync_policy.s32CurFrame > audio_sync_policy.s32TagFrame)) {
@@ -5031,6 +5031,7 @@ static int ms12_update_decoded_info_process(struct audio_stream_out *stream, voi
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = aml_out->dev;
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    struct aml_audio_patch *patch = get_dev_patch(adev);
     int32_t temp_spdif_dec_used_size = 0;
     void *main_frames_buffer = input_buffer;
     int main_frames_size = input_bytes;
@@ -5077,8 +5078,26 @@ static int ms12_update_decoded_info_process(struct audio_stream_out *stream, voi
 
         }
 
+    } else if (aml_out->hal_format == AUDIO_FORMAT_HE_AAC_V1 ||
+        aml_out->hal_format == AUDIO_FORMAT_HE_AAC_V2 ||
+        aml_out->hal_format == AUDIO_FORMAT_AAC ||
+        aml_out->hal_format == AUDIO_FORMAT_AAC_LATM) {
+        decoded_frames = aml_out->last_dec_out_frame;
+        //Fixme: errcount is temporarily unavailable when using MS12
+        decoded_err = 0;
+        if (is_dev_patch_valid(adev) && is_dev_patch_exist(adev)) {
+            if (patch->main_heaac_info.is_loas) {
+                sample_rate = patch->main_heaac_info.sampleRateHz;
+                ch_num = patch->main_heaac_info.channelCount;
+            } else if (patch->main_heaac_info.is_adts) {
+                sample_rate = patch->main_heaac_info.sample_rate;
+                ch_num = popcount(patch->main_heaac_info.channel_mask);
+            }
+            UpdateDecodedInfo_DecodedFrames(decoded_frames);
+            UpdateDecodedInfo_DecodedErr(decoded_err);
+            UpdateDecodedInfo_SampleRate_ChannelNum_ChannelConfiguration(sample_rate, ch_num);
+        }
     }
-
     return 0;
 
 }
