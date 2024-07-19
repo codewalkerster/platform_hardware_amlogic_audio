@@ -97,6 +97,7 @@ static struct aml_mixer_list gAmlMixerList[] = {
     {AML_MIXER_ID_AUDIO_HAL_FORMAT,     "Audio HAL Format"},
     {AML_MIXER_ID_HDMIIN_AUDIO_EDID,    "HDMIIN AUDIO EDID"},
     {AML_MIXER_ID_EARC_TX_ATTENDED_TYPE, "eARC_TX attended type"},
+    {AML_MIXER_ID_EARC_RX_ATTENDED_TYPE, "eARC_RX attended type"},
     {AML_MIXER_ID_EARC_TX_AUDIO_TYPE,   "eARC_TX Audio Coding Type"},
     {AML_MIXER_ID_EARC_TX_EARC_MODE,    "eARC_TX eARC Mode"},
     {AML_MIXER_ID_ARC_EARC_RX_ENABLE,   "ARC eARC RX enable"},

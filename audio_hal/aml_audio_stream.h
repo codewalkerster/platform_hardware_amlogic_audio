@@ -492,6 +492,7 @@ void tv_do_ease_in(struct audio_stream_out *stream, void *write_buf, size_t writ
 
 const char *write_func_to_str(enum stream_write_func func);
 int aml_audio_earctx_get_type(struct aml_audio_device *adev);
+int aml_audio_earcrx_get_type(struct aml_audio_device *adev);
 int aml_audio_earc_get_latency(struct aml_audio_device *adev);
 int set_device_control(struct audio_hw_device *dev, struct str_parms *parms);
 audio_channel_mask_t aml_map_ch_to_mask(int ch);

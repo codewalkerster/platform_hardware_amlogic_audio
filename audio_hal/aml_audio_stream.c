@@ -1386,6 +1386,14 @@ int aml_audio_earctx_get_type(struct aml_audio_device *adev)
     return attend_type;
 }
 
+int aml_audio_earcrx_get_type(struct aml_audio_device *adev)
+{
+    int attend_type = 0;
+
+    attend_type = aml_mixer_ctrl_get_int(&adev->alsa_mixer, AML_MIXER_ID_EARC_RX_ATTENDED_TYPE);
+    return attend_type;
+}
+
 int aml_audio_earc_get_latency(struct aml_audio_device *adev)
 {
     int latency = 0;

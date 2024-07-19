@@ -4959,6 +4959,11 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         sprintf(temp_buf, "hal_param_get_earctx_attend_type=%d", type);
         ALOGD("temp_buf %s", temp_buf);
         return strdup(temp_buf);
+    } else if (strstr (keys, "hal_param_get_earcrx_attend_type") ) {
+        int type = aml_audio_earcrx_get_type(adev);
+        sprintf(temp_buf, "hal_param_get_earcrx_attend_type=%d", type);
+        ALOGD("temp_buf %s", temp_buf);
+        return strdup(temp_buf);
     } else if (strstr(keys, "aq_tuning")) {
         get_AQ_parameters(dev, temp_buf, keys);
         return strdup(temp_buf);
