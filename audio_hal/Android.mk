@@ -152,12 +152,10 @@ include $(BUILD_PREBUILT)
         libamlparser \
         libamlspeed \
         libalsautils \
-        libdmabufheap
-
-    LOCAL_SHARED_LIBRARIES += \
-        android.hardware.bluetooth.audio@2.0 \
-        android.hardware.bluetooth.audio@2.0-impl \
-        libbluetooth_audio_session \
+        libdmabufheap \
+        android.hardware.bluetooth.audio-V3-ndk \
+        libbluetooth_audio_session_aidl \
+        libbinder_ndk \
         libbase \
         libfmq
 
