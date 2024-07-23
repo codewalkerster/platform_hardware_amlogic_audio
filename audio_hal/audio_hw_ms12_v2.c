@@ -2718,8 +2718,8 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
                 offset += nbytes_consumed;
 
                 /* when (mat encoder output data(mat_enc_out_bytes) not 0), send them to alsa */
+                pthread_mutex_lock(&adev->bitstream_lock);
                 if (ms12->mat_enc_out_bytes) {
-                    pthread_mutex_lock(&adev->bitstream_lock);
                     endian16_convert(ms12->mat_enc_out_buffer, ms12->mat_enc_out_bytes);
                     aml_audio_spdifout_process
                                 (bitstream_out->spdifout_handle
@@ -2738,8 +2738,8 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
                     }
                     /* after write the IEC61937 data to hardware, reset it to zero position. */
                     ms12->mat_enc_out_bytes = 0;
-                    pthread_mutex_unlock(&adev->bitstream_lock);
                 }
+                pthread_mutex_unlock(&adev->bitstream_lock);
 
             }
         }
