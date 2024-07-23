@@ -4933,6 +4933,7 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         bool dap_speaker_status = adev->is_ms12_tuning_dat && (adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER) && (is_TV(adev) || is_SBR(adev));
         sprintf(temp_buf, "hal_param_get_dap_speaker_status=%d", dap_speaker_status);
         ALOGI("temp_buf %s dap_speaker_status=%d", temp_buf, dap_speaker_status);
+        return strdup(temp_buf);
     } else if (strstr (keys, "hal_param_get_atmos_indicator_status")) {
         sprintf(temp_buf, "hal_param_get_atmos_indicator_status=%d", adev->atmos_indicator_status);
         ALOGV("temp_buf %s atmos_indicator_status=%d", temp_buf, adev->atmos_indicator_status);
