@@ -98,7 +98,7 @@ ssize_t processing_multich_pcm(struct audio_stream_out *stream,
 
             /* apply volume for spk/hp, SPDIF/HDMI keep the max volume */
             float gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
-            if (!adev->enable_soundbar_mode/*(eDolbyMS12Lib == adev->dolby_lib_type) && aml_out->ms12_vol_ctrl*/) {
+            if (!adev->enable_soundbar_mode && (adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI)/*(eDolbyMS12Lib == adev->dolby_lib_type) && aml_out->ms12_vol_ctrl*/) {
                 gain_speaker = 1.0;
             }
             apply_volume_16to32(gain_speaker, (int16_t *)buffer, adev->out_32_buf, bytes);
