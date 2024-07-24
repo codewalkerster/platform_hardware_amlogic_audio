@@ -5889,6 +5889,24 @@ int set_dtv_parameters(struct audio_hw_device *dev, struct str_parms *parms)
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     int ret = -1, val = 0;
 
+    ret = str_parms_get_int(parms, "hal_param_dtv_spdif_protection_mode", &val);
+    if (ret >= 0) {
+        dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_SPDIF_PROTECTION_MODE, val);
+        goto exit;
+    }
+
+    ret = str_parms_get_int(parms, "hal_param_dtv_media_first_lang", &val);
+    if (ret >= 0) {
+        dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_MEDIA_FIRST_LANG, val);
+        goto exit;
+    }
+
+    ret = str_parms_get_int(parms, "hal_param_dtv_media_second_lang", &val);
+    if (ret >= 0) {
+        dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_MEDIA_SECOND_LANG, val);
+        goto exit;
+    }
+
     /* set_dtv_parameters only called by tsplayer,tuner hal audio use audiotrack api */
     if (is_dev_patch_exist(adev) && get_dev_patch(adev)->cbs_patch) {
          ret = 0;
@@ -6009,18 +6027,6 @@ int set_dtv_parameters(struct audio_hw_device *dev, struct str_parms *parms)
         goto exit;
     }
 
-    ret = str_parms_get_int(parms, "hal_param_dtv_media_first_lang", &val);
-    if (ret >= 0) {
-        dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_MEDIA_FIRST_LANG, val);
-        goto exit;
-    }
-
-    ret = str_parms_get_int(parms, "hal_param_dtv_media_second_lang", &val);
-    if (ret >= 0) {
-        dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_MEDIA_SECOND_LANG, val);
-        goto exit;
-    }
-
     ret = str_parms_get_int(parms, "hal_param_dtv_audio_volume", &val);
     if (ret >= 0) {
         dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_VOLUME, val);
@@ -6033,11 +6039,7 @@ int set_dtv_parameters(struct audio_hw_device *dev, struct str_parms *parms)
         goto exit;
     }
 
-    ret = str_parms_get_int(parms, "hal_param_dtv_spdif_protection_mode", &val);
-        if (ret >= 0) {
-            dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_SPDIF_PROTECTION_MODE, val);
-            goto exit;
-        }
+
     /* dvb cmd deal with end */
 exit:
     return ret;
