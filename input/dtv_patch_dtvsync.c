@@ -713,8 +713,9 @@ dtvsync_process_res  aml_dtvsync_nonms12_process(struct audio_stream_out *stream
 
     } else if (m_audiopolicy.audiopolicy == MEDIASYNC_AUDIO_ADJUST_CLOCK) {
 
-        aml_dtvsync_adjustclock(stream, &m_audiopolicy);
-        enable_dtv_underrun_mute(adev, false);
+        ALOGD("there no longer respond to CLK adjust strategy");
+        //aml_dtvsync_adjustclock(stream, &m_audiopolicy);
+        //enable_dtv_underrun_mute(adev, false);
 
     } else if (m_audiopolicy.audiopolicy == MEDIASYNC_AUDIO_RESAMPLE) {
 
@@ -816,9 +817,12 @@ dtvsync_process_res aml_dtvsync_ms12_process_policy(void *priv_data, void *ms12_
             }
 
         } else if (async_policy->audiopolicy == MEDIASYNC_AUDIO_ADJUST_CLOCK) {
-
-            aml_dtvsync_ms12_adjust_clock(stream_out, async_policy->param1);
-            enable_dtv_underrun_mute(adev, false);
+            /*In the jira SWPL-178738, We found if adjust CLK frequently(DTV/local play case), audio output will be not smooth.
+              Therefore, After discussion, it was temporarily turned off this function.
+             */
+             ALOGD("there no longer respond to CLK adjust strategy");
+            //aml_dtvsync_ms12_adjust_clock(stream_out, async_policy->param1);
+            //enable_dtv_underrun_mute(adev, false);
 
         } else if (async_policy->audiopolicy == MEDIASYNC_AUDIO_RESAMPLE) {
 
