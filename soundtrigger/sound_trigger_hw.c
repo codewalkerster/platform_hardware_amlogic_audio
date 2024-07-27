@@ -324,6 +324,7 @@ static int stdev_unload_sound_model(const struct sound_trigger_hw_device *dev,
     struct amlogic_sound_trigger_device *stdev = (struct amlogic_sound_trigger_device *)dev;
     int status = 0;
     ALOGI("unload_sound_model:%d", handle);
+    set_sound_trigger_cmd(SOUND_TRIGGER_CLOSE_DEVICE);
     pthread_mutex_lock(&stdev->lock);
 
     struct recognition_context *model_context = NULL;
@@ -482,7 +483,7 @@ static int stdev_stop_recognition(const struct sound_trigger_hw_device *dev,
     model_context->model_started = false;
 
     pthread_mutex_unlock(&stdev->lock);
-    set_sound_trigger_cmd(SOUND_TRIGGER_CLOSE_DEVICE);
+
     ALOGI("%s done for handle %d", __func__, handle);
 
 exit:
