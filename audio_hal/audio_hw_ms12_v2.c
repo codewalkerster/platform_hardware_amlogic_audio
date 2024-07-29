@@ -1418,6 +1418,19 @@ int dolby_ms12_main_process(
         return ret;
     }
 
+    if (aml_out->is_ms12_main_decoder_disable) {
+        AM_LOGI("is_ms12_main_decoder_disable, drop %zu bytes", bytes);
+        if (audio_is_linear_pcm(aml_out->hal_format)) {
+            // sleep half of data's duration , avoid audioflinger underrun frequently.
+            int duration_ms = bytes / aml_out->hal_frame_size / (aml_out->hal_rate/1000) / 2;
+            if (duration_ms > 0) {
+                usleep(duration_ms * 1000);
+            }
+        }
+        *use_size = bytes;
+        return 0;
+    }
+
     pthread_mutex_lock(&ms12->lock);
     pthread_mutex_lock(&ms12->main_lock);
     if (ms12->dolby_ms12_enable && !aml_out->is_ms12_main_decoder) {
@@ -4417,6 +4430,9 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
             adev
             , ms12
             , hal_internal_format);
+
+        // fix case : main audio decoder is paused
+        dolby_ms12_main_resume(stream);
     }
 
     return 0;

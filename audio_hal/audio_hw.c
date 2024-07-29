@@ -3449,6 +3449,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->needs_compensation_timeus = 0;
     out->restore_vmaster = false;
     out->is_callback_pending = false;
+    out->is_ms12_main_decoder_disable = false;
 
     clock_gettime(CLOCK_MONOTONIC, &out->last_info_timestamp);
     clock_gettime(CLOCK_MONOTONIC, &out->last_avsync_timestamp);
@@ -3637,6 +3638,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     if (out->is_ms12_main_decoder) {
         close_ms12_output_main_stream(stream);
     }
+    out->is_ms12_main_decoder_disable = false;
 
     /* After playback for previous dts stream, there is remain data in VirtualX library. It needs to clear data buffer of VirtualX by using
        zero data to replace these remain data. Otherwise it will play this remain data first when start playback next time*/
@@ -6843,6 +6845,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
                 if (out->is_ms12_main_decoder) {
                     ALOGI("%s() line %d close ms12 main stream", __func__, __LINE__);
                     close_ms12_output_main_stream((struct audio_stream_out *)out);
+                    aml_out->is_ms12_main_decoder_disable = true;
                 }
                 pthread_mutex_unlock(&out->lock);
             }
