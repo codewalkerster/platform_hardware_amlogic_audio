@@ -1826,6 +1826,7 @@ MAIN_INPUT:
             }
         }
         ms12->is_bypass_ms12 = is_ms12_passthrough(stream);
+        ms12->is_dolby_atmos = (dolby_ms12_get_input_atmos_info() == 1);
 exit:
         if (get_ms12_dump_enable(DUMP_MS12_INPUT_MAIN)) {
             dump_ms12_output_data((void*)buffer, *use_size, MS12_INPUT_SYS_MAIN_FILE);
@@ -3969,8 +3970,6 @@ int ms12_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_t 
         ms12->aaudio_low_latency = adev->aaudio_low_latency;
         adev->aaudio_low_latency_updated = false;
     }
-
-    ms12->is_dolby_atmos = (dolby_ms12_get_input_atmos_info() == 1);
 
     /*update the master pcm frame, which is used for av sync*/
     if (audio_is_linear_pcm(output_format) && ms12_info) {
