@@ -53,6 +53,23 @@ typedef struct _aml_pcm_mixing_st {
     uint32_t main_channel_table[MAX_MAIN_CHANNEL_COUNT];
 } aml_pcm_mixing_st;
 
+static inline short CLIPSHORT(int32_t r)
+{
+    if (r > 32767)
+        r = 32767;
+    else if (r < -32768)
+        r = -32768;
+    return r;
+}
+
+static inline int CLIPINT(int64_t r)
+{
+    if (r > 2147483647)
+        r = 2147483647;
+    else if (r < -2147483648)
+        r = -2147483648;
+    return r;
+}
 
 #define MAX_INPUT_CHANNELS_SUPPORTED 26
 typedef struct _aml_pcm_downmix_st {

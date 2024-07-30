@@ -23,6 +23,7 @@
 #include "aml_audio_heaacparser.h"
 #include "aml_audio_bitsparser.h"
 #include "aml_malloc_debug.h"
+#include "audio_data_process.h"
 #ifdef ANDROID_PLATFORM_SDK_VERSION
 #include <system/audio-base.h>
 #else
@@ -1127,7 +1128,7 @@ resync:
         }
         heaac_parser_handle->buf_remain = data_valid;
 
-        need_size = HEAAC_HEADER_SIZE - data_valid;
+        need_size = CLIPINT((int64_t) HEAAC_HEADER_SIZE - (int64_t)data_valid);
         /*get some bytes to make sure it is at least HEAAC_HEADER_SIZE bytes*/
         if (need_size > 0) {
             /*check if input has enough data*/

@@ -22,6 +22,7 @@
 #include <aml_malloc_debug.h>
 #include <system/audio-base.h>
 #include "aml_audio_spdifdec.h"
+#include "audio_data_process.h"
 
 #define IEC61937_HEADER_PA_LITTLE  0xF872
 #define IEC61937_HEADER_PB_LITTLE  0x4E1F
@@ -410,7 +411,7 @@ static int aml_spdif_decoder_find_syncword(void *phandle
         }
         spdif_dec_handle->buf_remain = data_valid;
 
-        need_size = IEC61937_HEADER_SYNC_PERIOD - data_valid;
+        need_size = CLIPINT((int64_t) IEC61937_HEADER_SYNC_PERIOD - (int64_t)data_valid);
         /*get some bytes to make sure it is at least period bytes*/
         if (need_size > 0) {
             /*check if input has enough data*/
@@ -428,6 +429,7 @@ static int aml_spdif_decoder_find_syncword(void *phandle
     }
 
     /*double check here*/
+    /* coverity[overflow_sink] */
     *sync_word_offset = seek_61937_sync_word((char*)*spdifdec_buf, spdif_dec_handle->buf_remain);
     if (*sync_word_offset != 0) {
         ALOGE("we can't get here remain=%d,resync iec61937 header", spdif_dec_handle->buf_remain);

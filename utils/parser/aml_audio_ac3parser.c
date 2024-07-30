@@ -29,6 +29,7 @@
 
 #include "aml_audio_ac3parser.h"
 #include "aml_malloc_debug.h"
+#include "audio_data_process.h"
 
 #define DOLBY_DDPP_MAXSIZE          (32768)
 #define DOLBY_DDP_HEADER_SIZE       (12)
@@ -523,7 +524,7 @@ int aml_ac3_parser_process(void *parser_handle, const void *in_buffer, int32_t n
             }
             /*make sure the remain buf has 12 bytes*/
             memcpy(parser_buf + aml_parser_handle->buf_remain, buffer + buf_offset , need_size);
-            aml_parser_handle->buf_remain += need_size;
+            aml_parser_handle->buf_remain = CLIPINT((int64_t)aml_parser_handle->buf_remain + (int64_t)need_size);
             buf_offset += need_size;
             buf_left = numBytes - buf_offset;
         }

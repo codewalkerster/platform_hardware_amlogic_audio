@@ -577,7 +577,7 @@ static void _aml_async_dump_data(const void *buffer, int bytes, struct buffer_it
         if (new_buffer_size > BUFFER_MAX_SIZE) {
             new_buffer_size = BUFFER_MAX_SIZE;
         }
-
+        /* coverity[overflow_sink] */
         if (ring_buffer_realloc(ringbuf, new_buffer_size) == 0) {
             avail_bytes = get_buffer_write_space(ringbuf);
             buffer_size = ringbuf->size;

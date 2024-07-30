@@ -31,6 +31,7 @@
 #include "ac3_parser_utils.h"
 #include "aml_ac3_parser.h"
 #include "aml_audio_matparser.h"
+#include "audio_data_process.h"
 
 #define IEC61937_HEADER_SIZE 8
 #define IEC61937_AC3_PC_VALUE       (0x1)
@@ -101,7 +102,7 @@ int scan_dolby_main_associate_frame (void *input_buffer
                     *used_size = sync_word_offset + AC3_PERIOD_SIZE;
                     is_iec61937_packat = 1;
                 } else
-                    *used_size = sync_word_offset + payload_size;
+                    *used_size = CLIPINT((int64_t)sync_word_offset + (int64_t)payload_size);
                 ret = 0;
             } else {
                 ALOGV ("%s useful data len %lu ac3 iec61937 packet size %#x payload_size %#x",
@@ -113,10 +114,10 @@ int scan_dolby_main_associate_frame (void *input_buffer
             payload_size = (pcpd >> 16);
             if (bytes - sync_word_offset >= (size_t) payload_size) {
                 if (bytes - sync_word_offset >= EAC3_PERIOD_SIZE) {
-                    *used_size = sync_word_offset + EAC3_PERIOD_SIZE;
+                    *used_size = CLIPINT((int64_t)sync_word_offset + (int64_t)EAC3_PERIOD_SIZE);
                     is_iec61937_packat = 1;
                 } else
-                    *used_size = sync_word_offset + payload_size;
+                    *used_size = CLIPINT((int64_t)sync_word_offset +(int64_t)payload_size);
                 ret = 0;
             } else {
                 ALOGV ("%s useful data len %lu eac3 iec61937 packet size %#x payload_size %#x",

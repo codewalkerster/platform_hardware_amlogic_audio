@@ -65,24 +65,6 @@ static int ch2_ch8_n_b16_b32(void *data_mixed, void *data_sys, size_t frames)
     return 0;
 }
 
-static inline short CLIPSHORT(int32_t r)
-{
-    if (r > 32767)
-        r = 32767;
-    else if (r < -32768)
-        r = -32768;
-    return r;
-}
-
-static inline int CLIPINT(int64_t r)
-{
-    if (r > 2147483647)
-        r = 2147483647;
-    else if (r < -2147483648)
-        r = -2147483648;
-    return r;
-}
-
 int do_mixing_by_ch_mux(void *data_mixed,
                         uint32_t *out_ch_tab,
                         uint32_t out_mux_channels,
