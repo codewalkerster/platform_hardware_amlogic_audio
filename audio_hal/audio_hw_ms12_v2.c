@@ -4218,6 +4218,36 @@ static int nbytes_of_dolby_ms12_downmix_output_pcm_frame()
     return pcm_out_channels*bytes_per_sample;
 }
 
+static void patch_set_ms12_start_threshold(struct aml_audio_device *adev, audio_format_t fmt)
+{
+    struct aml_audio_patch *patch = get_dev_patch(adev);
+    audio_devices_t src = patch->input_src;
+    bool set_start_threshold = false;
+
+    if (src != AUDIO_DEVICE_IN_HDMI && src != AUDIO_DEVICE_IN_HDMI_ARC)
+        return;
+
+    if ((fmt == AUDIO_FORMAT_AC3) || (fmt == AUDIO_FORMAT_E_AC3)) {
+        dolby_ms12_set_enforce_timeslice(true);
+        ALOGI("hdmi/arc in ddp/dd case, use enforce timeslice");
+    }
+
+    if ((src == AUDIO_DEVICE_IN_HDMI) && (fmt == AUDIO_FORMAT_AC3 || fmt == AUDIO_FORMAT_E_AC3 ||
+        fmt == AUDIO_FORMAT_E_AC3_JOC || fmt == AUDIO_FORMAT_MAT)) {
+        set_start_threshold = true;
+    } else if (patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC && fmt == AUDIO_FORMAT_AC3) {
+        set_start_threshold = true;
+    }
+    if (set_start_threshold) {
+        int start_threshold = 1536;
+        struct dolby_ms12_desc *ms12 = &(adev->ms12);
+        /* For MAT HBR, set ms12 start threshold about 2 frames */
+        set_ms12_set_main_start_threshold(ms12, start_threshold);
+        ALOGI("hdmi/arc in ddp/mat case, set start threshold %d", start_threshold);
+    }
+    return;
+}
+
 int dolby_ms12_main_open(struct audio_stream_out *stream) {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = aml_out->dev;
@@ -4332,20 +4362,8 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
         set_ms12_ac4_presentation_group_index(ms12, media_presentation_id);
     }
 
-    if (patch && patch->input_src == AUDIO_DEVICE_IN_HDMI) {
-        if ((hal_internal_format == AUDIO_FORMAT_AC3) || (hal_internal_format == AUDIO_FORMAT_E_AC3)) {
-            dolby_ms12_set_enforce_timeslice(true);
-            ALOGI("hdmi in ddp/dd case, use enforce timeslice");
-        }
-
-        if (hal_internal_format == AUDIO_FORMAT_E_AC3 ||
-            hal_internal_format == AUDIO_FORMAT_E_AC3_JOC ||
-            hal_internal_format == AUDIO_FORMAT_MAT) {
-            int start_threshold = 1536;
-            /* For MAT HBR, set ms12 start threshold about 2 frames */
-            set_ms12_set_main_start_threshold(ms12, start_threshold);
-            ALOGI("hdmi in ddp/mat case, set start threshold %d", start_threshold);
-        }
+    if (patch) {
+        patch_set_ms12_start_threshold(adev, hal_internal_format);
     }
 
     aml_ms12_main_decoder_open(ms12, hal_internal_format, aml_out->hal_channel_mask, sample_rate);
