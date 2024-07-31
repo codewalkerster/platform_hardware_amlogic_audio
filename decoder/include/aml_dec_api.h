@@ -191,6 +191,7 @@ typedef struct aml_dtsx_config {
     int output_bw;
     int device_type;
     void *dev;
+    bool sink_support_multich_pcm;
 } aml_dtsx_config_t;
 
 typedef struct aml_pcm_config {

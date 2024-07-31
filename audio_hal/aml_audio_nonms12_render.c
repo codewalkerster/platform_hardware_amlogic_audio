@@ -619,6 +619,9 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, const void *buffer
                     aml_audio_spdif_output(stream, &aml_out->spdifout_handle, dec_raw_data);
                 }
 
+            } else if (is_dts_format(aml_out->hal_internal_format) && (dec_raw_data->data_format == AUDIO_FORMAT_PCM_16_BIT ||
+                        dec_raw_data->data_format ==AUDIO_FORMAT_PCM_32_BIT)) {
+                aml_audio_spdif_output(stream, &aml_out->spdifout_handle, dec_raw_data);
             }
 
             /*special case  for dts , dts decoder need to follow aml_dec_api.h */
@@ -672,7 +675,7 @@ bool aml_decoder_output_compatible(struct audio_stream_out *stream, audio_format
 
     if ((aml_out->aml_dec->format == AUDIO_FORMAT_AC3)
         || (aml_out->aml_dec->format == AUDIO_FORMAT_E_AC3)) {
-        aml_dcv_config_t* dcv_config = (aml_dcv_config_t *)(&aml_out->dec_config);
+        aml_dcv_config_t* dcv_config = &aml_out->dec_config.dcv_config;
         if (((optical_format == AUDIO_FORMAT_PCM_16_BIT) && (dcv_config->digital_raw > AML_DEC_CONTROL_DECODING))
             || ((optical_format == AUDIO_FORMAT_E_AC3) && (dcv_config->digital_raw != AML_DEC_CONTROL_RAW))
             || (optical_format == AUDIO_FORMAT_AC3 && dcv_config->decoding_mode != DDP_DECODE_MODE_SINGLE)) {
@@ -680,13 +683,14 @@ bool aml_decoder_output_compatible(struct audio_stream_out *stream, audio_format
         }
     } else if (is_dts_format(aml_out->aml_dec->format)) {
         if (adev->dts_lib_type == eDTSXLib) {
-            aml_dtsx_config_t* dtsx_config = (aml_dtsx_config_t *)(&aml_out->dec_config);
-            // Still need to discuss.
-            if ((optical_format == AUDIO_FORMAT_PCM_16_BIT) && (dtsx_config->digital_raw > AML_DEC_CONTROL_DECODING)) {
-                is_compatible = false;
-            }
+            /* DTSX currently only supports one IEC61937 raw outputs.
+             * According to the edid, @audio_format_t in Android audio only defines the difference between AUDIO_FORMAT_DTS
+             * and AUDIO_FORMAT_DTS_HD, while DTS-HD EDID vsdb has four situations(0x0/0x1/0x3/0x7 see input\include\hdmirx_utils.h).
+             * To simplify the process, the decoder is reinitialized every time.
+             * */
+            return false;
         } else {
-            aml_dca_config_t* dca_config = (aml_dca_config_t *)(&aml_out->dec_config);
+            aml_dca_config_t* dca_config = &aml_out->dec_config.dca_config;
             if ((optical_format == AUDIO_FORMAT_PCM_16_BIT) && (dca_config->digital_raw > AML_DEC_CONTROL_DECODING)) {
                 is_compatible = false;
             }
@@ -823,15 +827,20 @@ static void dts_decoder_config_prepare(struct audio_stream_out *stream, aml_dec_
             dtsx_config->sink_dev_type = 0; //CA(0),MA(1),P1(2),P2(4)
         }
 
-        if (is_STB(adev))
+        if (is_STB(adev)) {
             dtsx_config->device_type = STB;
+            if (p_hdmi_descs->pcm_fmt.max_channels == 8 && adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_PCM) {
+                ALOGI("%s sink support multi-ch pcm, and dtsx decoder bus0 output multi-ch pcm when stream channel != 2", __func__);
+                dtsx_config->sink_support_multich_pcm = true;
+            }
+        }
         else
             dtsx_config->device_type = TV;
 
-        ALOGI("[%s:%d] digital_raw:%d, dual_output_flag:%d, is_iec61937:%d, is_dtscd:%d, passthroug:%d, is_hdmi_output:%d, sink_dev_type:%d", __func__, __LINE__,
+        ALOGI("[%s:%d] digital_raw:%d, dual_output_flag:%d, is_iec61937:%d, is_dtscd:%d, passthroug:%d, is_hdmi_output:%d, sink_dev_type:%d, sink_support_multich_pcm:%d", __func__, __LINE__,
             dtsx_config->digital_raw, aml_out->dual_output_flag, dtsx_config->is_iec61937,
             dtsx_config->is_dtscd, dtsx_config->passthroug_enable, dtsx_config->is_hdmi_output,
-            dtsx_config->sink_dev_type);
+            dtsx_config->sink_dev_type, dtsx_config->sink_support_multich_pcm);
     } else if (adev->dts_lib_type == eDTSHDLib) {
         aml_dca_config_t * dts_config = &dec_config->dca_config;
         dts_config->digital_raw = AML_DEC_CONTROL_CONVERT;

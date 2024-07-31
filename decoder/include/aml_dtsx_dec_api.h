@@ -146,6 +146,7 @@ typedef struct dtsx_dec_s {
     unsigned char *sample_convert_buf;
     int sample_convert_buf_size;
     int device_type;
+    bool sink_support_multich_pcm;
 } dtsx_dec_t;
 
 int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config);
