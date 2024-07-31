@@ -854,6 +854,7 @@ static void* audio_type_parse_threadloop(void *data)
         } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
             cur_samplerate = get_eArcIn_samplerate(audio_type_status->mixer_handle);
             audio_type_status->audio_samplerate = audio_transfer_samplerate(cur_samplerate);
+            type = earc_coding_type_to_codec(eArcIn_coding_type_detection(audio_type_status->mixer_handle));
         }
 
         if (cur_samplerate == -1)
@@ -861,7 +862,7 @@ static void* audio_type_parse_threadloop(void *data)
 
         /*check hdmiin audio input sr and reset hw resample*/
         if (cur_samplerate != last_cur_samplerate && cur_samplerate != HW_RESAMPLE_DISABLE) {
-            if (audio_type_status->audio_type == LPCM) {
+            if (audio_type_status->audio_type == LPCM  && type != NOT_READY) {
                 enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
                 audio_type_status->reset_input = true;
                 ALOGD("Reset hdmiin/spdifin audio resample sr from %d to %d\n",
@@ -990,8 +991,10 @@ static void* audio_type_parse_threadloop(void *data)
                 } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_SPDIF) {
                     audio_type_status->cur_audio_type = spdifin_audio_format_detection(audio_type_status->mixer_handle);
                 } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
-                    type = earc_coding_type_to_codec(eArcIn_coding_type_detection(audio_type_status->mixer_handle));
                     mute = eArcIn_get_cs_mute(audio_type_status->mixer_handle);
+                    /* earc_mute is only for recording detect the cs mute status */
+                    if (mute)
+                        audio_type_status->earc_mute = mute;
                     if (type != NOT_READY)
                         audio_type_status->cur_audio_type = type;
                 }
@@ -1003,11 +1006,14 @@ static void* audio_type_parse_threadloop(void *data)
                     ALOGV("Raw data found: type(%d)\n", audio_type_status->cur_audio_type);
                     enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
                     audio_type_status->fmt_change = true;
-                } else if (audio_type_status->earc_mute != mute) {
+                } else if (audio_type_status->earc_mute && !mute && type != NOT_READY) {
+                    /* If we record mute, and now it is unmute, and the type is NOT_READY,
+                     * need reset for channel swap */
                     audio_type_status->fmt_change = true;
+                    audio_type_status->earc_mute = mute;
+                    ALOGI("earc mute reset\n");
                 }
 
-                audio_type_status->earc_mute = mute;
                 audio_type_status->audio_type = audio_type_status->cur_audio_type;
                 if (audio_type_status->hdmi_packet != cur_audio_packet) {
                     audio_type_status->hdmi_packet = cur_audio_packet;
