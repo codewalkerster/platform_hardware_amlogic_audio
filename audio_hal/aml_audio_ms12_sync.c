@@ -1408,6 +1408,9 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
 
         if (adev->ms12.is_bypass_ms12) {
             frame_latency = get_ms12_bypass_latency_offset(false, adev->is_netflix) * 48;
+            if (adev->bDVEnable && !is_TV(adev)) {
+                frame_latency += get_sink_dv_latency_offset(false, adev->is_netflix) * 48;
+            }
         } else {
             frame_latency = get_ms12_nontunnel_latency_offset(get_output_by_devices(adev->cur_out_devices),
                                                                out->hal_internal_format,

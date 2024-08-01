@@ -66,7 +66,7 @@
 #define  AVSYNC_MS12_TUNNEL_AC4_HDMI_LATENCY                  (30)
 
 
-#define  AVSYNC_MS12_NONTUNNEL_BYPASS_LATENCY            (-130)
+#define  AVSYNC_MS12_NONTUNNEL_BYPASS_LATENCY            (50)
 
 /*
  * -220 -> -250 for result as +35 -> +60
@@ -278,7 +278,7 @@
 
 
 #define  AVSYNC_DV_TUNNEL_LATENCY                              (0)
-#define  AVSYNC_DV_NONTUNNEL_LATENCY                           (0)
+#define  AVSYNC_DV_NONTUNNEL_LATENCY                           (16)
 
 #define  AVSYNC_DV_TUNNEL_LATENCY_PROPERTY                     "vendor.media.audio.hal.dv.tunnel"
 #define  AVSYNC_DV_NONTUNNEL_LATENCY_PROPERTY                  "vendor.media.audio.hal.dv.nontunnel"
