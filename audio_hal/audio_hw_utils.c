@@ -1156,7 +1156,7 @@ uint32_t out_get_alsa_latency_frames(const struct audio_stream_out *stream)
                 frames = delay_ms * out->config.rate/1000;
             }
         } else {
-            frames = mixer_get_inport_latency_frames(audio_mixer, out->inputPortID)
+            frames = (out->inputPortID == -1) ? 0 : mixer_get_inport_latency_frames(audio_mixer, out->inputPortID)
                         + mixer_get_outport_latency_frames(audio_mixer);
         }
     } else {
