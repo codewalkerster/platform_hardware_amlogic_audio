@@ -3766,8 +3766,9 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
             out->hwsync->mediasync = NULL;
 
         }
-        aml_audio_free(out->hwsync);
-        out->hwsync = NULL;
+        // aml_stream_timer_pause_callback will use out->hwsync, free it at final time.
+        // aml_audio_free(out->hwsync);
+        // out->hwsync = NULL;
     }
     if (out->spdifout_handle) {
         aml_audio_spdifout_close(out->spdifout_handle);
@@ -3841,6 +3842,10 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     }
 
     pthread_mutex_lock(&adev->stream_release_lock);
+    if (out->hwsync) {
+        aml_audio_free(out->hwsync);
+        out->hwsync = NULL;
+    }
     aml_audio_free(stream);
     pthread_mutex_unlock(&adev->stream_release_lock);
 
