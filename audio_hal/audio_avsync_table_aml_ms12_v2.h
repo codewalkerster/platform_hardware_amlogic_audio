@@ -547,9 +547,9 @@
 
 
 /* for different output format */
-#define  AVSYNC_NONMS12_DTV_PCM_OUT_LATENCY                     (-25)
+#define  AVSYNC_NONMS12_DTV_PCM_OUT_LATENCY                     (0)
 #define  AVSYNC_NONMS12_DTV_DD_OUT_LATENCY                      (0)
-#define  AVSYNC_NONMS12_DTV_DDP_OUT_LATENCY                     (-64)
+#define  AVSYNC_NONMS12_DTV_DDP_OUT_LATENCY                     (-30)
 #define  AVSYNC_NONMS12_DTV_MAT_OUT_LATENCY                     (0)
 
 #define  AVSYNC_NONMS12_DTV_PCM_OUT_LATENCY_PROPERTY            "vendor.media.audio.hal.nonms12.dtv.pcmout"
