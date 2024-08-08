@@ -97,6 +97,9 @@ DolbyMS12ConfigParams::DolbyMS12ConfigParams():
     // mDolbyMS12GetOutProfile(NULL)
     // ,
     mParamNum(0)
+    ,mRuntimeParamNum(0)
+    ,mCodecParamNum(0)
+    ,mEncParamNum(0)
     , mAudioOutFlags(AUDIO_OUTPUT_FLAG_NONE)
     , mAudioStreamOutFormat(AUDIO_FORMAT_PCM_16_BIT)
     // , mAudioSteamOutDevices(AUDIO_DEVICE_OUT_SPEAKER)
@@ -108,6 +111,9 @@ DolbyMS12ConfigParams::DolbyMS12ConfigParams():
     , mDolbyMS12OutConfig(MS12_OUTPUT_MASK_DD)
     , mDolbyMS12OutSampleRate(48000)
     , mConfigParams(NULL)
+    , mRuntimeConfigParams(NULL)
+    , mCodecConfigParams(NULL)
+    , mEncConfigParams(NULL)
     // , mMultiOutputFlag(true)
     , mDRCBoost(100)
     , mDRCCut(100)
@@ -182,12 +188,34 @@ DolbyMS12ConfigParams::DolbyMS12ConfigParams():
         ALOGD("%s() line %d prepare the array fail", __FUNCTION__, __LINE__);
         return;
     }
+
+    mRuntimeConfigParams = PrepareConfigParams(MAX_ARGC, MAX_ARGV_STRING_LEN);
+    if (!mRuntimeConfigParams) {
+        ALOGD("%s() line %d prepare the array fail", __FUNCTION__, __LINE__);
+        return;
+    }
+
+    mCodecConfigParams = PrepareConfigParams(MAX_ARGC, MAX_ARGV_STRING_LEN);
+    if (!mCodecConfigParams) {
+        ALOGD("%s() line %d prepare the array fail", __FUNCTION__, __LINE__);
+        return;
+    }
+
+    mEncConfigParams = PrepareConfigParams(MAX_ARGC, MAX_ARGV_STRING_LEN);
+    if (!mEncConfigParams) {
+        ALOGD("%s() line %d prepare the array fail", __FUNCTION__, __LINE__);
+        return;
+    }
+
     memset(mDolbyMain1FileName, 0, sizeof(mDolbyMain1FileName));
     memcpy(mDolbyMain1FileName, DEFAULT_MAIN_DDP_FILE_NAME, sizeof(DEFAULT_MAIN_DDP_FILE_NAME));
     memset(mDolbyMain2FileName, 0, sizeof(mDolbyMain2FileName));
     memcpy(mDolbyMain2FileName, DEFAULT_DUMMY_DDP_FILE_NAME, sizeof(DEFAULT_DUMMY_DDP_FILE_NAME));
     char params_bin[] = "ms12_exec";
     sprintf(mConfigParams[mParamNum++], "%s", params_bin);
+    sprintf(mRuntimeConfigParams[mRuntimeParamNum++], "%s", params_bin);
+    sprintf(mCodecConfigParams[mCodecParamNum++], "%s", params_bin);
+    sprintf(mEncConfigParams[mEncParamNum++], "%s", params_bin);
 
     //TODO: use a system property to override default DAP tuning file name
     // If we detected DAP tuning file exists then DAP will be enabled with both
@@ -202,6 +230,9 @@ DolbyMS12ConfigParams::~DolbyMS12ConfigParams()
 {
     ALOGD("+%s()", __FUNCTION__);
     CleanupConfigParams(mConfigParams, MAX_ARGC);
+    CleanupConfigParams(mRuntimeConfigParams, MAX_ARGC);
+    CleanupConfigParams(mCodecConfigParams, MAX_ARGC);
+    CleanupConfigParams(mEncConfigParams, MAX_ARGC);
     ALOGD("-%s()", __FUNCTION__);
 }
 
@@ -1588,41 +1619,62 @@ char *DolbyMS12ConfigParams::QueryDapParameters(const char *key)
 }
 
 //get dolby ms12 config params
-char **DolbyMS12ConfigParams::GetDolbyMS12ConfigParams(int *argc)
+char **DolbyMS12ConfigParams::GetDolbyMS12ConfigParams(int *argc, int arg_type)
 {
     ALOGD("+%s()\n", __FUNCTION__);
+    char **ConfigParams;
+    int *ParamNum;
+    switch (arg_type) {
+        case MS12_ARG_TYPE_MASTER:
+            ConfigParams = mConfigParams;
+            ParamNum = &mParamNum;
+            break;
+        case MS12_ARG_TYPE_RUNTIME:
+            ConfigParams = mRuntimeConfigParams;
+            ParamNum = &mRuntimeParamNum;
+            break;
+        case MS12_ARG_TYPE_CODEC:
+            ConfigParams = mCodecConfigParams;
+            ParamNum = &mCodecParamNum;
+            break;
+        case MS12_ARG_TYPE_ENC:
+            ConfigParams = mEncConfigParams;
+            ParamNum = &mEncParamNum;
+            break;
+    }
 
-    if (argc && mConfigParams) {
+    if (argc && ConfigParams) {
         char params_bin[] = "ms12_exec";
-        sprintf(mConfigParams[mParamNum++], "%s", params_bin);
-        SetInputOutputFileName(mConfigParams, &mParamNum);
-        SetFunctionalSwitches(mConfigParams, &mParamNum);
-        SetAc4Switches(mConfigParams, &mParamNum);
-        SetPCMSwitches(mConfigParams, &mParamNum);
-        SetHEAACSwitches(mConfigParams, &mParamNum);
-        SetOTTProcessingGraphSwitches(mConfigParams, &mParamNum);
+        sprintf(ConfigParams[(*ParamNum)], "%s", params_bin);
+        (*ParamNum)++;
+        SetInputOutputFileName(ConfigParams, ParamNum);
+        SetFunctionalSwitches(ConfigParams, ParamNum);
+        SetAc4Switches(ConfigParams, ParamNum);
+        SetPCMSwitches(ConfigParams, ParamNum);
+        SetHEAACSwitches(ConfigParams, ParamNum);
+        SetOTTProcessingGraphSwitches(ConfigParams, ParamNum);
         if (mDAPInitMode == DAP_CONTENT_PROC_MODE) {
-            SetDAPContentSwitches(mConfigParams, &mParamNum);
+            SetDAPContentSwitches(ConfigParams, ParamNum);
         }
         if (mDAPInitMode == DAP_CONTENT_PROC_DEVICE_PROC_MODE) {
-            SetDAPDeviceSwitches(mConfigParams, &mParamNum, 0);
-            SetDAPContentSwitches(mConfigParams, &mParamNum);
+            SetDAPDeviceSwitches(ConfigParams, ParamNum, 0);
+            SetDAPContentSwitches(ConfigParams, ParamNum);
         }
-        *argc = mParamNum;
+        *argc = *ParamNum;
         ALOGV("%s() line %d argc %d\n", __FUNCTION__, __LINE__, *argc);
         //here is to check the config params
 
         int config_params_check = 1;
         if (config_params_check) {
             int i = 0;
-            for (i = 0; i < mParamNum; i++) {
-                ALOGI("param #%d: %s\n", i, mConfigParams[i]);
+            for (i = 0; i < *ParamNum; i++) {
+                ALOGI("param #%d: %s\n", i, ConfigParams[i]);
             }
         }
     }
 
     ALOGD("-%s()", __FUNCTION__);
-    return mConfigParams;
+    return ConfigParams;
 }
 
 int DolbyMS12ConfigParams::ms_get_int_array_from_str(char **p_csv_string, int num_el, int *p_vals)
@@ -1702,10 +1754,10 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
     ALOGV("+%s()", __FUNCTION__);
     ALOGV("ms12 runtime cmd: %s", cmd);
 
-    strcpy(mConfigParams[0], "ms12_runtime");
+    strcpy(mRuntimeConfigParams[0], "ms12_runtime");
 
     *argc = 1;
-    mParamNum = 1;
+    mRuntimeParamNum = 1;
 
     std::string token;
     std::istringstream cmd_string(cmd);
@@ -1713,136 +1765,136 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
     char *opt = NULL;
 
     while (cmd_string >> token) {
-        strncpy(mConfigParams[mParamNum], token.c_str(), MAX_ARGV_STRING_LEN);
-        mConfigParams[mParamNum][MAX_ARGV_STRING_LEN - 1] = '\0';
-        ALOGV("argv[%d] = %s", mParamNum, mConfigParams[mParamNum]);
-        mParamNum++;
+        strncpy(mRuntimeConfigParams[mRuntimeParamNum], token.c_str(), MAX_ARGV_STRING_LEN);
+        mRuntimeConfigParams[mRuntimeParamNum][MAX_ARGV_STRING_LEN - 1] = '\0';
+        ALOGV("argv[%d] = %s", mRuntimeParamNum, mRuntimeConfigParams[mRuntimeParamNum]);
+        mRuntimeParamNum++;
         (*argc)++;
     }
 
     while (index < *argc) {
         if (!opt) {
-            if ((mConfigParams[index][0] == '-') && (mConfigParams[index][1] < '0' || mConfigParams[index][1] > '9')) {
-                opt = mConfigParams[index] + 1;
+            if ((mRuntimeConfigParams[index][0] == '-') && (mRuntimeConfigParams[index][1] < '0' || mRuntimeConfigParams[index][1] > '9')) {
+                opt = mRuntimeConfigParams[index] + 1;
             } else {
-                ALOGE("Invalid option sequence, skipped %s", mConfigParams[index]);
+                ALOGE("Invalid option sequence, skipped %s", mRuntimeConfigParams[index]);
             }
             index++;
             continue;
         }
 
         if (strcmp(opt, "u") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 2)) {
                 ALOGI("-u DualMonoReproMode: %d", val);
                 mDualMonoReproMode = val;
             }
         } else if (strcmp(opt, "b") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 100)) {
                 ALOGI("-b DRCBoost: %d", val);
                 mDRCBoost = val;
             }
         } else if (strcmp(opt, "bs") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 100)) {
                 ALOGI("-bs DRCBoostStereo: %d", val);
                 mDRCBoostStereo = val;
             }
         } else if (strcmp(opt, "c") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 100)) {
                 ALOGI("-c DRCCut: %d", val);
                 mDRCCut = val;
             }
         } else if (strcmp(opt, "cs") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 100)) {
                 ALOGI("-cs DRCCutStereo: %d", val);
                 mDRCCutStereo = val;
             }
         } else if (strcmp(opt, "dmx") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 2)) {
                 ALOGI("-dmx Downmix Mode: %d", val);
                 /* Fixme: [he-aac] 2 = ARIB is not used on AOSP */
                 mDownmixMode = val;
             }
         } else if (strcmp(opt, "drc") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
                 ALOGI("-drc DRCModesOfDownmixedOutput: %d", val);
                 mDRCModesOfDownmixedOutput = val;
             }
         } else if (strcmp(opt, "at") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 3)) {
                 ALOGI("-at AC4Ac: %d", val);
                 mAC4Ac = val;
             }
         } else if (strcmp(opt, "xa") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
                 ALOGI("-xa Associated audio mixing: %d", val);
                 mAssociatedAudioMixing = val;
             }
         } else if (strcmp(opt, "xu") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= MIN_USER_CONTROL_VALUES) && (val <= MAX_USER_CONTROL_VALUES)) {
                 ALOGI("-xu User control values:[-32 (mute assoc) to 32 (mute main)] %d", val);
                 mUserControlVal = val;
             }
         } else if (strcmp(opt, "xs") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
                 ALOGI("-xs system/application audio mixing: %d", val);
                 mSystemAPPAudioMixing = val;
             }
         } else if (strcmp(opt, "pat") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
                 ALOGI("-pat AC4Pat: %d", val);
                 mAC4Pat = val;
             }
         } else if (strcmp(opt, "lang") == 0) {
-            ALOGI("-lang AC4Lang: %s", mConfigParams[index]);
-            strncpy(mAC4Lang, mConfigParams[index], 3);
+            ALOGI("-lang AC4Lang: %s", mRuntimeConfigParams[index]);
+            strncpy(mAC4Lang, mRuntimeConfigParams[index], 3);
         } else if (strcmp(opt, "lang2") == 0) {
-            ALOGI("-lang2 AC4Lang2: %s", mConfigParams[index]);
-            strncpy(mAC4Lang2, mConfigParams[index], 3);
+            ALOGI("-lang2 AC4Lang2: %s", mRuntimeConfigParams[index]);
+            strncpy(mAC4Lang2, mRuntimeConfigParams[index], 3);
         } else if (strcmp(opt, "ac4_de") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 12)) {
                 ALOGI("-ac4_de mAC4De: %d", val);
                 mAC4De = val;
             }
         } else if (strcmp(opt, "ac4_pres_group_idx") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 510)) {
                 ALOGI("-ac4_pres_group_idx AC4PresGroupIdx: %d", val);
                 mAC4PresGroupIdx = val;
             }
         } else if (strcmp(opt, "ac4_short_prog_id") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if (val >= 0) {
                 ALOGI("-ac4_short_prog_id AC4ShortProgId: %d", val);
                 mAC4ShortProgId = val;
             }
         } else if (strcmp(opt, "dap_surround_decoder_enable") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
                 ALOGI("-dap_surround_decoder_enable DAPSurDecEnable: %d", val);
                 mDAPSurDecEnable = val;
             }
         } else if (strcmp(opt, "dap_drc") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
                 ALOGI("-dap_drc DAPDRCMode: %d", val);
                 mDAPDRCMode = val;
             }
         } else if (strcmp(opt, "dap_bass_enhancer") == 0) {
             int param[4];
-            if (sscanf(mConfigParams[index], "%d,%d,%d,%d",
+            if (sscanf(mRuntimeConfigParams[index], "%d,%d,%d,%d",
                 &param[0], &param[1], &param[2], &param[3]) == 4) {
                 if ((param[0] >= 0) && (param[0] <= 1))
                     DeviceDAPBassEnhancer.bass_enable = param[0];
@@ -1856,7 +1908,7 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
             }
         } else if (strcmp(opt, "dap_dialogue_enhancer") == 0) {
             int param[2];
-            if (sscanf(mConfigParams[index], "%d,%d",
+            if (sscanf(mRuntimeConfigParams[index], "%d,%d",
                 &param[0], &param[1]) == 2) {
                 if ((param[0] >= 0) && (param[0] <= 1))
                     ContentDAPDialogueEnhancer.de_enable = param[0];
@@ -1866,7 +1918,7 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
             }
         } else if (strcmp(opt, "dap_graphic_eq") == 0) {
             DAPGraphicEQ eq;
-            char *ptr = mConfigParams[index];
+            char *ptr = mRuntimeConfigParams[index];
             if (ms_get_int_from_str(&ptr, &eq.eq_enable) < 0)
                 goto eq_error;
             if (ms_get_int_from_str(&ptr, &eq.eq_nb_bands) < 0)
@@ -1883,7 +1935,7 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
             ALOGI("-dap_graphic_eq DeviceDAPGraphicEQ: %d %d", eq.eq_enable, eq.eq_nb_bands);
         } else if (strcmp(opt, "dap_ieq") == 0) {
             DAPIEQ ieq;
-            char *ptr = mConfigParams[index];
+            char *ptr = mRuntimeConfigParams[index];
             if (ms_get_int_from_str(&ptr, &ieq.ieq_enable) < 0)
                 goto eq_error;
             if (ms_get_int_from_str(&ptr, &ieq.ieq_amount) < 0)
@@ -1901,14 +1953,14 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
             ContentDAPIEQ = ieq;
             ALOGI("-dap_ieq: %d %d %d", ieq.ieq_enable, ieq.ieq_amount, ieq.ieq_nb_bands);
         } else if (strcmp(opt, "dap_gains") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= -2080) && (val <= 480)) {
                 ALOGI("-dap_gains: %d", val);
                 mDAPGains = val;
             }
         } else if (strcmp(opt, "dap_leveler") == 0) {
             int param[2];
-            if (sscanf(mConfigParams[index], "%d,%d",
+            if (sscanf(mRuntimeConfigParams[index], "%d,%d",
                 &param[0], &param[1]) == 2) {
                 if ((param[0] >= 0) && (param[0] <= 2))
                     ContentDAPLeveler.leveler_enable = param[0];
@@ -1917,14 +1969,14 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
                 ALOGI("-dap_leveler: %d %d", param[0], param[1]);
             }
         } else if (strcmp(opt, "dap_mi_steering") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
                 ContentDAPMISteering.mi_enable = val;
                 ALOGI("-dap_mi_steering: %d", val);
             }
         } else if (strcmp(opt, "dap_surround_virtualizer") == 0) {
             int param[2];
-            if (sscanf(mConfigParams[index], "%d,%d",
+            if (sscanf(mRuntimeConfigParams[index], "%d,%d",
                 &param[0], &param[1]) == 2) {
                 if ((param[0] >= 0) && (param[0] <= 2))
                     DeviceDAPSurroundVirtualizer.virtualizer_enable = param[0];
@@ -1933,19 +1985,31 @@ char **DolbyMS12ConfigParams::UpdateDolbyMS12RuntimeConfigParams(int *argc, char
                 ALOGI("-dap_surround_virtualizer: %d %d", param[0], param[1]);
             }
         } else if (strcmp(opt, "atmos_lock") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             mAtmosLock = val ? true : false;
             ALOGI("-atmos_lock: %d", mAtmosLock);
         } else if (strcmp(opt, "chmod_locking") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             if ((val >= 0) && (val <= 1)) {
                 mLockingChannelModeENC = val;
                 ALOGI("-chmod_locking: %d", val);
             }
         } else if (strcmp(opt, "full_dap_disable") == 0) {
-            val = atoi(mConfigParams[index]);
+            val = atoi(mRuntimeConfigParams[index]);
             mFullDAPDisable = val ? true : false;
             ALOGI("-full_dap_disable: %d", mFullDAPDisable);
+        } else if (strcmp(opt, "sys_prim_mixgain") == 0) {
+            int param[3];
+            if (sscanf(mRuntimeConfigParams[index], "%d,%d,%d",
+                &param[0], &param[1], &param[2]) == 3) {
+                if ((param[0] >= -12288) && (param[0] <= 0))
+                    mSysPrimMixGain.target = param[0];
+                if ((param[1] >= 0) && (param[1] <= 60000))
+                    mSysPrimMixGain.duration = param[1];
+                if ((param[2] >= 0) && (param[2] <= 3))
+                    mSysPrimMixGain.shape = param[2];
+                ALOGI("-sys_prim_mixgain: %d %d %d", param[0], param[1], param[2]);
+            }
         }
 
 eq_error:
@@ -1954,7 +2018,7 @@ eq_error:
     }
 
     ALOGV("-%s()", __FUNCTION__);
-    return mConfigParams;
+    return mRuntimeConfigParams;
 }
 
 #if 0
@@ -2035,24 +2099,54 @@ void DolbyMS12ConfigParams::CleanupConfigParams(char **ConfigParams, int max_raw
     return ;
 }
 
-void DolbyMS12ConfigParams::ResetConfigParams(void)
+void DolbyMS12ConfigParams::ResetConfigParams(int arg_type)
 {
     ALOGV("+%s() line %d\n", __FUNCTION__, __LINE__);
+    char **ConfigParams;
+
+    switch (arg_type) {
+        case MS12_ARG_TYPE_MASTER:
+            ConfigParams = mConfigParams;
+            break;
+        case MS12_ARG_TYPE_RUNTIME:
+            ConfigParams = mRuntimeConfigParams;
+            break;
+        case MS12_ARG_TYPE_CODEC:
+            ConfigParams = mCodecConfigParams;
+            break;
+        case MS12_ARG_TYPE_ENC:
+            ConfigParams = mEncConfigParams;
+            break;
+    }
     int i = 0;
-    if (mConfigParams) {
+    if (ConfigParams) {
         for (i = 0; i < MAX_ARGC; i++) {
-            if (mConfigParams[i]) {
-                memset(mConfigParams[i], 0, MAX_ARGV_STRING_LEN);
+            if (ConfigParams[i]) {
+                memset(ConfigParams[i], 0, MAX_ARGV_STRING_LEN);
             }
         }
     }
-    mParamNum = 0;//reset the input params
-    mHasAssociateInput = false;
+
+    switch (arg_type) {
+        case MS12_ARG_TYPE_MASTER:
+            mParamNum = 0;
+            break;
+        case MS12_ARG_TYPE_RUNTIME:
+            mRuntimeParamNum = 0;
+            break;
+        case MS12_ARG_TYPE_CODEC:
+            mCodecParamNum = 0;
+            break;
+        case MS12_ARG_TYPE_ENC:
+            mEncParamNum = 0;
+            break;
+    }
     mHasSystemInput = false;
+    mHasAssociateInput = false;
     mMainFlags = 1;
-    ALOGV("%s() mHasAssociateInput %d mHasSystemInput %d\n", __FUNCTION__, mHasAssociateInput, mHasSystemInput);
+
     ALOGV("-%s() line %d\n", __FUNCTION__, __LINE__);
-    return ;
+    return;
 }
 
 }//end android

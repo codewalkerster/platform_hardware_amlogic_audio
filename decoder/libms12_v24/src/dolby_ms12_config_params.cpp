@@ -262,12 +262,12 @@ extern "C" char *dolby_ms12_query_dap_parameters(const char *key)
         return NULL;
     }
 }
-extern "C" char **dolby_ms12_config_params_get_config_params(int *argc)
+extern "C" char **dolby_ms12_config_params_get_config_params(int *argc, int arg_type)
 {
     ALOGV("%s()\n", __FUNCTION__);
     android::DolbyMS12ConfigParams *config_param = getInstance();
     if (config_param) {
-        return config_param->GetDolbyMS12ConfigParams(argc);
+        return config_param->GetDolbyMS12ConfigParams(argc, arg_type);
     } else {
         return NULL;
     }
@@ -362,12 +362,12 @@ extern "C" audio_channel_mask_t dolby_ms12_config_params_get_dolby_config_output
     }
 }
 
-extern "C" void dolby_ms12_config_params_reset_config_params(void)
+extern "C" void dolby_ms12_config_params_reset_config_params(int arg_type)
 {
     ALOGV("%s()\n", __FUNCTION__);
     android::DolbyMS12ConfigParams *config_param = getInstance();
     if (config_param) {
-        config_param->ResetConfigParams();
+        config_param->ResetConfigParams(arg_type);
     }
 }
 

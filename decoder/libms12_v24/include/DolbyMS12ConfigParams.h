@@ -41,6 +41,10 @@
 #define DEFAULT_DUMMY2_DDP_FILE_NAME "dummy.ac3"
 #define DEFAULT_DAP_TUNING_FILE_NAME "/vendor/etc/ms12_tuning.dat"
 
+#define MS12_ARG_TYPE_MASTER   0
+#define MS12_ARG_TYPE_RUNTIME  1
+#define MS12_ARG_TYPE_CODEC    2
+#define MS12_ARG_TYPE_ENC      3
 
 #ifdef __cplusplus
 namespace android
@@ -98,7 +102,7 @@ public:
     virtual int SetDAPDeviceSwitches(char **ConfigParams, int *row_index, int is_runtime);
     virtual int SetDAPContentSwitches(char **ConfigParams, int *row_index);
     virtual char *QueryDapParameters(const char *key);
-    virtual char **GetDolbyMS12ConfigParams(int *argc);
+    virtual char **GetDolbyMS12ConfigParams(int *argc, int arg_type);
 #if 0
     virtual char **GetDolbyMS12RuntimeConfigParams(int *argc);
 #endif
@@ -124,7 +128,7 @@ public:
     {
         return mDolbyMS12OutChannelMask[MS12_INPUT_MAIN];
     }
-    virtual void ResetConfigParams(void);
+    virtual void ResetConfigParams(int arg_type);
     //associate flags
     virtual void setAssociateFlag(bool flag)
     {
@@ -598,6 +602,9 @@ private:
     // static android::Mutex mLock;
     // audio_devices_t mAudioSteamOutDevices;
     int mParamNum;
+    int mRuntimeParamNum;
+    int mCodecParamNum;
+    int mEncParamNum;
 
     //dolby ms12 input
     audio_output_flags_t mAudioOutFlags;
@@ -608,7 +615,9 @@ private:
     int mDolbyMS12OutConfig;
     int mDolbyMS12OutSampleRate;
     char **mConfigParams;//[MAX_ARGC][MAX_ARGV_STRING_LEN];
-
+    char **mRuntimeConfigParams;//[MAX_ARGC][MAX_ARGV_STRING_LEN];
+    char **mCodecConfigParams;//[MAX_ARGC][MAX_ARGV_STRING_LEN];
+    char **mEncConfigParams;//[MAX_ARGC][MAX_ARGV_STRING_LEN];
 
     // bool mMultiOutputFlag;
     //bool mLowComplexityMode = false;

@@ -85,6 +85,12 @@ struct dolby_ms12_desc {
     //audio_policy_forced_cfg_t force_use;
     int dolby_ms12_init_argc;
     char **dolby_ms12_init_argv;
+    int dolby_ms12_runtime_argc;
+    char **dolby_ms12_runtime_argv;
+    int dolby_ms12_codec_argc;
+    char **dolby_ms12_codec_argv;
+    int dolby_ms12_enc_argc;
+    char **dolby_ms12_enc_argv;
     void *dolby_ms12_ptr;
     int dolby_ms12_out_max_size;
     /*

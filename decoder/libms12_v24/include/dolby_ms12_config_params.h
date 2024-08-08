@@ -118,7 +118,7 @@ char *dolby_ms12_query_dap_parameters(const char *key);
 
  * @return the char **argv
  */
-char **dolby_ms12_config_params_get_config_params(int *argc);
+char **dolby_ms12_config_params_get_config_params(int *argc, int arg_type);
 
 #if 0
 /**
@@ -173,7 +173,7 @@ audio_channel_mask_t dolby_ms12_config_params_get_dolby_config_output_channelmas
 /**
  * @brief reset the dolby_ms12_init() input params
  */
-void dolby_ms12_config_params_reset_config_params(void);
+void dolby_ms12_config_params_reset_config_params(int arg_type);
 
 /**
  * @brief cleanup the ms12 config params
