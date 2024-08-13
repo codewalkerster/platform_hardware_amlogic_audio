@@ -29,8 +29,8 @@
 #define RESAMPLE_FRAME_NUM (1024)  // One period, Unit: frame
 #define OUTPUT_ALSA_SAMPLERATE (48000)
 
-/* VirtualX requires an aligned block(256) as a processing unit. */
-#define ALIGN_FRAME_NUM (256) // Unit: frame
+/* VirtualX and DTSX requires an aligned block(256) as a processing unit,but DTSX requires an even number of processing units. */
+#define ALIGN_FRAME_NUM (512) // Unit: frame
 
 static audio_resample_func_t * get_resample_function(resample_type_t resample_type)
 {
