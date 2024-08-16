@@ -585,10 +585,21 @@ bool Check_VX_lib(void)
         ALOGE("%s, fail to dlopen %s(%s)", __func__, VIRTUALX_LICENSE_LIB_PATH, dlerror());
         return false;
     } else {
-        ALOGD("%s, success to dlopen %s", __func__, VIRTUALX_LICENSE_LIB_PATH);
+        void *testSymbol = NULL;
+#ifdef DTS_VX_V4_ENABLE
+        testSymbol = dlsym(h_libvx_handle, "VX_V4_init");
+#else
+        testSymbol = dlsym(h_libvx_handle, "VX_init_api");
+#endif
         dlclose(h_libvx_handle);
         h_libvx_handle = NULL;
-        return true;
+        if (testSymbol) {
+            ALOGD("%s, success to load %s", __func__, VIRTUALX_LICENSE_LIB_PATH);
+            return true;
+        } else {
+            ALOGD("%s, fail to load %s", __func__, VIRTUALX_LICENSE_LIB_PATH);
+            return false;
+        }
     }
 }
 

@@ -4927,11 +4927,6 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         sprintf(temp_buf, "post_gain = %f %f %f", AmplToDb(adev->eq_data.p_gain.speaker), AmplToDb(adev->eq_data.p_gain.spdif_arc),
                 adev->eq_data.p_gain.headphone);
         return strdup(temp_buf);
-    } else if (strstr(keys, "dolby_ms12_enable")) {
-        int ms12_enable = (eDolbyMS12Lib == adev->dolby_lib_type_last);
-        ALOGI("ms12_enable :%d", ms12_enable);
-        sprintf(temp_buf, "dolby_ms12_enable=%d", ms12_enable);
-        return  strdup(temp_buf);
     } else if (strstr(keys, "dolby_decode_enable")) {
         int dolby_decode_enable = (adev->dolby_decode_enable > 0);
         AM_LOGI("dolby_decode_enable :%d", dolby_decode_enable);
@@ -5055,6 +5050,16 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
 #endif
         ALOGV("temp_buf %s", temp_buf);
         return strdup(temp_buf);
+    } else if (strstr(keys, "dts_x_enable")) {
+        int dtsx_enable = (eDTSXLib == adev->dts_lib_type);
+        ALOGI("dtsx_enable :%d", dtsx_enable);
+        sprintf(temp_buf, "dts_x_enable=%d", dtsx_enable);
+        return  strdup(temp_buf);
+    } else if (strstr(keys, "Config")) {
+        char *temp_params = get_parameters_from_json_config(&adev->board_config, keys);
+        if (temp_params != NULL) {
+            return temp_params;
+        }
     }
 
     return strdup("");
@@ -9389,6 +9394,9 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->debug_flag = aml_audio_get_debug_flag();
     adev->count = 1;
     aml_audio_board_config_init(&adev->board_config);
+    if (adev->dolby_lib_type_last != eDolbyMS12Lib) {
+        adev->board_config.dolby_ms12_audio_config = -1;
+    }
     /*set audio hal process bitwidth*/
     adev_config_process_bitwidth(adev);
 

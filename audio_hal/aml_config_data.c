@@ -54,6 +54,18 @@ int aml_get_jason_int_value(char* key,int defvalue)
     return value;
 }
 
+const char *aml_get_jason_str_value(char* key, const char* defvalue)
+{
+    if (audio_config_jason) {
+        cJSON *temp = cJSON_GetObjectItem(audio_config_jason, key);
+        aml_printf_cJSON(key, temp);
+        if (temp) {
+            return temp->valuestring;
+        }
+    }
+    return defvalue;
+}
+
 bool aml_get_codec_support(char* aformat)
 {
     cJSON *item = NULL;
@@ -125,6 +137,100 @@ void aml_audio_board_config_init(struct audio_board_config *config)
         config->sbr_spk_ott_hbr_same_tdm = aml_get_jason_int_value("SBR_Speaker_OTT_HBR_Same_TDM", 0);
         /* get config of alsa device id for builtinmic, default -1 for using pdm device */
         config->builtinmic_alsa_dev_id = aml_get_jason_int_value("Builtinmic_Alsa_Dev_Id", -1);
+        config->audio_process_bitwidth    = aml_get_jason_int_value("Audio_Process_BitWidth", 16);
+        /* Start: Audio Setting UI/Core relevant configurations */
+        /*if not support MS12, to change Dolby_MS12_Audio_Config with "-1" in adev_open() */
+        const char* str_val = aml_get_jason_str_value("Dolby_MS12_Audio_Config", "Y");
+        if (strcasestr(str_val, "Z") != NULL) {
+            config->dolby_ms12_audio_config = MS12_CONFIG_Z;
+        } else if (strcasestr(str_val, "X") != NULL) {
+            config->dolby_ms12_audio_config = MS12_CONFIG_X;
+        } else {
+            config->dolby_ms12_audio_config = MS12_CONFIG_Y;
+        }
+        config->dts_virtualx_audio_config = aml_get_jason_int_value("Dts_Virtualx_Audio_Config", 0);
+        config->effect_EQ_Audio_Config = aml_get_jason_int_value("Effect_EQ_Audio_Config", 0);
+        config->effect_Balance_Audio_Config = aml_get_jason_int_value("Effect_Balance_Audio_Config", 0);
+        config->effect_TrebleBass_Audio_Config = aml_get_jason_int_value("Effect_TrebleBass_Audio_Config", 0);
+        config->effect_VirtualSurround_Audio_Config = aml_get_jason_int_value("Effect_VirtualSurround_Audio_Config", 0);
+        config->effect_DPE_Audio_Config = aml_get_jason_int_value("Effect_DPE_Audio_Config", 0);
+        config->dolby_DRC_Audio_Config = aml_get_jason_int_value("Dolby_DRC_Audio_Config", 0);
+        config->dts_DRC_Audio_Config = aml_get_jason_int_value("Dts_DRC_Audio_Config", 0);
+        config->audio_Latency_Config = aml_get_jason_int_value("Audio_Latency_Config", 0);
+        config->force_DDP_Config = aml_get_jason_int_value("Force_DDP_Config", 0);
+        config->passthrough_Audio_Config = aml_get_jason_int_value("Passthrough_Audio_Config", 0);
+        config->engineer_Mode_Audio_Config = aml_get_jason_int_value("Engineer_Mode_Audio_Config", 0);
+        /* End: Audio Setting UI/Core relevant configurations */
+    } else {
+        ALOGW("%s() Fail!", __func__);
     }
+}
+
+char * get_parameters_from_json_config(struct audio_board_config *board_config, const char *keys)
+{
+    char temp_buf[AUDIO_HAL_CHAR_MAX_LEN] = {0};
+
+    if (!strcmp(keys, "Dolby_MS12_Audio_Config")) {
+        sprintf(temp_buf, "Dolby_MS12_Audio_Config=%s",
+            (board_config->dolby_ms12_audio_config == MS12_CONFIG_Z ? "Z" :\
+            (board_config->dolby_ms12_audio_config == MS12_CONFIG_Y ? "Y" :\
+            (board_config->dolby_ms12_audio_config == MS12_CONFIG_X ? "X" :"N"))));
+        ALOGV("%s() temp_buf=%s",__func__, temp_buf);
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Dts_Virtualx_Audio_Config")) {
+        sprintf(temp_buf, "Dts_Virtualx_Audio_Config=%s",
+            (((board_config->dts_virtualx_audio_config == 1) && Check_VX_lib()) ? "1" : "0"));
+        ALOGV("%s() temp_buf=%s",__func__, temp_buf);
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Effect_EQ_Audio_Config")) {
+        sprintf(temp_buf, "Effect_EQ_Audio_Config=%s",
+            (board_config->effect_EQ_Audio_Config == 1 ? "1" :\
+            (board_config->effect_EQ_Audio_Config == 5 ? "5" :\
+            (board_config->effect_EQ_Audio_Config == 7 ? "7" :\
+            (board_config->effect_EQ_Audio_Config == 9 ? "9" : "0")))));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Effect_Balance_Audio_Config")) {
+        sprintf(temp_buf, "Effect_Balance_Audio_Config=%s",
+            (board_config->effect_Balance_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Effect_TrebleBass_Audio_Config")) {
+        sprintf(temp_buf, "Effect_TrebleBass_Audio_Config=%s",
+            (board_config->effect_TrebleBass_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Effect_VirtualSurround_Audio_Config")) {
+        sprintf(temp_buf, "Effect_VirtualSurround_Audio_Config=%s",
+            (board_config->effect_VirtualSurround_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Effect_DPE_Audio_Config")) {
+        sprintf(temp_buf, "Effect_DPE_Audio_Config=%s",
+            (board_config->effect_DPE_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Dolby_DRC_Audio_Config")) {
+        sprintf(temp_buf, "Dolby_DRC_Audio_Config=%s",
+            (board_config->dolby_DRC_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Dts_DRC_Audio_Config")) {
+        sprintf(temp_buf, "Dts_DRC_Audio_Config=%s",
+            (board_config->dts_DRC_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Audio_Latency_Config")) {
+        sprintf(temp_buf, "Audio_Latency_Config=%s",
+            (board_config->audio_Latency_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Force_DDP_Config")) {
+        sprintf(temp_buf, "Force_DDP_Config=%s",
+            (board_config->force_DDP_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Passthrough_Audio_Config")) {
+        sprintf(temp_buf, "Passthrough_Audio_Config=%s",
+            (board_config->passthrough_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Engineer_Mode_Audio_Config")) {
+        sprintf(temp_buf, "Engineer_Mode_Audio_Config=%s",
+            (board_config->engineer_Mode_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    }
+
+    return NULL;
 }
 

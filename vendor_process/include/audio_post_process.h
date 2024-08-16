@@ -130,6 +130,12 @@ int get_aml_dts_effect_param(struct aml_native_postprocess *native_postprocess, 
 bool is_vendor_support_libvx(struct aml_native_postprocess *native_postprocess);
 
 /*
+ * @brief Combine Check_VX_lib and "Dts_Virtualx_Audio_Config" defined in the JSON
+ * to determine if the platform supports Virtualx.
+*/
+bool Check_VX_lib(void);
+
+/*
  *@brief audio_post_process
  * source_format:
  *      input effect chain data format, support PCM16, PCM32

@@ -37,10 +37,11 @@ struct audio_board_config {
     int ms12_output_mask;
     int DTS_output_ch;
     int cpux_affinity_support;
-    /*
+    int audio_process_bitwidth;   /*this control the bidwidth of audio hal processing*/
+     /*
       0: Soundbar, Speaker(8ch-PCM) vs HDMI(MAT), HBR do not use a same TDM.
       1: Soundbar, Speaker(8ch-PCM) vs HDMI(MAT), HBR use a same TDM.
-    */
+     */
     int sbr_spk_ott_hbr_same_tdm;
 
     /*
@@ -51,11 +52,82 @@ struct audio_board_config {
       >= 0: specific alsa device id for builtinmic
     */
     int builtinmic_alsa_dev_id;
+    /*
+      -1: Not support MS12
+      0: config with X
+      1: config with Y
+      2: config with Z
+    */
+    int dolby_ms12_audio_config;
+    /*
+      0: off virtualx
+      1: on virtualx
+    */
+    int dts_virtualx_audio_config;
+    /*
+      0: off HPEQ
+      1/5: on 5 band HPEQ
+      7: on 5 band HPEQ
+      9: on 9 band HPEQ
+    */
+    int effect_EQ_Audio_Config;
+    /*
+      0: off Balance
+      1: on Balance
+    */
+    int effect_Balance_Audio_Config;
+    /*
+      0: off Balance
+      1: on Balance
+    */
+    int effect_TrebleBass_Audio_Config;
+    /*
+      0: off VirtualSurround
+      1: on VirtualSurround
+    */
+    int effect_VirtualSurround_Audio_Config;
+    /*
+      0: off DPE
+      1: on DPE
+    */
+    int effect_DPE_Audio_Config;
+    /*
+      0: hide Dolby DRC UI
+      1: Display Dolby DRC UI
+    */
+    int dolby_DRC_Audio_Config;
+    /*
+      0: hide DTS DRC UI
+      1: display DTS DRC UI
+    */
+    int dts_DRC_Audio_Config;
+    /*
+      0: hide audio latency UI
+      1: display audio latency UI
+    */
+    int audio_Latency_Config;
+    /*
+      0: hide force DDP UI
+      1: display force DDP UI
+    */
+    int force_DDP_Config;
+    /*
+      Advanced -> Select format -> Sub UI: Passthrough
+      0: hide passthrough UI
+      1: display passthrough under "Select format"
+    */
+    int passthrough_Audio_Config;
+    /*
+      0: hide engineer Mode UI
+      1: display engineer Mode UI
+    */
+    int engineer_Mode_Audio_Config;
 };
 
 int aml_audio_config_parser();
 int aml_get_jason_int_value(char* key,int defvalue);
 bool aml_get_codec_support(char* aformat);
 void aml_audio_board_config_init(struct audio_board_config *config);
+char * get_parameters_from_json_config(struct audio_board_config *board_config, const char *keys);
 
 #endif

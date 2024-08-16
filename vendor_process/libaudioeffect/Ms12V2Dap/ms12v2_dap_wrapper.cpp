@@ -790,6 +790,15 @@ int DAPV2_getParameter(DAPV2Context *pContext, void *pParam, size_t *pValueSize,
         *(uint32_t *) pValue = value;
         ALOGD("%s: get DAP misteering is %d", __FUNCTION__, value);
         break;
+    case DAP_EFFECT_ENABLE:
+        if (*pValueSize < sizeof(uint32_t)) {
+            *pValueSize = 0;
+            return -EINVAL;
+        }
+        value = (int32_t)pContext->dap_effect_enable;
+        *(uint32_t *) pValue = value;
+        ALOGD("%s: get DAP effect enable: %d", __FUNCTION__, value);
+        break;
     default:
         ALOGE("%s: unknown param %d", __FUNCTION__, param);
         return -EINVAL;

@@ -291,6 +291,12 @@ typedef enum DEVICE_TYPE {
     BDS = 3
 } device_type_t;
 
+enum ms12_config_leveler {
+    MS12_CONFIG_Y = 0, /*not support dap*/
+    MS12_CONFIG_X = 1, /*support dap, but not support atmos*/
+    MS12_CONFIG_Z = 2, /*support dap, and support atmos*/
+};
+
 struct audio_hw_resource_mgr;
 struct sys_resource_manager_handler;
 
