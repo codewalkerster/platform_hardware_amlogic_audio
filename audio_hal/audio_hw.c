@@ -3817,7 +3817,6 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         ALOGI("%s restore dolby lib =%d", __func__, adev->dolby_lib_type);
     }
     pthread_mutex_unlock(&out->lock);
-    pthread_mutex_destroy(&out->lock);
 
     if (is_output_device_muted(adev, AUDIO_DEVICE_OUT_SPEAKER, true)) {
         set_output_device_mute(adev, AUDIO_DEVICE_OUT_SPEAKER, false, true);
@@ -3825,6 +3824,8 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
 
     AM_LOGI("io %d: out:%p exit ------", out->io_handle, out);
 
+    // for aml_stream_timer_pause_callback is async function,
+    // should be very careful when you try to free output stream resource.
     wait_cnt = 20;
     while (wait_cnt > 0) {
         pthread_mutex_lock(&adev->stream_release_lock);
@@ -3840,6 +3841,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     if (wait_cnt <= 0) {
         AM_LOGE("wait callback finish fail !");
     }
+    pthread_mutex_destroy(&out->lock);
 
     pthread_mutex_lock(&adev->stream_release_lock);
     if (out->hwsync) {
