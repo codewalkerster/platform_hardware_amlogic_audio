@@ -172,7 +172,7 @@ void *input_stream_do_resample(struct audio_stream_in *stream, void *buffer, int
         if (cur_samplerate != output_sr) {
             audio_resample_config_t cfg = {
                 .aformat = audio_format_from_pcm_format(in->config.format),
-                .channels = in->config.channels,
+                .channels = 2,
                 .input_sr = cur_samplerate,
                 .output_sr = output_sr,
             };
