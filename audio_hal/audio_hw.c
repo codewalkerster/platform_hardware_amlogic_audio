@@ -5003,24 +5003,9 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
     return strdup("");
 }
 
-static int adev_init_later(struct aml_audio_device *adev, struct aml_stream_out *aml_out, audio_output_flags_t flags)
+static int adev_config_process_bitwidth(struct aml_audio_device *adev)
 {
-    audio_format_t primaryOutFormat = get_primary_out_format(adev);
-
-    if (!aml_out) {
-        AM_LOGE("fail, flags=0x%x aml_out=NULL !", flags);
-        return -1;
-    }
-   /*When an XTS test item split is run on multiple devices, a submix may not be created, resulting in a crash*/
-    if ((adev->useSubMix && adev->sm) || primaryOutFormat) {
-        return 0;
-    }
-    primaryOutFormat = aml_out->hal_format;
-    uint32_t primaryOutRate = aml_out->hal_rate;
-
-    if (primaryOutFormat != AUDIO_FORMAT_PCM_16_BIT && primaryOutFormat != AUDIO_FORMAT_PCM_32_BIT) {
-        primaryOutFormat = AUDIO_FORMAT_PCM_16_BIT;
-    }
+    audio_format_t primaryOutFormat = AUDIO_FORMAT_PCM_16_BIT;
     set_primary_out_format(adev, primaryOutFormat);
     primaryOutFormat = get_primary_out_format(adev);
 
@@ -5039,7 +5024,7 @@ static int adev_init_later(struct aml_audio_device *adev, struct aml_stream_out 
         dca_set_out_ch_internal(0);
     }
 
-    AM_LOGI("AAAA primaryOutFormat:%s primaryOutRate:%d", audioFormat2Str(primaryOutFormat), primaryOutRate);
+    AM_LOGI("AAAA primaryOutFormat:%s", audioFormat2Str(primaryOutFormat));
 
     return 0;
 }
@@ -7761,8 +7746,6 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
     aml_out->card = adev->card;
     aml_out->hwsync_parsed_frames_sum = 0;
 
-    adev_init_later(adev, aml_out, flags);
-
     if (adev->useSubMix) {
         // In V1.1, android out lpcm stream and hwsync pcm stream goes to aml mixer,
         // tv source keeps the original way.
@@ -9320,6 +9303,8 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->debug_flag = aml_audio_get_debug_flag();
     adev->count = 1;
     aml_audio_board_config_init(&adev->board_config);
+    /*set audio hal process bitwidth*/
+    adev_config_process_bitwidth(adev);
 
     if (pthread_mutex_init(&adev->bitstream_lock, NULL)) {
         ALOGE("%s pthread_mutex_init(bitstream_lock) failed", __func__);
