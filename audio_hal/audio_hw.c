@@ -825,6 +825,7 @@ static int out_flush (struct audio_stream_out *stream)
 
     AM_LOGI("io %d: out:%p", out->io_handle, stream);
     out->write_count = 0;
+    out->flush_time = aml_audio_get_systime() / 1000; //us --> ms
     /* VTS: a stream should always succeed to flush
      * hardware/libhardware/include/hardware/audio.h: Stream must already
      * be paused before calling flush(), we check and complain this case
@@ -881,11 +882,24 @@ static int out_flush (struct audio_stream_out *stream)
     }
     if (out->aml_dec && out->total_write_size) {
         aml_decoder_flush(out->aml_dec);
-        if (adev->is_netflix && adev->dolby_decode_enable && !audio_is_linear_pcm(out->hal_format)) {
+        if (adev->is_netflix && !audio_is_linear_pcm(out->hal_format)) {
             // NTS PLAY-101-TC20
             // release decoder : to discard decoder internal buffer
             aml_decoder_release(out->aml_dec);
             out->aml_dec = NULL;
+
+            uint64_t curr_time_ms = aml_audio_get_systime() / 1000;
+            if (curr_time_ms > out->pause_time) {
+                int sleep_time_ms = 0;
+                uint64_t diff_time_ms = curr_time_ms - out->pause_time;
+                // Pretend we are consuming the remaining data, then audiotrack switch time will exceed 200ms,
+                // and eleven will detect event "No data received for 200ms, switching to fake source".
+                if (diff_time_ms < 32) {
+                    sleep_time_ms = 32 - diff_time_ms;
+                    AM_LOGI("time_ms %" PRId64 " between pause and flush, sleep %d ms", diff_time_ms, sleep_time_ms);
+                    usleep(sleep_time_ms * 1000);
+                }
+            }
         }
     }
 
@@ -5969,7 +5983,7 @@ void aml_stream_timer_pause_callback(union sigval sigv)
 static void submix_post_sleep(struct aml_stream_out *aml_out)
 {
     uint64_t curr_time_us = 0;
-    struct aml_audio_device *adev = (aml_out == NULL ? aml_out->dev : NULL);
+    struct aml_audio_device *adev = (aml_out != NULL ? aml_out->dev : NULL);
 
     if (aml_out == NULL || adev == NULL || !adev->useSubMix) {
         return;
@@ -6122,6 +6136,25 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, const void *buf
             aml_hw_mixer_init(&adev->hw_mixer);
         }
         pthread_mutex_unlock(&adev->lock);
+
+        if (adev->is_netflix && eDolbyDcvLib == adev->dolby_lib_type) {
+            if (!audio_is_linear_pcm(aml_out->hal_format) && aml_out->total_write_size) {
+                uint64_t curr_time_ms = aml_audio_get_systime() / 1000;
+                AM_LOGI("time_ms %" PRId64 ", pause_time %" PRId64 ", flush_time %" PRId64 "",
+                    curr_time_ms, aml_out->pause_time, aml_out->flush_time);
+                if ((curr_time_ms > aml_out->pause_time) && (aml_out->flush_time >= aml_out->pause_time)) {
+                    int sleep_time_ms = 0;
+                    uint64_t diff_time_ms = curr_time_ms - aml_out->pause_time;
+                    // for case : eleven will detect event "No data received for 200ms, switching to fake source".
+                    // reduce the first audio data 32ms(ddp alsa start threshold is 42ms)
+                    if (diff_time_ms < 180) {
+                        sleep_time_ms = 180 - diff_time_ms;
+                        AM_LOGI("time_ms %" PRId64 " audiotrack switch, sleep %d ms", diff_time_ms, sleep_time_ms);
+                        usleep(sleep_time_ms * 1000);
+                    }
+                }
+            }
+        }
     }
     if (case_cnt > MAX_INPUT_STREAM_CNT) {
         ALOGE ("%s use mask %x,we do not support two direct stream output at the same time.TO CHECK CODE FLOW!!!!!!",__func__,adev->usecase_masks);

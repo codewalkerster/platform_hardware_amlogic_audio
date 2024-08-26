@@ -749,6 +749,7 @@ struct aml_stream_out {
 
     uint64_t write_time;
     uint64_t pause_time;
+    uint64_t flush_time;
     int write_count;
     bool is_dtscd;
     bool iec_check;
