@@ -782,9 +782,7 @@ void set_ms12_main_audio_mute(struct dolby_ms12_desc *ms12, bool b_mute, unsigne
         sprintf(parm, "%s %d,%d,%d", "-sys_prim_mixgain", 0, duration, 0);
     }
     if ((strlen(parm)) > 0 && ms12) {
-        pthread_mutex_lock(&ms12->main_lock);
         aml_ms12_update_runtime_params(ms12, parm);
-        pthread_mutex_unlock(&ms12->main_lock);
     }
     ms12->is_muted = b_mute;
     ALOGD("%s b_mute %d, duration %d ", __FUNCTION__, ms12->is_muted, duration);
@@ -4539,6 +4537,8 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
     }
 
     aml_ms12_main_decoder_close(ms12);
+    set_ms12_main_volume(ms12, 1.0f);
+    set_ms12_main_audio_mute(ms12, false, 0);
     set_ms12_set_main_start_threshold(ms12, 0);
     adev->ms12.main_input_fmt = AUDIO_FORMAT_INVALID;
     ms12->ms12_main_stream_out = NULL;
@@ -4559,9 +4559,6 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
             );
     }
     pthread_mutex_unlock(&ms12->main_lock);
-
-    //The function has mutex inside, needs to be called outside mutex.
-    set_ms12_main_audio_mute(ms12, false, 0);
 
     return 0;
 }
