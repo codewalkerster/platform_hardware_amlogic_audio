@@ -636,10 +636,8 @@ void set_ms12_dap_postgain(struct dolby_ms12_desc *ms12, int postgain)
     char parm[64] = "";
     sprintf(parm, "%s %d", "-dap_gains", postgain);
 
-    pthread_mutex_lock(&ms12->lock);
     if ((strlen(parm)) > 0 && ms12)
         aml_ms12_update_runtime_params(ms12, parm);
-    pthread_mutex_unlock(&ms12->lock);
 }
 
 void set_ms12_fade_pan
@@ -927,6 +925,7 @@ int get_the_dolby_ms12_prepared(
 
     ALOGI("\n+%s()", __FUNCTION__);
     pthread_mutex_lock(&ms12->lock);
+    pthread_mutex_lock(&ms12->main_lock);
     ALOGI("++%s(), locked", __FUNCTION__);
     ms12->optical_format = adev->optical_format;
     ms12->sink_format    = adev->sink_format;
@@ -1212,6 +1211,7 @@ int get_the_dolby_ms12_prepared(
         ALOGI("%s(), aml_out->output_speed %f", __FUNCTION__,aml_out->output_speed);
     }
     ALOGI("--%s(), locked", __FUNCTION__);
+    pthread_mutex_unlock(&ms12->main_lock);
     pthread_mutex_unlock(&ms12->lock);
 
     //update the runtime parameters after ms12 initialization is completed.
@@ -1304,6 +1304,7 @@ Err_Ms12_Config:
     aml_ms12_cleanup(ms12);
 Err_Timer_Create:
     aml_audio_timer_delete(ms12->ms12_timer_id);
+    pthread_mutex_unlock(&ms12->main_lock);
     pthread_mutex_unlock(&ms12->lock);
     return ret;
 }
@@ -1449,18 +1450,10 @@ int dolby_ms12_main_process(
         return 0;
     }
 
-    pthread_mutex_lock(&ms12->lock);
     pthread_mutex_lock(&ms12->main_lock);
     if (ms12->dolby_ms12_enable && !aml_out->is_ms12_main_decoder) {
         dolby_ms12_main_open(stream);
-        /* dynamically set the drc parameters mode/cut/boost */
-        //dynamic_set_dolby_ms12_drc_parameters(ms12);
     }
-    /*coverity[double_unlock]*/
-    pthread_mutex_unlock(&ms12->main_lock);
-    pthread_mutex_unlock(&ms12->lock);
-
-    pthread_mutex_lock(&ms12->main_lock);
 
     if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT) && audio_is_linear_pcm(aml_out->hal_internal_format)) {
         check_audio_level("ms12_main", buffer, bytes);

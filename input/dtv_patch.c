@@ -452,9 +452,7 @@ static int dtv_patch_handle_event(struct audio_hw_device *dev, int cmd, int val)
             ALOGI("advol_level set to %d\n", demux_info->advol_level);
             if ((eDolbyMS12Lib == adev->dolby_lib_type_last && ms12->dolby_ms12_enable) &&
                 (path_id == dtv_audio_instances->demux_index_working)) {
-                pthread_mutex_lock(&ms12->lock);
                 set_ms12_ad_vol(ms12, demux_info->advol_level);
-                pthread_mutex_unlock(&ms12->lock);
             }
             break;
         case AUDIO_DTV_PATCH_CMD_SET_AD_MIX_LEVEL:
@@ -468,10 +466,8 @@ static int dtv_patch_handle_event(struct audio_hw_device *dev, int cmd, int val)
             ALOGI("mixing_level set to %d\n", demux_info->mixing_level);
             if (eDolbyMS12Lib == adev->dolby_lib_type_last &&
                 (path_id == dtv_audio_instances->demux_index_working)) {
-                pthread_mutex_lock(&ms12->lock);
                 dolby_ms12_set_user_control_value_for_mixing_main_and_associated_audio(demux_info->mixing_level);
                 set_ms12_ad_mixing_level(ms12, demux_info->mixing_level);
-                pthread_mutex_unlock(&ms12->lock);
             }
             if (non_dolby_format(demux_info->ad_fmt)) {
                  //for shine ad menu dolby low -10 medium 0 high 10 match -6db 0db 6db
@@ -483,9 +479,7 @@ static int dtv_patch_handle_event(struct audio_hw_device *dev, int cmd, int val)
             ALOGI("media_presentation_id %d",demux_info->media_presentation_id);
             if (eDolbyMS12Lib == adev->dolby_lib_type_last && (demux_info->main_fmt == ACODEC_FMT_AC4 \
                 || (int)path_id == dtv_audio_instances->demux_index_working)) {
-                pthread_mutex_lock(&ms12->lock);
                 set_ms12_ac4_presentation_group_index(ms12, demux_info->media_presentation_id);
-                pthread_mutex_unlock(&ms12->lock);
             }
             break;
         case AUDIO_DTV_PATCH_CMD_SET_MEDIA_FIRST_LANG:
@@ -5519,11 +5513,9 @@ int out_set_audio_description_mix_level(struct audio_stream_out *stream, const f
             dmx_info->mixing_level = leveldB;
             if (eDolbyMS12Lib == adev->dolby_lib_type_last &&
                 (path_id == dtv_audio_instances->demux_index_working)) {
-                pthread_mutex_lock(&ms12->lock);
                 dolby_ms12_set_user_control_value_for_mixing_main_and_associated_audio(dmx_info->mixing_level);
                 set_ms12_ad_mixing_level(ms12, dmx_info->mixing_level);
                 /*coverity[double_unlock]*/
-                pthread_mutex_unlock(&ms12->lock);
             }
         }
     } else {

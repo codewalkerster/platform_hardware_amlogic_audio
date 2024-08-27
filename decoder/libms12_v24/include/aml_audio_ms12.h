@@ -100,6 +100,7 @@ struct dolby_ms12_desc {
     we need protect the risk situation
     */
     pthread_mutex_t main_lock;
+    pthread_mutex_t runtime_lock;
     pthread_t dolby_ms12_threadID;
     bool dolby_ms12_thread_exit;
     bool is_continuous_paused;

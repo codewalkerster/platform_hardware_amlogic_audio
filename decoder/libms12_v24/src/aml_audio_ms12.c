@@ -173,13 +173,13 @@ int aml_ms12_update_runtime_params(struct dolby_ms12_desc *ms12_desc, char *cmd)
 {
     ALOGV("+%s()\n", __FUNCTION__);
     int ret = -1;
-    int mutex_result = 0;
 
     if (!ms12_desc || !cmd) {
         ALOGE("%s[%d] parameter error", __func__, __LINE__);
         return ret;
     }
 
+    pthread_mutex_lock(&ms12_desc->runtime_lock);
 
     if (!ms12_desc->dolby_ms12_init_argv) {
         ms12_desc->dolby_ms12_init_argv = dolby_ms12_config_params_get_config_params(&ms12_desc->dolby_ms12_init_argc);
@@ -200,21 +200,16 @@ int aml_ms12_update_runtime_params(struct dolby_ms12_desc *ms12_desc, char *cmd)
                 (get_audio_associate_format() == AUDIO_FORMAT_MAT)) {
                 dolby_ms12_config_params_set_associate_flag(true);
             }
-            ms12_desc->dolby_ms12_init_argv = dolby_ms12_config_params_update_runtime_config_params(&ms12_desc->dolby_ms12_init_argc, cmd);
-            /*dolby_ms12_ptr should be in lock mode*/
-            mutex_result = pthread_mutex_trylock(&ms12_desc->lock);
+            ms12_desc->dolby_ms12_runtime_argv = dolby_ms12_config_params_update_runtime_config_params(&ms12_desc->dolby_ms12_runtime_argc, cmd);
             if (ms12_desc->dolby_ms12_ptr) {
                 ret = dolby_ms12_update_runtime_params(ms12_desc->dolby_ms12_ptr, ms12_desc->dolby_ms12_init_argc, ms12_desc->dolby_ms12_init_argv);
-            }
-            if (mutex_result == 0) {
-                /*we success lock it, now unlock it*/
-                pthread_mutex_unlock(&ms12_desc->lock);
             }
         } else {
             ret = 1;
             ms12_desc->dolby_ms12_init_argv = dolby_ms12_config_params_update_runtime_config_params(&ms12_desc->dolby_ms12_init_argc, cmd);
         }
     }
+    pthread_mutex_unlock(&ms12_desc->runtime_lock);
     ALOGV("-%s() ret %d\n", __FUNCTION__, ret);
     return ret;
 }
@@ -224,7 +219,9 @@ int aml_ms12_update_runtime_params_direct(struct dolby_ms12_desc *ms12_desc, int
     ALOGI("+%s()\n", __FUNCTION__);
     int ret = -1;
     if (ms12_desc->dolby_ms12_ptr) {
+        pthread_mutex_lock(&ms12_desc->runtime_lock);
         ret = dolby_ms12_update_runtime_params(ms12_desc->dolby_ms12_ptr, argc, argv);
+        pthread_mutex_unlock(&ms12_desc->runtime_lock);
     }
     ALOGI("-%s() ret %d\n", __FUNCTION__, ret);
     return ret;
