@@ -17,6 +17,14 @@
 #ifndef _AUDIO_HW_PROFILE_H_
 #define _AUDIO_HW_PROFILE_H_
 
+#define AUDIO_PROFILE_ITEM_NUM (32)
+
+typedef struct {
+    audio_format_t audio_format;    /*the support format*/
+    bool enable;                    /*whether it is enabled for not*/
+} audio_manual_set_t;
+
+
 struct aml_arc_hdmi_desc;
 struct audio_hw_device;
 struct audio_stream;

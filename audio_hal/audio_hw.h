@@ -76,6 +76,8 @@
 #include "../automotive/bus_stream_out.h"
 #endif
 
+#include "audio_hw_profile.h"
+
 /* number of frames per period */
 /*
  * change DEFAULT_PERIOD_SIZE from 1024 to 512 for passing CTS
@@ -623,6 +625,8 @@ struct aml_audio_device {
     bool is_dtg_case;//dtg case at the UK
     void *zero_data_detect_list;
     pcm_record_delay_t aml_pcm_record_delay;
+    bool is_manual;
+    audio_manual_set_t manual_encoding_format[AUDIO_PROFILE_ITEM_NUM];  /*refer to AUDIO_ENCODING_FORMAT_E*/
 };
 
 struct meta_data {

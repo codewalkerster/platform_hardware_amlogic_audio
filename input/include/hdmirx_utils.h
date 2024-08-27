@@ -104,6 +104,7 @@ struct format_desc {
      * |        F37 – F35 = 0        |  34 = 0 |  33 = 1 |  32 = 1 |  31= 1  |  30= 1  | Dolby MAT profile 6
      */
     bool enforce_single_oa_element;//mat sad byte3 is 0x1
+    bool mat_truehd_only;   // ony support truehd, not support MAT PCM
 };
 
 /*

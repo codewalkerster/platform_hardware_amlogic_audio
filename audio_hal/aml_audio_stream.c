@@ -100,6 +100,7 @@ static audio_format_t get_sink_capability (struct aml_audio_device *adev)
     bool dd_is_support = hdmi_desc->dd_fmt.is_support;
     bool ddp_is_support = hdmi_desc->ddp_fmt.is_support;
     bool mat_is_support = hdmi_desc->mat_fmt.is_support;
+    bool mat_truehd_only = hdmi_desc->mat_fmt.mat_truehd_only;
 
     audio_format_t sink_capability = AUDIO_FORMAT_PCM_16_BIT;
 
@@ -112,44 +113,40 @@ static audio_format_t get_sink_capability (struct aml_audio_device *adev)
         char *cap = NULL;
         /*we should get the real audio cap, so we need it report the correct truehd info*/
         cap = (char *) get_hdmi_sink_cap_new (AUDIO_PARAMETER_STREAM_SUP_FORMATS,0, hdmi_desc, true);
+
+        dd_is_support = hdmi_desc->dd_fmt.is_support;
+        ddp_is_support = hdmi_desc->ddp_fmt.is_support;
+        mat_is_support = hdmi_desc->mat_fmt.is_support;
+        mat_truehd_only = hdmi_desc->mat_fmt.mat_truehd_only;
+
         if (cap) {
             /*
              * Dolby MAT 2.0/2.1 has low latency vs Dolby MAT 1.0(TRUEHD inside)
              * Dolby MS12 prefers to output MAT2.0/2.1.
              */
-            if ((strstr(cap, "AUDIO_FORMAT_MAT_2_0") != NULL) || (strstr(cap, "AUDIO_FORMAT_MAT_2_1") != NULL)) {
+            if (mat_is_support) {
                 sink_capability = AUDIO_FORMAT_MAT;
-            }
-            /*
-             * Dolby MAT 1.0(TRUEHD inside) vs DDP+DD
-             * Dolby MS12 prefers to output DDP.
-             * But set sink as TrueHD, then TrueHD can encoded with MAT encoder in Passthrough mode.
-             */
-            else if (strstr(cap, "AUDIO_FORMAT_MAT_1_0") != NULL) {
+            } else if (mat_truehd_only) {
                 sink_capability = AUDIO_FORMAT_DOLBY_TRUEHD;
             }
             /*
              * DDP vs DDP
              * Dolby MS12 prefers to output DDP.
              */
-            else if (strstr(cap, "AUDIO_FORMAT_E_AC3") != NULL) {
+            else if (ddp_is_support) {
                 sink_capability = AUDIO_FORMAT_E_AC3;
             }
             /*
              * DD vs PCM
              * Dolby MS12 prefers to output DD.
              */
-            else if (strstr(cap, "AUDIO_FORMAT_AC3") != NULL) {
+            else if (dd_is_support) {
                 sink_capability = AUDIO_FORMAT_AC3;
             }
             ALOGI ("%s mbox+dvb case sink_capability =  %#x\n", __FUNCTION__, sink_capability);
             aml_audio_free(cap);
             cap = NULL;
         }
-
-        dd_is_support = hdmi_desc->dd_fmt.is_support;
-        ddp_is_support = hdmi_desc->ddp_fmt.is_support;
-        mat_is_support = hdmi_desc->mat_fmt.is_support;
 
     } else {
         if (mat_is_support || hdmi_desc->mat_fmt.MAT_PCM_48kHz_only) {

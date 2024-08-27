@@ -817,7 +817,8 @@ static void dts_decoder_config_prepare(struct audio_stream_out *stream, aml_dec_
 
         if (is_STB(adev)) {
             dtsx_config->device_type = STB;
-            if (p_hdmi_descs->pcm_fmt.max_channels == 8 && adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_PCM) {
+            if (p_hdmi_descs->pcm_fmt.max_channels == 8 &&
+                (adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_PCM || (adev->is_manual && adev->sink_format == AUDIO_FORMAT_PCM_16_BIT))) {
                 ALOGI("%s sink support multi-ch pcm, and dtsx decoder bus0 output multi-ch pcm when stream channel != 2", __func__);
                 dtsx_config->sink_support_multich_pcm = true;
             }

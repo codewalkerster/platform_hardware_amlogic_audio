@@ -4010,6 +4010,39 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         }
         adev->digital_audio_mode = val;
 
+        adev->is_manual = false;
+        if (val == AML_DIGITAL_AUDIO_MODE_MANUAL) {
+            /*if we want the manual behavior is same with AUTO, use below code*/
+            //adev->digital_audio_format = AML_DIGITAL_AUDIO_MODE_AUTO;
+            /*if we want the manual behavior is same with BYPASS, use below code*/
+            adev->digital_audio_mode = AML_DIGITAL_AUDIO_MODE_AUTO;
+            adev->is_manual = true;
+            ALOGI("%s size=%d", __func__, sizeof(adev->manual_encoding_format));
+            memset(adev->manual_encoding_format, 0, sizeof(adev->manual_encoding_format));
+            ret = str_parms_get_str(parms, "hal_param_digital_audio_subformat", value, sizeof(value));
+            if (ret >= 0) {
+                char *saveptr = NULL;
+                int i = 0;
+                char *token = strtok_r(value, ",", &saveptr);
+                while (token != NULL) {
+                    adev->manual_encoding_format[i].enable = true;
+                    adev->manual_encoding_format[i++].audio_format = encodingFormat2AudioFormat(atoi(token));
+                    token = strtok_r(NULL, ",", &saveptr);
+                }
+                for (int j = 0; j < i; j++) {
+                    AM_LOGV("%s", audioFormat2Str(adev->manual_encoding_format[j].audio_format));
+                }
+                if (i == 0) {
+                    AM_LOGI("none format. ret:%d", ret);
+                }
+            } else {
+                AM_LOGI("always ret:%d", ret);
+                memset(adev->manual_encoding_format, 0, sizeof(adev->manual_encoding_format));
+            }
+        } else {
+            memset(adev->manual_encoding_format, 0, sizeof(adev->manual_encoding_format));
+        }
+
         /* only switch from/to bypass mode, update the DUT's EDID */
         if (adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_BYPASS ||
             adev->last_digital_audio_mode == AML_DIGITAL_AUDIO_MODE_BYPASS) {

@@ -17,6 +17,8 @@
 
 
 #define LOG_TAG "audio_hw_hal_profile"
+//#define LOG_NDEBUG 0
+
 #include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -209,7 +211,6 @@ AUDIO_CHANNEL_OUT_5POINT1POINT4"
 AUDIO_CHANNEL_OUT_5POINT1|\
 AUDIO_CHANNEL_OUT_7POINT1"
 
-#define AUDIO_PROFILE_ITEM_NUM               (32)
 #define AUDIO_PROFILE_SAMPLERATE_NUM         (10)
 #define AUDIO_PROFILE_MAXCH_STRING           " %d ch"
 #define AUDIO_PROFILE_DEPVALUE_STRING        " DepValue %x"
@@ -365,10 +366,9 @@ typedef struct {
     vsadb_t vsadb; //vendor_specific_audio_data_block
 } audio_profile_cap_t;
 
-
 struct hdmi_audio_profile_t{
     audio_profile_cap_t audio_cap_item[AUDIO_PROFILE_ITEM_NUM];
-} ;
+};
 
 static struct hdmi_audio_profile_t hdmi_audio_profile;
 
@@ -686,6 +686,110 @@ exit:
     return 0;
 }
 
+static bool get_hdmi_manual_support(audio_manual_set_t * manual_setting, audio_format_t format) {
+    bool b_support = false;
+    int i = 0;
+    for (i = 0; i < AUDIO_PROFILE_ITEM_NUM; i++) {
+        if (manual_setting[i].audio_format == format) {
+            b_support = true;
+            break;
+        }
+    }
+    return b_support;
+}
+
+void update_hdmi_manual_sink_cap(struct aml_arc_hdmi_desc *p_hdmi_descs, audio_manual_set_t * manual_setting) {
+    int i = 0;
+    bool b_support = false;
+
+    /*check dd support*/
+    b_support = get_hdmi_manual_support(manual_setting, AUDIO_FORMAT_AC3);
+    if (p_hdmi_descs->dd_fmt.is_support == 0 && b_support) {
+        p_hdmi_descs->dd_fmt.is_support = 1;
+        p_hdmi_descs->dd_fmt.max_channels = 6;
+        ALOGV("%s manual enable AC3", __func__);
+    } else if (p_hdmi_descs->dd_fmt.is_support == 1 && !b_support) {
+        p_hdmi_descs->dd_fmt.is_support = 0;
+        ALOGV("%s manual disable AC3", __func__);
+    }
+
+    /*check ddp support*/
+    b_support = get_hdmi_manual_support(manual_setting, AUDIO_FORMAT_E_AC3);
+    if (p_hdmi_descs->ddp_fmt.is_support == 0 && b_support) {
+        p_hdmi_descs->ddp_fmt.is_support = 1;
+        p_hdmi_descs->ddp_fmt.max_channels = 8;
+        ALOGV("%s manual enable EAC3", __func__);
+    } else if (p_hdmi_descs->ddp_fmt.is_support == 1 && !b_support) {
+        p_hdmi_descs->ddp_fmt.is_support = 0;
+        ALOGV("%s manual disable EAC3", __func__);
+    }
+
+    /*check ddp atmos support*/
+    b_support = get_hdmi_manual_support(manual_setting, AUDIO_FORMAT_E_AC3_JOC);
+    if (p_hdmi_descs->ddp_fmt.atmos_supported == 0) {
+        if (b_support) {
+            p_hdmi_descs->ddp_fmt.is_support = 1;
+            p_hdmi_descs->ddp_fmt.max_channels = 8;
+            p_hdmi_descs->ddp_fmt.atmos_supported = 1;
+            ALOGV("%s manual enable EAC3 JOC", __func__);
+        } else {
+            // do nothing
+        }
+    } else if (p_hdmi_descs->ddp_fmt.atmos_supported == 1) {
+        if (!b_support) {
+            p_hdmi_descs->ddp_fmt.atmos_supported = 0;
+            ALOGV("%s manual disable EAC3 JOC", __func__);
+        } else {
+            /*if ddp with atmos is manual enabled, need enable ddp by default*/
+             p_hdmi_descs->ddp_fmt.is_support = 1;
+             p_hdmi_descs->ddp_fmt.max_channels = 8;
+        }
+    }
+
+    /*check dts support*/
+    b_support = get_hdmi_manual_support(manual_setting, AUDIO_FORMAT_DTS);
+    if (p_hdmi_descs->dts_fmt.is_support == 0 && b_support) {
+        p_hdmi_descs->dts_fmt.is_support = 1;
+        p_hdmi_descs->dts_fmt.max_channels = 8;
+        ALOGV("%s manual enable DTS", __func__);
+    } else if (p_hdmi_descs->dts_fmt.is_support == 1 && !b_support) {
+        p_hdmi_descs->dts_fmt.is_support = 0;
+        ALOGV("%s manual disable DTS", __func__);
+    }
+
+    /*check dtshd support*/
+    b_support = get_hdmi_manual_support(manual_setting, AUDIO_FORMAT_DTS_HD);
+    if (p_hdmi_descs->dtshd_fmt.is_support == 0 && b_support) {
+        p_hdmi_descs->dtshd_fmt.is_support = 1;
+        p_hdmi_descs->dtshd_fmt.max_channels = 8;
+        ALOGV("%s manual enable DTSHD", __func__);
+    } else if (p_hdmi_descs->dtshd_fmt.is_support == 1 && !b_support) {
+        p_hdmi_descs->dtshd_fmt.is_support = 0;
+        ALOGV("%s manual disable DTSHD", __func__);
+    }
+
+    /*check dolby mat support*/
+    b_support = get_hdmi_manual_support(manual_setting, AUDIO_FORMAT_MAT);
+    if (p_hdmi_descs->mat_fmt.is_support == 0 && b_support) {
+        p_hdmi_descs->mat_fmt.is_support = 1;
+        p_hdmi_descs->mat_fmt.mat_truehd_only = 0;
+        p_hdmi_descs->mat_fmt.max_channels = 8;
+        ALOGV("%s manual enable Dolby MAT", __func__);
+    } else if (p_hdmi_descs->mat_fmt.is_support == 1 && !b_support) {
+        p_hdmi_descs->mat_fmt.is_support = 0;
+        p_hdmi_descs->mat_fmt.mat_truehd_only = 0;
+        ALOGV("%s manual disable Dolby MAT", __func__);
+    } else if (p_hdmi_descs->mat_fmt.mat_truehd_only == 1 && !b_support) {
+        p_hdmi_descs->mat_fmt.is_support = 0;
+        p_hdmi_descs->mat_fmt.mat_truehd_only = 0;
+        ALOGV("%s manual disable Dolby TrueHD", __func__);
+    }
+
+
+    return;
+}
+
+
 char*  get_hdmi_sink_cap_new(const char *keys, audio_format_t format, struct aml_arc_hdmi_desc *p_hdmi_descs, bool report_aml_truehd)
 {
     int i = 0;
@@ -855,12 +959,14 @@ char*  get_hdmi_sink_cap_new(const char *keys, audio_format_t format, struct aml
                     size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DOLBY_TRUEHD|AUDIO_FORMAT_MAT_1_0|AUDIO_FORMAT_MAT_2_0");
                 p_hdmi_descs->mat_fmt.is_support = 1;
                 p_hdmi_descs->mat_fmt.enforce_single_oa_element = 1;
+                p_hdmi_descs->mat_fmt.mat_truehd_only = 0;
             } else if (audio_cap_item->dep_value == 0x0) {
                 //Byte3 bit0:0 bit1:0
                 //eg: "MAT, 8 ch, 48/96/192 kHz, DepValue 0x0"
                 if (report_aml_truehd)
                     size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DOLBY_TRUEHD|AUDIO_FORMAT_MAT_1_0");
                 p_hdmi_descs->mat_fmt.is_support = 0;//fixme about the mat_fmt.is_support
+                p_hdmi_descs->mat_fmt.mat_truehd_only = 1;
 
             } else if ((audio_cap_item->dep_value == 0x3) ||
                 (audio_cap_item->dep_value == 0x4) ||
@@ -875,6 +981,7 @@ char*  get_hdmi_sink_cap_new(const char *keys, audio_format_t format, struct aml
                     size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DOLBY_TRUEHD|AUDIO_FORMAT_MAT_1_0|AUDIO_FORMAT_MAT_2_0|AUDIO_FORMAT_MAT_2_1");
                 p_hdmi_descs->mat_fmt.is_support = 1;
                 p_hdmi_descs->mat_fmt.enforce_single_oa_element = 0;
+                p_hdmi_descs->mat_fmt.mat_truehd_only = 0;
             } else {
                 ALOGE("%s line %d MAT SAD Byte3 bit0&bit1 is invalid!", __func__, __LINE__);
                 p_hdmi_descs->mat_fmt.is_support = 0;
@@ -887,6 +994,11 @@ char*  get_hdmi_sink_cap_new(const char *keys, audio_format_t format, struct aml
         if (audio_cap_item) {
             size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_MPEGH_BL_L3|AUDIO_FORMAT_MPEGH_BL_L4|AUDIO_FORMAT_MPEGH_LC_L3|AUDIO_FORMAT_MPEGH_LC_L4");
             p_hdmi_descs->mpegh_fmt.is_support = 1;
+        }
+
+        if (adev->is_manual) {
+            ALOGI("%s update manual setting", __func__);
+            update_hdmi_manual_sink_cap(p_hdmi_descs, adev->manual_encoding_format);
         }
     }
     /*check the channel cap */
