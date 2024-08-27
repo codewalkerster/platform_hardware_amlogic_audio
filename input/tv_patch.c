@@ -181,9 +181,18 @@ static bool reconfig_stream_param(struct aml_stream_in *stream_in, struct aml_au
     } else if (patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC) {
         int type = audio_parse_get_audio_type_direct(patch->audio_parse_para);
 
+        patch->input_sample_rate = 48000;
         if (type == MULTICH_LPCM) {
             channel = 8;
             buf_size = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT * 4;
+            if (patch->input_sample_rate > 96000) {
+                period_size = DEFAULT_CAPTURE_PERIOD_SIZE * 4;
+            } else if (patch->input_sample_rate > 48000) {
+                period_size = DEFAULT_CAPTURE_PERIOD_SIZE * 2;
+            }
+            /* only multi-channel pcm should update rate to SW resampler */
+            patch->input_sample_rate = audio_parse_get_audio_samplerate(patch->audio_parse_para);
+            AM_LOGD("audio type:%d, samplerate:%d", type, patch->input_sample_rate);
         } else if (type == LPCM) {
             buf_size = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT * 4;
         } else if (type == MAT) {
@@ -242,7 +251,8 @@ int teardown_input_format_change(struct aml_audio_patch *patch, struct audio_str
         stream_config.sample_rate = patch->in_sample_rate;
         stream_config.channel_mask = patch->in_chanmask;
         stream_config.format = patch->aformat;
-        AM_LOGI("old_format:%x new_format:%x chmask %#x for PCM", old_aml_in->hal_format, stream_config.format, patch->in_chanmask);
+        AM_LOGI("old_format:%x new_format:%x chmask %#x samplerat %d for PCM", old_aml_in->hal_format,
+                stream_config.format, stream_config.channel_mask, stream_config.sample_rate);
     } else {
         stream_config.sample_rate = patch->in_sample_rate;
         stream_config.channel_mask = patch->in_chanmask;
@@ -342,7 +352,6 @@ void *audio_patch_input_threadloop(void *data)
         adev_close_input_stream(patch->dev, &in->stream);
         return (void *)0;
     }
-    buffer = patch->in_buf;
 
     prctl(PR_SET_NAME, (unsigned long)"audio_input_patch");
     aml_set_thread_sched_priority("audio_input_patch", patch->audio_input_threadID, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY - 1);
@@ -402,10 +411,11 @@ void *audio_patch_input_threadloop(void *data)
             if (!patch->in_buf) {
                break;
             }
-            buffer = patch->in_buf;
             patch->in_buf_size = read_bytes;
             memset(patch->in_buf, 0, patch->in_buf_size);
         }
+        /* SW resampler may change the buffer pointer */
+        buffer = patch->in_buf;
 
         if (in->standby) {
             ret = start_input_stream(in);
@@ -425,10 +435,10 @@ void *audio_patch_input_threadloop(void *data)
                 input_stream_channels_adjust(&in->stream, patch->in_buf, read_bytes, false);
             } else {
                 aml_alsa_input_read(&in->stream, patch->in_buf, read_bytes);
-                memset(patch->in_buf, 0, bytes_avail);
-                ring_buffer_clear(ringbuffer);
                 enable_tv_mute(aml_dev, true);
             }
+            memset(patch->in_buf, 0, bytes_avail);
+            ring_buffer_clear(ringbuffer);
         } else {
             if (is_same_patch_src(aml_dev, SRC_HDMIIN) && in->tv_param.audio_packet_type == AUDIO_PACKET_AUDS && in->config.channels != 2) {
                 /* we now don't downmix multich pcm of input */

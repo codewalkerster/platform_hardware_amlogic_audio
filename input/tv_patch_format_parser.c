@@ -731,7 +731,7 @@ static int update_audio_type(audio_type_parse_t *status, int update_bytes, int s
             audio_type_status->read_bytes = 0;
             AM_LOGI("package_size:%d no IEC61937 header found, PCM data!", audio_type_status->package_size);
             enable_HW_resample(mixer_handle, sr);
-            ALOGD("Reset hdmiin/spdifin audio resample sr to %d\n", sr);
+            AM_LOGD("Reset hdmiin/spdifin audio resample sr to %d\n", sr);
         }
         audio_type_status->read_bytes += update_bytes;
     } else {
@@ -741,7 +741,7 @@ static int update_audio_type(audio_type_parse_t *status, int update_bytes, int s
         audio_type_status->read_bytes = 0;
         AM_LOGI("Raw data found: type(%d)\n", audio_type_status->audio_type);
         enable_HW_resample(mixer_handle, HW_RESAMPLE_DISABLE);
-        ALOGD("Reset hdmiin/spdifin audio resample sr to %d\n", HW_RESAMPLE_DISABLE);
+        AM_LOGD("Reset hdmiin/spdifin audio resample disable\n");
     }
     return 0;
 }
@@ -867,8 +867,7 @@ static void* audio_type_parse_threadloop(void *data)
         if (cur_samplerate != last_cur_samplerate && cur_samplerate != HW_RESAMPLE_DISABLE) {
             if (audio_type_status->audio_type == LPCM  && type != NOT_READY) {
                 enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
-                audio_type_status->reset_input = true;
-                ALOGD("Reset hdmiin/spdifin audio resample sr from %d to %d\n",
+                AM_LOGD("Reset hdmiin/spdifin audio resample sr from %d to %d\n",
                     last_cur_samplerate, cur_samplerate);
             }
             if (type != NOT_READY)
@@ -1006,8 +1005,9 @@ static void* audio_type_parse_threadloop(void *data)
                 if (audio_type_status->audio_type != LPCM && audio_type_status->cur_audio_type == LPCM) {
                     enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
                     audio_type_status->fmt_change = true;
+                    AM_LOGI("type %d", audio_type_status->audio_type);
                 } else if (audio_type_status->audio_type == LPCM && audio_type_status->cur_audio_type != LPCM){
-                    ALOGV("Raw data found: type(%d)\n", audio_type_status->cur_audio_type);
+                    AM_LOGI("Raw data found: type(%d)\n", audio_type_status->cur_audio_type);
                     enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
                     audio_type_status->fmt_change = true;
                 } else if (audio_type_status->earc_mute && !mute && type != NOT_READY) {
@@ -1015,7 +1015,7 @@ static void* audio_type_parse_threadloop(void *data)
                      * need reset for channel swap */
                     audio_type_status->fmt_change = true;
                     audio_type_status->earc_mute = mute;
-                    ALOGI("earc mute reset\n");
+                    AM_LOGI("earc mute reset\n");
                 }
 
                 audio_type_status->audio_type = audio_type_status->cur_audio_type;

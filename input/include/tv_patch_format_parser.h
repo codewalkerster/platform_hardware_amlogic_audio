@@ -139,7 +139,6 @@ typedef struct audio_type_parse {
 
     int audio_type;
     int cur_audio_type;
-    bool reset_input;
 
     audio_channel_mask_t audio_ch_mask;
 

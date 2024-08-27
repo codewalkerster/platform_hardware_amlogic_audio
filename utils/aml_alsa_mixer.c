@@ -89,6 +89,7 @@ static struct aml_mixer_list gAmlMixerList[] = {
     {AML_MIXER_ID_HW_RESAMPLE_SOURCE,   "Hw resample module"},
     {AML_MIXER_ID_EARCRX_AUDIO_CODING_TYPE,   "eARC_RX Audio Coding Type"},
     {AML_MIXER_ID_EARCRX_CS_MUTE,       "eARC_RX CS Mute"},
+    {AML_MIXER_ID_EARCRX_STABLE,        "eARC RX stable"},
     {AML_MIXER_ID_EARCRX_AUDIO_SAMPLERATE, "eARC_RX Audio Sample Frequency"},
     {AML_MIXER_ID_EARCRX_AUDIO_BIT_DEPTH,   "eARC_RX Audio Word Length"},
     {AML_MIXER_ID_EARCRX_CHANNEL_MAP,   "eARC_RX Channel Map"},

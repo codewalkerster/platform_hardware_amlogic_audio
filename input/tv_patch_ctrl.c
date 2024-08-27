@@ -108,9 +108,15 @@ int input_stream_channels_adjust(struct audio_stream_in *stream, void* buffer, s
         return ret;
 
     norminal_channel_cnt = in->config.channels;
-    if (is_same_patch_src(adev, SRC_ARCIN) && patch->arc_layout_b) {
-        norminal_channel_cnt = 8;
-        in->tv_param.read_mul_factor = 4;
+    if (is_same_patch_src(adev, SRC_ARCIN)) {
+        if (patch->arc_layout_b) {
+            norminal_channel_cnt = 8;
+            in->tv_param.read_mul_factor = EAC3_MULTIPLIER;
+        } else if (patch->input_sample_rate > 96000) {
+            in->tv_param.read_mul_factor = HBR_MULTIPLIER;
+        } else if (patch->input_sample_rate > 48000) {
+            in->tv_param.read_mul_factor = EAC3_MULTIPLIER;
+        }
     }
 
     size_t read_bytes = norminal_channel_cnt * bytes / channel_count;
@@ -124,6 +130,9 @@ int input_stream_channels_adjust(struct audio_stream_in *stream, void* buffer, s
     }
 
     ret = aml_alsa_input_read(stream, in->input_tmp_buffer, read_bytes);
+    if (!ret && get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
+        aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/tv_read.raw", in->input_tmp_buffer, read_bytes);
+    }
     if (in->config.format == PCM_FORMAT_S16_LE) {
         if (downmix) {
             int samples = read_bytes / 2;
@@ -315,9 +324,14 @@ bool signal_status_check(audio_devices_t in_device, int *mute_time,
         *mute_time = 1000;
         return false;
     }
-    if (((in_device & AUDIO_DEVICE_IN_SPDIF) ||
-            (in_device & AUDIO_DEVICE_IN_HDMI_ARC)) &&
+    if ((in_device & AUDIO_DEVICE_IN_SPDIF) &&
             !is_spdif_in_stable_hw(stream)) {
+        *mute_time = 1000;
+        return false;
+    }
+
+    if ((in_device & AUDIO_DEVICE_IN_HDMI_ARC) &&
+            !is_earc_in_stable_hw(stream)) {
         *mute_time = 1000;
         return false;
     }
@@ -878,16 +892,10 @@ bool is_spdif_in_stable_hw(struct audio_stream_in *stream)
     struct aml_stream_in *in = (struct aml_stream_in *) stream;
     struct aml_audio_device *aml_dev = in->dev;
     struct aml_audio_patch *patch = get_dev_patch(aml_dev);
-    int type = 0;
-
-    if (is_earc_descrpt())
-        type = eArcIn_audio_format_detection(stream);
-    else
-        type = aml_mixer_ctrl_get_int (&aml_dev->alsa_mixer, AML_MIXER_ID_SPDIFIN_AUDIO_TYPE);
+    int type = aml_mixer_ctrl_get_int (&aml_dev->alsa_mixer, AML_MIXER_ID_SPDIFIN_AUDIO_TYPE);
 
     if (type == NOT_READY) {
         AM_LOGV("%s(), in type is not ready yet", __func__);
-        patch->arc_layout_b = patch->last_layout_b;
         return true;
     }
 
@@ -897,6 +905,33 @@ bool is_spdif_in_stable_hw(struct audio_stream_in *stream)
         return false;
     }
 
+    return true;
+}
+
+bool is_earc_in_stable_hw(struct audio_stream_in *stream)
+{
+    struct aml_stream_in *in = (struct aml_stream_in *)stream;
+    struct aml_audio_device *aml_dev = in->dev;
+    struct aml_audio_patch *patch = get_dev_patch(aml_dev);
+    int stable = 0, type = 0;
+
+    stable = aml_mixer_ctrl_get_int(&aml_dev->alsa_mixer, AML_MIXER_ID_EARCRX_STABLE);
+    if (!stable) {
+        ALOGV("%s() amixer %s get %d\n", __func__, "HDMIIN audio stable", stable);
+        return false;
+    }
+
+    type = eArcIn_audio_format_detection(stream);
+    if (type == NOT_READY) {
+        AM_LOGV("%s(), in type is not ready yet", __func__);
+        patch->arc_layout_b = patch->last_layout_b;
+        return true;
+    }
+    if (type != patch->param_config.spdif_fmt_hw) {
+        ALOGI ("%s(), in type changed from %d to %d", __func__, patch->param_config.spdif_fmt_hw, type);
+        patch->param_config.spdif_fmt_hw = type;
+        return false;
+    }
     return true;
 }
 

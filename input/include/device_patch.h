@@ -137,7 +137,6 @@ struct aml_audio_patch
     int ca;
     enum earc_audio_type earcin_audio_type;
     bool cs_mute;
-    bool reset_input;
     bool need_reconfig_mediasync;
     audio_devices_t output_src;
     bool is_dtv_src;
