@@ -860,7 +860,10 @@ static void* audio_type_parse_threadloop(void *data)
         if (cur_samplerate == -1)
             cur_samplerate = HW_RESAMPLE_48K;
 
-        /*check hdmiin audio input sr and reset hw resample*/
+        /* check hdmiin audio input sr and reset hw resample
+         * if type is NOT_READY, it is only for earc rx, and
+         * it shows that stream is unstable, don't update sample rate.
+         */
         if (cur_samplerate != last_cur_samplerate && cur_samplerate != HW_RESAMPLE_DISABLE) {
             if (audio_type_status->audio_type == LPCM  && type != NOT_READY) {
                 enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
@@ -868,7 +871,8 @@ static void* audio_type_parse_threadloop(void *data)
                 ALOGD("Reset hdmiin/spdifin audio resample sr from %d to %d\n",
                     last_cur_samplerate, cur_samplerate);
             }
-            last_cur_samplerate = cur_samplerate;
+            if (type != NOT_READY)
+                last_cur_samplerate = cur_samplerate;
         }
 
         if (audio_type_status->soft_parser && audio_type_status->in) {
