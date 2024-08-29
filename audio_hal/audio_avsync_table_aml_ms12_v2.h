@@ -535,7 +535,7 @@
 #define  AVSYNC_NONMS12_DTV_HDMI_OUT_PCM_LATENCY                (-60)
 #define  AVSYNC_NONMS12_DTV_HDMI_OUT_DD_LATENCY                 (0)
 #define  AVSYNC_NONMS12_DTV_HDMI_OUT_DDP_LATENCY                (0)
-#define  AVSYNC_NONMS12_DTV_SPEAKER_LATENCY                     (0)
+#define  AVSYNC_NONMS12_DTV_SPEAKER_LATENCY                     (-40)
 
 #define  AVSYNC_NONMS12_DTV_HDMI_ARC_OUT_PCM_LATENCY_PROPERTY            "vendor.media.audio.hal.nonms12.dtv.arc.pcm"
 #define  AVSYNC_NONMS12_DTV_HDMI_ARC_OUT_DD_LATENCY_PROPERTY             "vendor.media.audio.hal.nonms12.dtv.arc.dd"
