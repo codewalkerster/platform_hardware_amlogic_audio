@@ -688,6 +688,7 @@ struct aml_stream_out {
     uint64_t last_payload_offset;
     uint64_t last_hwsync_header_pts;
     uint64_t last_dec_out_frame;
+    uint64_t last_dec_out_pcm_frame;
     struct audio_config out_cfg;
     int debug_stream;
     uint64_t us_used_last_write;

@@ -3783,6 +3783,11 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
                 __func__, decoded_frame, u64DecOutFrame, delay_frame, stDelay.u32DelayFrame, (delay_frame + stDelay.u32DelayFrame), delay_pts_diff / 90);
             ALOGI("%s in policy =%d tag frame =%d cur_frame=%d", __func__, syncpolicy_status.eSyncPolicy, syncpolicy_status.s32TagFrame, syncpolicy_status.s32CurFrame);
         }
+
+        if (syncpolicy_status.eSyncPolicy == DTVSYNC_AUDIO_NORMAL_OUTPUT && decoded_frame - aml_out->last_dec_out_pcm_frame < 1536) {
+            return audio_sync_policy;
+        }
+
         if (aml_dtvsync) {
             async_policy = &(aml_dtvsync->apolicy);
             ret = aml_audio_hwsync_lookup_apts(aml_out->hwsync, consume_payload, &apts);
@@ -3880,6 +3885,7 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
 
     }
     aml_out->last_dec_out_frame = u64DecOutFrame;
+    aml_out->last_dec_out_pcm_frame = decoded_frame;
 
     if ((audio_sync_policy.eSyncPolicy == DTVSYNC_AUDIO_DROP_PCM || audio_sync_policy.eSyncPolicy == DTVSYNC_AUDIO_INSERT)
         && (audio_sync_policy.s32TagFrame < 0 || audio_sync_policy.s32CurFrame < 0 || audio_sync_policy.s32CurFrame > audio_sync_policy.s32TagFrame)) {
