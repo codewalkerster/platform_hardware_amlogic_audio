@@ -2708,11 +2708,15 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
         /*
          * control the mute flag to mute/unmute the spdif out.
          */
-        if (ms12->main_volume < FLOAT_ZERO) {
-            aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 1);
-        } else {
-            aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 0);
+        pthread_mutex_lock(&adev->bitstream_lock);
+        if (bitstream_out->spdifout_handle) {
+            if (ms12->main_volume < FLOAT_ZERO) {
+                aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 1);
+            } else {
+                aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 0);
+            }
         }
+        pthread_mutex_unlock(&adev->bitstream_lock);
         if (is_same_patch_src(adev, SRC_DTV) && is_dev_patch_exist(adev)&& get_dev_patch(adev)->need_drop_size > 0) {
             return 0;
         }
@@ -3592,7 +3596,7 @@ Aml_MS12_SyncPolicy_t ms12_sync_callback(void *priv_data, unsigned long long u64
     int delay_frame = 0;
     int delay_pts_diff = 0;
     int adjust_ms = 0;
-
+    bool disable_adjust = false;
     int64_t  system_time_diff_ms = 0;
 
     struct timespec ts;
@@ -3604,6 +3608,8 @@ Aml_MS12_SyncPolicy_t ms12_sync_callback(void *priv_data, unsigned long long u64
     /*when it is dolby truehd and bypass mode, we don't need send pcm output*/
     if (aml_out->hal_internal_format == AUDIO_FORMAT_DOLBY_TRUEHD) {
         audio_sync_policy = truehd_sync_callback(priv_data, u64DecOutFrame, stDelay);
+        if (ms12->is_bypass_ms12)
+            disable_adjust = true;
     }
 
     if (!aml_out->hw_sync_mode) {
@@ -3687,7 +3693,7 @@ Aml_MS12_SyncPolicy_t ms12_sync_callback(void *priv_data, unsigned long long u64
     /*pts is bigger than pts, we need wait some time*/
     // SWPL-171731 : netflix stream playing --> press HOME key, then video/pcr slowly stop.
     // but audio don't receive in time pause signal due to poor system performance.
-    if (adjust_ms > 0 && !adev->is_netflix) {
+    if (adjust_ms > 0 && !adev->is_netflix && !disable_adjust) {
         uint64_t target_time = aml_audio_get_systime() + adjust_ms * 1000 + stDelay.u32DelayFrame / 48 * 1000;
         uint64_t current_time = 0;
         uint64_t time_left = 0;
