@@ -1365,7 +1365,7 @@ int aml_audio_get_hdmi_latency_offset(audio_format_t source_format,
               * old tuning value is -30 as the avsync(avg) result is about -3.8(Self-test).so in OTT-22450
               * change the (-30) to (-45), finally the avsync(avg) result change to -12.6(Self-test)
               */
-            latency_ms = -45; /*TB44, pcm(DDP with omx decoder), target [-45, 0]*/
+            latency_ms = -130; /*TB44 v1.2, pcm(DDP with omx decoder), target [-40, 40]*/
         }
     } else {
         prop_name = "vendor.media.audio.hal.hdmi_latency.raw";
@@ -1382,7 +1382,7 @@ int aml_audio_get_hdmi_latency_offset(audio_format_t source_format,
                   * old tuning value is -95 as the avsync(avg) result is about -14.4(Self-test).so in OTT-22450
                   * change the -95 to (-115), finally the avsync(avg) result change to -38.2(Self-test)
                   */
-                 latency_ms = -115; /*TB44, DDP(DDP with Direct), target [-100, 0]*/
+                 latency_ms = 25; /*TB44 v1.2, DDP(DDP with Direct), target [-40, 40]*/
              }
         } else  if(source_format == AUDIO_FORMAT_AC3) {
             if (ms12_enable)
@@ -1393,7 +1393,7 @@ int aml_audio_get_hdmi_latency_offset(audio_format_t source_format,
                   * old tuning value is -95 as the avsync(avg) result is about 3. so in OTT-22450
                   * change the -95 to (-115), finally the avsync(avg) result change to
                   */
-                latency_ms = -115; /*TB44, DDP(DDP with Direct), target [-100, 0]*/
+                latency_ms = 25; /*TB44 v1.2, DDP(DDP with Direct), target [-40, 40]*/
              }
         }
     }

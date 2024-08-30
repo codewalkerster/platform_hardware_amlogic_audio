@@ -189,7 +189,7 @@
  * PCM_FHD_2997 > -7 ~ -23
  * PCM_FHD_5994 > -10 ~ -24
  */
-#define  AVSYNC_NONMS12_TUNNEL_STB_DDP_HDMI_LATENCY                     (50)//through HDMI,  target is [-45, 0]
+#define  AVSYNC_NONMS12_TUNNEL_STB_DDP_HDMI_LATENCY                     (30)//through HDMI,  target is [-40, 40]
 
 #define  AVSYNC_NONMS12_TUNNEL_STB_PCM_LATENCY_PROPERTY             "vendor.media.audio.hal.nonms12.tunnel.stb.pcm"
 #define  AVSYNC_NONMS12_TUNNEL_STB_DDP_CVBS_LATENCY_PROPERTY        "vendor.media.audio.hal.nonms12.tunnel.stb.ddp_cvbs"
@@ -232,7 +232,7 @@
 /* for different output format */
 #define  AVSYNC_NONMS12_STB_PCMOUT_LATENCY                     (0)
 #define  AVSYNC_NONMS12_STB_DDOUT_LATENCY                      (0)
-#define  AVSYNC_NONMS12_STB_DDPOUT_LATENCY                     (10)
+#define  AVSYNC_NONMS12_STB_DDPOUT_LATENCY                     (-15) //through HDMI,  target is [-40, 40]
 
 #define  AVSYNC_NONMS12_STB_PCMOUT_LATENCY_PROPERTY            "vendor.media.audio.hal.nonms12.stb.pcmout"
 #define  AVSYNC_NONMS12_STB_DDOUT_LATENCY_PROPERTY             "vendor.media.audio.hal.nonms12.stb.ddout"
