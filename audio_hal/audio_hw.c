@@ -6895,7 +6895,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
                 if (out->is_ms12_main_decoder) {
                     ALOGI("%s() line %d close ms12 main stream", __func__, __LINE__);
                     close_ms12_output_main_stream((struct audio_stream_out *)out);
-                    aml_out->is_ms12_main_decoder_disable = true;
+                    out->is_ms12_main_decoder_disable = true;
                 }
                 pthread_mutex_unlock(&out->lock);
             }
