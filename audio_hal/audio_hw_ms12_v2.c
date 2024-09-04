@@ -3974,7 +3974,6 @@ int ms12_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_t 
     struct audio_stream_out *stream_out = (struct audio_stream_out *)aml_out;
     struct aml_audio_device *adev = aml_out->dev;
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
-    struct aml_audio_patch *patch = get_dev_patch(adev);
 
     audio_format_t hal_internal_format = ms12_get_audio_hal_format(aml_out->hal_internal_format);
     audio_format_t output_format = (ms12_info) ? ms12_info->data_type : AUDIO_FORMAT_PCM_16_BIT;

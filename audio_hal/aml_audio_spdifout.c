@@ -731,7 +731,8 @@ int aml_audio_spdifout_process(void *phandle, void *buffer, size_t byte)
                 }
                 output_buffer = spdifout_phandle->temp_buf;
             }
-            channel_layout_swap_center_lfe(output_buffer, output_buffer_bytes, spdifout_phandle->out_data_ch);
+
+            channel_layout_swap_center_lfe(output_buffer, output_buffer_bytes, spdifout_phandle->out_data_ch, spdifout_phandle->audio_format);
         }
 
         ret = aml_alsa_output_write_new(alsa_handle, output_buffer, output_buffer_bytes);

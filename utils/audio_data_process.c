@@ -277,10 +277,8 @@ int processing_and_convert(void *data_mixed,
  * convert L R C LFE *** -> L R LFE C **
  *
  */
-void channel_layout_swap_center_lfe(void * data, int size, int channels) {
+void channel_layout_swap_center_lfe(void * data, int size, int channels, audio_format_t audio_format) {
     int i = 0;
-    int16_t *in_buf = data;
-    int16_t temp = 0;
     int frames = 0;
 
     if (data == NULL) {
@@ -292,11 +290,24 @@ void channel_layout_swap_center_lfe(void * data, int size, int channels) {
         return;
     }
 
-    frames = size / (channels * 2);
-    for (i = 0; i < frames; i++) {
-        temp = in_buf[channels * i + 2];
-        in_buf[channels * i + 2] = in_buf[channels * i + 3];
-        in_buf[channels * i + 3] = temp;
+    if (audio_format == AUDIO_FORMAT_PCM_16_BIT) {
+        int16_t *in_buf = data;
+        int16_t temp = 0;
+        frames = size / (channels * 2);
+        for (i = 0; i < frames; i++) {
+            temp = in_buf[channels * i + 2];
+            in_buf[channels * i + 2] = in_buf[channels * i + 3];
+            in_buf[channels * i + 3] = temp;
+        }
+    } else if (audio_format == AUDIO_FORMAT_PCM_32_BIT) {
+        int32_t *in_buf = data;
+        int32_t temp = 0;
+        frames = size / (channels * 4);
+        for (i = 0; i < frames; i++) {
+            temp = in_buf[channels * i + 2];
+            in_buf[channels * i + 2] = in_buf[channels * i + 3];
+            in_buf[channels * i + 3] = temp;
+        }
     }
 }
 

@@ -236,6 +236,10 @@ int aml_alsa_output_open(struct audio_stream_out *stream) {
         } else if (config->rate > MM_FULL_POWER_SAMPLING_RATE) {
             device = DIGITAL_DEVICE;
             path = "dcv/hires";
+        } else if (adev->ms12.dap_only_enable) {
+            config = &(adev->ms12_config);
+            device = ms12->device;
+            path = "dcv/dap";
         }
     }
     int card = adev->card;
