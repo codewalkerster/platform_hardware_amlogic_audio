@@ -358,4 +358,10 @@ inline bool is_dts_format(audio_format_t format) {
     }
 }
 
+void aml_audio_stream_migrate_to_apu(struct aml_stream_out *aml_out);
+void aml_audio_stream_delete_migrate_flag(struct aml_stream_out *aml_out);
+void aml_load_lock_lib_address(void);
+void aml_lock_lib_address(void);
+void aml_unlock_lib_address(void);
+
 #endif

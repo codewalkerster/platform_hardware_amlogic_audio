@@ -570,6 +570,7 @@ struct aml_audio_device {
     bool first_data;
 
     bool ms12_dynamic_sleep;
+    bool mlock_library_done;  /* mlock the necessary library map address, avoid library page fault(stuck a while) */
 
     pthread_mutex_t ms12_init_lock;  /*this mutex is used for adev_ms12_prepare/adev_ms12_cleanup*/
     int avsync_compensate_delay_ms; /*compensate the avsync audio delay*/

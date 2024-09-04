@@ -2007,10 +2007,20 @@ static void out_update_source_metadata_v7 (struct audio_stream_out *stream,
                                         const struct source_metadata_v7* source_metadata)
 {
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
+    struct aml_audio_device *adev = NULL;
     if (out && source_metadata) {
         if (source_metadata->tracks) {
-            ALOGV("%s() line %d usage:%d content_type:%d", __func__, __LINE__, source_metadata->tracks->base.usage, source_metadata->tracks->base.content_type);
+            ALOGI("%s() line %d usage:%d content_type:%d", __func__, __LINE__, source_metadata->tracks->base.usage, source_metadata->tracks->base.content_type);
             out->track_base_usage = source_metadata->tracks->base.usage;
+
+            // The system is ready when this function is called.
+            // Sound effect library is not loaded at adev_open function.
+            adev = out->dev;
+            if (adev && adev->mlock_library_done == false) {
+                aml_load_lock_lib_address();
+                aml_lock_lib_address();
+                adev->mlock_library_done = true;
+            }
         } else {
             //when source metadata track does not exist, we set is_preempt_system_audio_usage_media_stream as false
             out->is_preempt_system_audio_usage_media_stream = false;
@@ -7524,6 +7534,14 @@ ssize_t out_write_new(struct audio_stream_out *stream,
     if (adev->dolby_lib_type == eDolbyMS12Lib
         && aml_out->usecase == STREAM_PCM_HWSYNC && aml_out->pause_status == true) {
         out_resume_new(stream);
+    }
+
+    // mlock the necessary library map address, avoid library page fault(stuck a while)
+    // out_update_source_metadata_v7 may be not called.
+    if (adev && adev->mlock_library_done == false) {
+        aml_load_lock_lib_address();
+        aml_lock_lib_address();
+        adev->mlock_library_done = true;
     }
 
 #ifdef ENABLE_DVB_PATCH
