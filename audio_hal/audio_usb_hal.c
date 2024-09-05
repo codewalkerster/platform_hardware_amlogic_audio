@@ -107,10 +107,15 @@ static void adev_remove_stream_from_list(
  */
 static bool parse_card_device_params(const char *kvpairs, int *card, int *device)
 {
-    struct str_parms * parms = str_parms_create_str(kvpairs);
+    struct str_parms * parms = NULL;
     char value[32] = {'\0'};
     int param_val;
 
+    if (kvpairs == NULL || card == NULL || device == NULL) {
+        ALOGE("%s  kvpairs:%p  card:%p  device:%p ", __func__, kvpairs, card, device);
+        return -1;
+    }
+    parms = str_parms_create_str(kvpairs);
     // initialize to "undefined" state.
     *card = -1;
     *device = -1;
