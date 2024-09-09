@@ -585,6 +585,7 @@ ssize_t hw_write (struct audio_stream_out *stream
     uint64_t total_frame = 0;
     uint64_t write_frames = 0;
     uint64_t  sys_total_cost = 0;
+    uint64_t  stream_total_cost = 0;
     uint64_t  deep_buf_total_cost = 0;
     int  adjust_ms = 0;
     int  alsa_port = -1;
@@ -928,7 +929,12 @@ ssize_t hw_write (struct audio_stream_out *stream
             adev->ms12.sys_audio_timestamp.tv_sec = ts.tv_sec;
             adev->ms12.sys_audio_timestamp.tv_nsec = ts.tv_nsec;
             /*FIXME. 2ch 16 bit audio */
-            adev->ms12.sys_audio_frame_pos = adev->ms12.sys_audio_base_pos + adev->ms12.sys_audio_skip + sys_total_cost - latency_frames;
+            stream_total_cost = adev->ms12.sys_audio_base_pos + adev->ms12.sys_audio_skip + sys_total_cost;
+            if (stream_total_cost > latency_frames) {
+                adev->ms12.sys_audio_frame_pos = stream_total_cost - latency_frames;
+            } else {
+                adev->ms12.sys_audio_frame_pos = 0;
+            }
             adev->ms12.sys_data_write2alsa_status = true;
         }
 
@@ -940,7 +946,12 @@ ssize_t hw_write (struct audio_stream_out *stream
             adev->ms12.deep_buf_audio_timestamp.tv_sec = ts.tv_sec;
             adev->ms12.deep_buf_audio_timestamp.tv_nsec = ts.tv_nsec;
             /*FIXME. 2ch 16 bit audio */
-            adev->ms12.deep_buf_audio_frame_pos = adev->ms12.deep_buf_audio_base_pos + adev->ms12.deep_buf_audio_skip + deep_buf_total_cost - latency_frames;
+            stream_total_cost = adev->ms12.deep_buf_audio_base_pos + adev->ms12.deep_buf_audio_skip + deep_buf_total_cost;
+            if (stream_total_cost > latency_frames) {
+                adev->ms12.deep_buf_audio_frame_pos = stream_total_cost - latency_frames;
+            } else {
+                adev->ms12.deep_buf_audio_frame_pos = 0;
+            }
             adev->ms12.deep_buf_write2alsa_status = true;
         }
 

@@ -81,7 +81,7 @@
   so we choose 84ms now
 */
 #define MS12_SYS_INPUT_BUF_NS  (84000000LL)
-#define MS12_DEEP_BUF_INPUT_BUF_NS  (32000000LL)
+#define MS12_DEEP_BUF_INPUT_BUF_NS  (84000000LL)
 
 #define NANO_SECOND_PER_SECOND 1000000000LL
 #define NANO_SECOND_PER_MILLISECOND 1000000LL
@@ -2019,7 +2019,7 @@ int dolby_ms12_deep_buffer_process(
             if (input_ns == 0) {
                 input_ns = (uint64_t)(bytes) * NANO_SECOND_PER_SECOND / aml_out->hal_frame_size / mixer_default_samplerate;
             }
-            audio_virtual_buf_open(&ms12->deep_buf_virtual_buf_handle, "ms12 deep buf input", input_ns/3, MS12_DEEP_BUF_INPUT_BUF_NS, 0, MS12_DEEP_BUF_INCREASE_TIME_MS);
+            audio_virtual_buf_open(&ms12->deep_buf_virtual_buf_handle, "ms12 deep buf input", input_ns/2, MS12_DEEP_BUF_INPUT_BUF_NS, 0, MS12_DEEP_BUF_INCREASE_TIME_MS);
         }
         audio_virtual_buf_process(ms12->deep_buf_virtual_buf_handle, input_ns);
     }
