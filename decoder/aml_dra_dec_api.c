@@ -34,14 +34,6 @@
 #define DRA_REMAIN_BUFFER_SIZE (4096 * 10)
 #define DRA_AD_NEED_CACHE_FRAME_COUNT  2
 
-typedef struct _audio_info {
-    int bitrate;
-    int samplerate;
-    int channels;
-    int file_profile;
-    int error_num;
-} AudioInfo;
-
 typedef struct dra_decoder_operations {
     const char * name;
     int nAudioDecoderType;

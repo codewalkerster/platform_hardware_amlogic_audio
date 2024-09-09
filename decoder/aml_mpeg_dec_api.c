@@ -34,16 +34,6 @@
 #define MAD_DECODER_STEP_BYTE 1
 #define MAD_DECODER_PADDING_BYTE 512
 
-typedef struct _audio_info {
-    int bitrate;
-    int samplerate;
-    int channels;
-    int file_profile;
-    unsigned int error_num; // decode error frames
-    unsigned int drop_num; // drop frames
-    unsigned int decode_num; //decode success frames
-} AudioInfo;
-
 typedef struct mad_decoder_operations {
     const char * name;
     int nAudioDecoderType;

@@ -110,6 +110,7 @@ typedef struct aml_dec_stream_info {
     unsigned int stream_error_num; // decode error frames
     unsigned int stream_drop_num; // drop frames
     unsigned int stream_decode_num; //decode success frames
+    unsigned int dual_mono_supported;
 
 } aml_dec_stream_info_t;
 
@@ -269,6 +270,16 @@ typedef union aml_dec_info {
     aml_dec_output_info_t dec_output_info;   /* AML_DEC_OUTPUT_INFO */
 } aml_dec_info_t;
 
+typedef struct _audio_info {
+    int bitrate;
+    int samplerate;
+    int channels;
+    int file_profile;
+    unsigned int error_num; // decode error frames
+    unsigned int drop_num; // drop frames
+    unsigned int decode_num; //decode success frames
+    unsigned int dual_mono_supported;
+} AudioInfo;
 
 
 typedef int (*F_Init)(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config);

@@ -33,15 +33,6 @@
 #define AAC_MAX_FRAME_OUT_SIZE 8192
 #define AAC_AD_NEED_CACHE_FRAME_COUNT  2
 #define CALCULATE_BITRATE_NEED_TIME 300 //calculate bitrate in the first 300 seconds
-typedef struct _audio_info {
-    int bitrate;
-    int samplerate;
-    int channels;
-    int file_profile;
-    unsigned int error_num; // decode error frames
-    unsigned int drop_num; // drop frames
-    unsigned int decode_num; //decode success frames
-} AudioInfo;
 
 typedef struct faad_decoder_operations {
     const char * name;
@@ -431,12 +422,16 @@ static int faad_decoder_process(aml_dec_t *aml_dec, unsigned char *buffer, int b
     }
     aac_dec->total_raw_size += used_size_return;
     aac_dec->total_pcm_size += dec_pcm_data->data_len;
-    faad_op->getinfo(faad_op,&pAudioInfo);
-    aac_dec->stream_info.stream_sr = pAudioInfo.samplerate;
-    aac_dec->stream_info.stream_ch = pAudioInfo.channels;
-    aac_dec->stream_info.stream_error_num = pAudioInfo.error_num;
-    aac_dec->stream_info.stream_drop_num = pAudioInfo.drop_num;
-    aac_dec->stream_info.stream_decode_num = pAudioInfo.decode_num;
+    if (dec_pcm_data->data_len)  {
+        faad_op->getinfo(faad_op,&pAudioInfo);
+        aac_dec->stream_info.stream_sr = pAudioInfo.samplerate;
+        aac_dec->stream_info.stream_ch = faad_op->NchOriginal;
+        aac_dec->stream_info.output_bLFE = faad_op->lfepresent;
+        aac_dec->stream_info.stream_error_num = pAudioInfo.error_num;
+        aac_dec->stream_info.stream_drop_num = pAudioInfo.drop_num;
+        aac_dec->stream_info.stream_decode_num = pAudioInfo.decode_num;
+        aac_dec->stream_info.dual_mono_supported = pAudioInfo.dual_mono_supported;
+    }
 
     if (pAudioInfo.channels == 1 && dec_pcm_data->data_len) {
             int16_t *samples_data = (int16_t *)dec_pcm_data->buf;
