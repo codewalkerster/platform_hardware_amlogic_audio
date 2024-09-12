@@ -2916,9 +2916,20 @@ int ms12_passthrough_output(struct aml_stream_out *aml_out) {
         aml_ms12_bypass_checkout_data(ms12->ms12_bypass_handle, &output_buf, &out_size, consume_offset, &frame_info);
     }
 
+    /*
+     *               bitstream_a    bitstream_b
+     * ddp cap       ddp            dd
+     * dd only cap   null           dd
+     * for dd only output case, there is no ddp output on bitstream_a, need check bitstream_b
+     */
+    if (bitstream_out->spdifout_handle == NULL && hal_internal_format == AUDIO_FORMAT_AC3) {
+        bitstream_out = &ms12->bitstream_out[BITSTREAM_OUTPUT_B];
+    }
+
     if ((adev->digital_audio_mode != AML_DIGITAL_AUDIO_MODE_BYPASS)) {
         ms12->is_bypass_ms12 = false;
     }
+
     if (ms12->is_bypass_ms12 != bitstream_out->is_bypass_ms12 &&
         bitstream_out->spdifout_handle != NULL) {
         ALOGI("change to bypass mode from =%d to %d", bitstream_out->is_bypass_ms12, ms12->is_bypass_ms12);
