@@ -110,11 +110,17 @@ static void *audio_uevent_thread(void *pArg)
     return ((void *)0);
 }
 
+static void signal_handler(int signum)
+{
+    (void) signum;
+    return;
+}
 
 
 void aml_audio_uevent_open(uevent_callback_t callback) {
     int epoll_fd = 0;
     int uevent_fd = 0;
+    signal(SIGUSR1, signal_handler);
 
     memset(&audio_uevent_listener, 0, sizeof(struct audio_uevent_handle));
     //uevent
@@ -158,18 +164,22 @@ void aml_audio_uevent_open(uevent_callback_t callback) {
 
 
 void aml_audio_uevent_close() {
-    if (audio_uevent_listener.epoll_fd) {
-        close(audio_uevent_listener.epoll_fd);
+    ALOGI("%s, %d enter", __func__, __LINE__);
+    audio_uevent_listener.bexit = true;
+    if (audio_uevent_listener.thread_id != 0) {
+        pthread_kill(audio_uevent_listener.thread_id, SIGUSR1);
+        pthread_join(audio_uevent_listener.thread_id, NULL);
     }
 
     if (audio_uevent_listener.uevent_fd) {
         close(audio_uevent_listener.uevent_fd);
     }
 
-    audio_uevent_listener.bexit = true;
-    if (audio_uevent_listener.thread_id != 0) {
-        pthread_join(audio_uevent_listener.thread_id, NULL);
+    if (audio_uevent_listener.epoll_fd) {
+        close(audio_uevent_listener.epoll_fd);
     }
+
+    ALOGI("%s, %d leave", __func__, __LINE__);
     return;
 }
 
