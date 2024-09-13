@@ -77,7 +77,6 @@
 
 #define MS12_MAIN_BUF_INCREASE_TIME_MS (0)
 #define MS12_SYS_BUF_INCREASE_TIME_MS (1000)
-#define DDPI_UDC_COMP_LINE 2
 
 #define MS12_PCM_FRAME_SIZE         (6144)
 #define MS12_DD_FRAME_SIZE          (6144)
@@ -606,7 +605,7 @@ void set_ms12_main1_audio_pts(struct dolby_ms12_desc *ms12, uint64_t apts, uint6
         aml_ms12_update_runtime_params(ms12, parm);
 }
 
-void set_dolby_ms12_drc_parameters(audio_format_t input_format, int output_config_mask)
+void set_dolby_ms12_drc_parameters(audio_format_t input_format, int output_config_mask, struct dolby_ms12_desc *ms12)
 {
     int dolby_ms12_drc_mode = DOLBY_DRC_RF_MODE;
     int dolby_ms12_dap_drc_mode = DOLBY_DRC_RF_MODE;
@@ -614,8 +613,8 @@ void set_dolby_ms12_drc_parameters(audio_format_t input_format, int output_confi
     int drc_cut = 0;
     int drc_boost = 0;
 /* /
-    if (0 == aml_audio_get_dolby_drc_mode(&drc_mode, &drc_cut, &drc_boost))
-        dolby_ms12_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+    if (0 == aml_audio_get_dolby_drc_mode(ms12, &drc_mode, &drc_cut, &drc_boost))
+        dolby_ms12_drc_mode = drc_mode;
    */
     dolby_ms12_drc_mode = DOLBY_DRC_LINE_MODE;
 
@@ -639,8 +638,8 @@ void set_dolby_ms12_drc_parameters(audio_format_t input_format, int output_confi
     ALOGI("%s dolby_ms12_set_drc_mode %s", __FUNCTION__, (dolby_ms12_drc_mode == DOLBY_DRC_RF_MODE) ? "RF MODE" : "LINE MODE");
 
     if (output_config_mask & MS12_OUTPUT_MASK_DAP) {
-        if (0 == aml_audio_get_dolby_dap_drc_mode(&drc_mode, &drc_cut, &drc_boost))
-            dolby_ms12_dap_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+        if (0 == aml_audio_get_dolby_dap_drc_mode(ms12, &drc_mode, &drc_cut, &drc_boost))
+            dolby_ms12_dap_drc_mode = drc_mode;
         dolby_ms12_set_dap_drc_mode(dolby_ms12_dap_drc_mode);
         ALOGI("%s dolby_ms12_set_dap_drc_mode %s",
             __FUNCTION__, (dolby_ms12_dap_drc_mode == DOLBY_DRC_RF_MODE) ? "RF MODE" : "LINE MODE");
@@ -816,7 +815,7 @@ int get_the_dolby_ms12_prepared(
         output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO;
     }
 
-    //set_dolby_ms12_drc_parameters(input_format, output_config);
+    //set_dolby_ms12_drc_parameters(input_format, output_config, ms12);
     aml_ms12_config(ms12, input_format, input_channel_mask, input_sample_rate, output_config, get_ms12_path());
 
     if (ms12->dolby_ms12_enable) {

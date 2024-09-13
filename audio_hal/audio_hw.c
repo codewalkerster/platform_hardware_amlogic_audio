@@ -4562,12 +4562,29 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         goto exit;
     }
 
-    ret = str_parms_get_str(parms, "dialogue_enhancement", value, sizeof(value));
-    //this param used to the dialogue Enhancement of non dap, so we should to judge there is dap or not.
+#ifndef AUDIO_HAL_DISABLE_MS12
+    ret = str_parms_get_str(parms, "hal_param_dialogue_enhancement", value, sizeof(value));
+    //this param used to the Dialogue Enhancement of non dap (ac4_de), only valid for ac4 bistream.
     if (ret >= 0 && is_audio_postprocessing_add_dolbyms12_dap(adev) == false) {
-        adev->ms12.ac4_de = atoi(value);
-        ALOGE ("Amlogic_HAL - %s: set MS12 ac4 Dialogue Enhancement gain :%d.", __FUNCTION__,adev->ms12.ac4_de);
-
+         switch (atoi(value)) {
+        case DIALOGUE_ENHANCEMENT_OFF:
+            adev->ms12.ac4_de = 0;
+            break;
+        case DIALOGUE_ENHANCEMENT_LOW:
+            adev->ms12.ac4_de = 4;
+            break;
+        case DIALOGUE_ENHANCEMENT_MEDIUM:
+            adev->ms12.ac4_de = 8;
+            break;
+        case DIALOGUE_ENHANCEMENT_HIGH:
+            adev->ms12.ac4_de = 12;
+            break;
+        default:
+            ALOGE("%s(), not the expected Dialogue Enhancement lever, set Dialogue Enhancement off", __FUNCTION__);
+            adev->ms12.ac4_de = 0;
+            break;
+        }
+        ALOGI("Amlogic_HAL - %s: set MS12 ac4 Dialogue Enhancement gain :%d.", __FUNCTION__, adev->ms12.ac4_de);
         char parm[32] = "";
         sprintf(parm, "%s %d", "-ac4_de", adev->ms12.ac4_de);
         pthread_mutex_lock(&adev->lock);
@@ -4576,6 +4593,87 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         pthread_mutex_unlock(&adev->lock);
         goto exit;
     }
+
+    ret = str_parms_get_str(parms, "hal_param_dmx_mode", value, sizeof(value));
+    if (ret >= 0) {
+        switch (atoi(value)) {
+            case SOUND_DMX_MODE_SURROUND:
+                adev->ms12.dmx = 0;
+                break;
+            case SOUND_DMX_MODE_STEREO:
+                adev->ms12.dmx = 1;
+                break;
+            default:
+                ALOGE("%s(), not the expected dmx mode, set dmx mode surround", __FUNCTION__);
+                adev->ms12.dmx = 0;
+                break;
+        }
+        ALOGI("Amlogic_HAL - %s: set MS12 Downmix modes :%d.", __FUNCTION__, adev->ms12.dmx);
+        char parm[32] = "";
+        sprintf(parm, "%s %d", "-dmx", adev->ms12.dmx);
+        pthread_mutex_lock(&adev->lock);
+        if (strlen(parm) > 0)
+            aml_ms12_update_runtime_params(&(adev->ms12), parm);
+        pthread_mutex_unlock(&adev->lock);
+        goto exit;
+    }
+
+    ret = str_parms_get_str(parms, "hal_param_enable_drc_rf_mode", value, sizeof(value));
+    if (ret >= 0) {
+        char parm[64] = "";
+        int enable_drc_rf_mode = atoi(value);
+        if (enable_drc_rf_mode) {
+            adev->ms12.drc = 1;
+            adev->ms12.bs = 0;
+            adev->ms12.cs = 0;
+            adev->ms12.dap_drc = 1;
+            adev->ms12.b = 0;
+            adev->ms12.c = 0;
+            sprintf(parm, "-drc %d -bs %d -cs %d -dap_drc %d -b %d -c %d",  adev->ms12.drc, adev->ms12.bs, adev->ms12.cs, adev->ms12.dap_drc, adev->ms12.b, adev->ms12.c);
+            ALOGI("Amlogic_HAL - %s: set drc is rf mode", __FUNCTION__);
+        } else {
+            adev->ms12.drc = 0;
+            adev->ms12.dap_drc = 0;
+            sprintf(parm, "-drc %d -dap_drc %d",  adev->ms12.drc, adev->ms12.dap_drc);
+            ALOGI("Amlogic_HAL - %s: set drc is line mode", __FUNCTION__);
+        }
+        pthread_mutex_lock(&adev->lock);
+        if (strlen(parm) > 0)
+            aml_ms12_update_runtime_params(&(adev->ms12), parm);
+        pthread_mutex_unlock(&adev->lock);
+        goto exit;
+    }
+
+    ret = str_parms_get_str(parms, "hal_param_drc_boost_value", value, sizeof(value));
+    if (ret >= 0) {
+        int drc_boost_value = atoi(value);
+        adev->ms12.bs = drc_boost_value;
+        adev->ms12.b = drc_boost_value;
+        ALOGI("Amlogic_HAL - %s: set drc boost value is %d", __FUNCTION__, drc_boost_value);
+        char parm[32] = "";
+        sprintf(parm, "-bs %d -b %d",  adev->ms12.bs, adev->ms12.b);
+        pthread_mutex_lock(&adev->lock);
+        if (strlen(parm) > 0)
+            aml_ms12_update_runtime_params(&(adev->ms12), parm);
+        pthread_mutex_unlock(&adev->lock);
+        goto exit;
+    }
+
+    ret = str_parms_get_str(parms, "hal_param_drc_cut_value", value, sizeof(value));
+    if (ret >= 0) {
+        int drc_cut_value = atoi(value);
+        adev->ms12.cs = drc_cut_value;
+        adev->ms12.c = drc_cut_value;
+        ALOGI("Amlogic_HAL - %s: set drc cut value is %d", __FUNCTION__, drc_cut_value);
+        char parm[32] = "";
+        sprintf(parm, "-cs %d -c %d", adev->ms12.cs, adev->ms12.c);
+        pthread_mutex_lock(&adev->lock);
+        if (strlen(parm) > 0)
+            aml_ms12_update_runtime_params(&(adev->ms12), parm);
+        pthread_mutex_unlock(&adev->lock);
+        goto exit;
+    }
+#endif
 
     ret = str_parms_get_str(parms, "picture_mode", value, sizeof(value));
     if (ret >= 0) {
@@ -8552,7 +8650,20 @@ static int adev_dump(const audio_hw_device_t *device, int fd)
 
     adev_audio_patches_dump(aml_dev, fd);
 
+#ifndef AUDIO_HAL_DISABLE_MS12
     dolby_ms12_info_dump(fd);
+    switch (aml_dev->board_config.dolby_ms12_audio_config) {
+    case MS12_CONFIG_Y:
+        dprintf(fd, "[Ms12 Info]    Dolby MS12 Config: %s\n", "Y");
+        break;
+    case MS12_CONFIG_X:
+        dprintf(fd, "[Ms12 Info]    Dolby MS12 Config: %s\n", "X");
+        break;
+    case MS12_CONFIG_Z:
+        dprintf(fd, "[Ms12 Info]    Dolby MS12 Config: %s\n", "Z");
+        break;
+    }
+#endif
 
     aml_alsa_device_status_dump(aml_dev, fd);
 

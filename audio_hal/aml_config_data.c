@@ -54,7 +54,7 @@ int aml_get_jason_int_value(char* key,int defvalue)
     return value;
 }
 
-const char *aml_get_jason_str_value(char* key, const char* defvalue)
+const char *aml_get_jason_str_value(const char* key, const char* defvalue)
 {
     if (audio_config_jason) {
         cJSON *temp = cJSON_GetObjectItem(audio_config_jason, key);

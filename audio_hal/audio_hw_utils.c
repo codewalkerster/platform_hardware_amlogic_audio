@@ -75,12 +75,9 @@
 
 
 //DRC Mode
-#define DDPI_UDC_COMP_LINE 2
 #define DRC_MODE_BIT  0
 #define DRC_HIGH_CUT_BIT 3
 #define DRC_LOW_BST_BIT 16
-static const char *str_compmode[] = {"custom mode, analog dialnorm","custom mode, digital dialnorm",
-                            "line out mode","RF remod mode"};
 
 #define AUDIO_HAL_DUMP_DEFAULT_PATH "/data/vendor/audiohal/"
 
@@ -1462,50 +1459,26 @@ uint32_t tspec_diff_to_us(struct timespec tval_old,
 }
 
 
-int aml_audio_get_dolby_drc_mode(int *drc_mode, int *drc_cut, int *drc_boost)
+int aml_audio_get_dolby_drc_mode(struct dolby_ms12_desc *ms12, int *drc_mode, int *drc_cut, int *drc_boost)
 {
-    char cEndpoint[PROPERTY_VALUE_MAX] = {'\0'};
-    int ret = 0;
-    unsigned ac3_drc_control = (DDPI_UDC_COMP_LINE<<DRC_MODE_BIT)|(100<<DRC_HIGH_CUT_BIT)|(100<<DRC_LOW_BST_BIT);
-    ac3_drc_control = get_sysfs_int("/sys/class/audiodsp/ac3_drc_control");
-
-    if (!drc_mode || !drc_cut || !drc_boost)
-        return -1;
-    *drc_mode = ac3_drc_control&3;
-    ALOGI("drc mode from sysfs %s\n",str_compmode[*drc_mode]);
-    ret = property_get("ro.vendor.dolby.drcmode",cEndpoint,"");
-    if (ret > 0) {
-        *drc_mode = atoi(cEndpoint)&3;
-        ALOGI("drc mode from prop %s\n",str_compmode[*drc_mode]);
+    if (ms12 && drc_mode && drc_cut && drc_boost) {
+        *drc_mode = ms12->drc;
+        *drc_boost = ms12->bs;
+        *drc_cut = ms12->cs;
+        return 0;
     }
-    *drc_cut  = (ac3_drc_control>>DRC_HIGH_CUT_BIT)&0xff;
-    *drc_boost  = (ac3_drc_control>>DRC_LOW_BST_BIT)&0xff;
-    ALOGI("dd+ drc mode %s,high cut %d pct,low boost %d pct\n",
-        str_compmode[*drc_mode],*drc_cut, *drc_boost);
-    return 0;
+    return -1;
 }
 
-int aml_audio_get_dolby_dap_drc_mode(int *drc_mode, int *drc_cut, int *drc_boost)
+int aml_audio_get_dolby_dap_drc_mode(struct dolby_ms12_desc *ms12, int *drc_mode, int *drc_cut, int *drc_boost)
 {
-    char cEndpoint[PROPERTY_VALUE_MAX] = {'\0'};
-    int ret = 0;
-    unsigned dap_drc_control = (DDPI_UDC_COMP_LINE<<DRC_MODE_BIT)|(100<<DRC_HIGH_CUT_BIT)|(100<<DRC_LOW_BST_BIT);
-    dap_drc_control = get_sysfs_int("/sys/class/audiodsp/ac3_drc_control");
-
-    if (!drc_mode || !drc_cut || !drc_boost)
-        return -1;
-    *drc_mode = dap_drc_control&3;
-    ALOGI("drc mode from sysfs %s\n",str_compmode[*drc_mode]);
-    ret = property_get("ro.dolby.dapdrcmode",cEndpoint,"");
-    if (ret > 0) {
-        *drc_mode = atoi(cEndpoint)&3;
-        ALOGI("drc mode from prop %s\n",str_compmode[*drc_mode]);
+    if (ms12 && drc_mode && drc_cut && drc_boost) {
+        *drc_mode = ms12->dap_drc;
+        *drc_boost = ms12->b;
+        *drc_cut = ms12->c;
+        return 0;
     }
-    *drc_cut  = (dap_drc_control>>DRC_HIGH_CUT_BIT)&0xff;
-    *drc_boost  = (dap_drc_control>>DRC_LOW_BST_BIT)&0xff;
-    ALOGI("dap drc mode %s,high cut %d pct,low boost %d pct\n",
-        str_compmode[*drc_mode],*drc_cut, *drc_boost);
-    return 0;
+    return -1;
 }
 
 void aml_audio_set_cpu_affinity(bool APU)

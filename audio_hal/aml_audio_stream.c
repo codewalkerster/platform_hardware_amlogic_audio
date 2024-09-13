@@ -1102,6 +1102,7 @@ static int update_audio_hal_info(struct aml_audio_device *adev, audio_format_t f
     int update_threshold = DOLBY_FMT_UPDATE_THRESHOLD;
     int cur_aml_dap_surround_virtualizer = dolby_ms12_get_dap_surround_virtualizer();
     bool is_headphone_x = 0;
+    bool is_dolby_atmos_off = 0;
 
     if (is_dolby_ms12_support_compression_format(format)) {
         update_threshold = DOLBY_FMT_UPDATE_THRESHOLD;
@@ -1149,8 +1150,12 @@ static int update_audio_hal_info(struct aml_audio_device *adev, audio_format_t f
         }
     }
 
+    if (adev->board_config.dolby_ms12_audio_config != MS12_CONFIG_Z) {
+        is_dolby_atmos_off = 1;
+    } else {
+        is_dolby_atmos_off = (MS12_DAP_SPEAKER_VIRTUALIZER_OFF == cur_aml_dap_surround_virtualizer);
+    }
 
-    bool is_dolby_atmos_off = (MS12_DAP_SPEAKER_VIRTUALIZER_OFF == cur_aml_dap_surround_virtualizer);
     if (atmos_flag == 1) {
         if (format == AUDIO_FORMAT_E_AC3)
             update_type = (is_dolby_atmos_off) ? TYPE_DDP_ATMOS_PROMPT_ON_ATMOS : TYPE_DDP_ATMOS;
@@ -1224,8 +1229,8 @@ void update_audio_format(struct aml_audio_device *adev, audio_format_t format)
         }
 
 #ifdef MS12_V24_ENABLE
-        /* when DAP is not in audio postprocessing, there is no ATMOS Experience. */
-        if (is_audio_postprocessing_add_dolbyms12_dap(adev) == 0) {
+        /* when ms12 is config x or y, or DAP is not in audio postprocessing, there is no ATMOS Experience */
+        if ((adev->board_config.dolby_ms12_audio_config != MS12_CONFIG_Z) || (is_audio_postprocessing_add_dolbyms12_dap(adev) == 0)) {
             atmos_flag = 0;
         }
 #else

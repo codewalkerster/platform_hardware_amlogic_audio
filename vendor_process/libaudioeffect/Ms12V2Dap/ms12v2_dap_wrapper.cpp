@@ -44,6 +44,7 @@ using namespace android;
 
 extern "C" {
 
+#include "aml_config_data.h"
 #include "../Utility/LibAudioEffect.h"
 #define MODEL_SUM_OTT_DEFAULT_PATH "/vendor/etc/audio_config/model_sum.ini"
 
@@ -73,6 +74,11 @@ extern "C" {
 #define SPEAKER_VIRTUALIZER_OFF 0
 #define SPEAKER_VIRTUALIZER_ON 1
 #define SPEAKER_VIRTUALIZER_AUTO 2
+
+#define DIALOGUE_ENHANCEMENT_OFF    0
+#define DIALOGUE_ENHANCEMENT_LOW    1
+#define DIALOGUE_ENHANCEMENT_MEDIUM 2
+#define DIALOGUE_ENHANCEMENT_HIGH   3
 
 #define AC4_DE_MAX (12)
 
@@ -314,6 +320,7 @@ typedef struct DAPV2Context_s {
     DAPV2_state_e                    state;
     Ms12data                         gMs12data;
     bool                             dap_effect_enable;
+    const char*                      ms12_audio_config;
 } DAPV2Context;
 
 static int DAPV2_get_ac4_de_amount(int de_enable, int de_amount) {
@@ -814,9 +821,10 @@ int DAPV2_setParameter(DAPV2Context *pContext, void *pParam, void *pValue) {
     int temp1 = 0;
     int temp2 = 0;
     String8 tmpParam("");
-    char tempbuf[BUFFER_MAX_LENGTH] = {0};
     char temp[BUFFER_MAX_LENGTH] = {0};
-    char tempbuffer[BUFFER_MAX_LENGTH] = {0};
+    char tempbuf[BUFFER_MAX_LENGTH] = {0};
+    char tempbuffer1[BUFFER_MAX_LENGTH] = {0};
+    char tempbuffer2[BUFFER_MAX_LENGTH] = {0};
     switch (param) {
     case DAP_PARAM_PROFILE:
         value = *(int32_t *)pValue;
@@ -825,19 +833,27 @@ int DAPV2_setParameter(DAPV2Context *pContext, void *pParam, void *pValue) {
             return -EINVAL;
         }
         data->profile = value;
+        //Allow to set Speaker Virtualizer, only when ms12 is config_Z.
+        if (strcasestr(pContext->ms12_audio_config, "Z") != NULL) {
+            sprintf(tempbuffer1,"ms12_runtime=-dap_surround_decoder_enable %d -dap_surround_virtualizer %d,%d",
+                data->dolby_base_profile[value].dap_surround_param.surround_decoder_enable,
+                data->dolby_base_profile[value].dap_virtual_surround.mode, data->dolby_base_profile[value].dap_virtual_surround.boost);
+            setParameters(String8(tempbuffer1));
+        } else {
+            //Set speaker virtualizer off, when ms12 is not config_Z
+            sprintf(tempbuffer1,"ms12_runtime=-dap_surround_decoder_enable %d -dap_surround_virtualizer %d,%d", 0, 0, 0);
+            setParameters(String8(tempbuffer1));
+        }
         data->dolby_base_profile[value].dap_dialog_enhance.ac4_de_amount = DAPV2_get_ac4_de_amount(data->dolby_base_profile[value].dap_dialog_enhance.de_enable,
                                                                                                  data->dolby_base_profile[value].dap_dialog_enhance.de_amount);
-        sprintf(tempbuffer,"ms12_runtime=-ac4_de %d", data->dolby_base_profile[value].dap_dialog_enhance.ac4_de_amount);
-        setParameters(String8(tempbuffer));
+        sprintf(tempbuffer2,"ms12_runtime=-ac4_de %d", data->dolby_base_profile[value].dap_dialog_enhance.ac4_de_amount);
+        setParameters(String8(tempbuffer2));
         sprintf(tempbuf,"ms12_runtime=-dap_mi_steering %d -dap_bass_enhancer %d,%d,%d,%d -dap_dialogue_enhancer %d,%d"
-            " -dap_surround_decoder_enable %d -dap_surround_virtualizer %d,%d -dap_leveler %d,%d"
-            " -dap_gains %d -dap_ieq %d,%d,%d",
+            " -dap_leveler %d,%d -dap_gains %d -dap_ieq %d,%d,%d",
             data->dolby_base_profile[value].dap_surround_param.misteering,
             data->dolby_base_profile[value].dap_bass_enhancer.enable, data->dolby_base_profile[value].dap_bass_enhancer.boost,
             data->dolby_base_profile[value].dap_bass_enhancer.cutoff, data->dolby_base_profile[value].dap_bass_enhancer.width,
             data->dolby_base_profile[value].dap_dialog_enhance.de_enable, data->dolby_base_profile[value].dap_dialog_enhance.de_amount,
-            data->dolby_base_profile[value].dap_surround_param.surround_decoder_enable,
-            data->dolby_base_profile[value].dap_virtual_surround.mode, data->dolby_base_profile[value].dap_virtual_surround.boost,
             data->dolby_base_profile[value].dap_vol_leveler.vl_enable, data->dolby_base_profile[value].dap_vol_leveler.vl_amount,
             data->dolby_base_profile[value].dap_surround_param.postgain,
             data->dolby_base_profile[value].dap_ieq_param.ieq_enable,data->dolby_base_profile[value].dap_ieq_param.ieq_amount,
@@ -930,18 +946,39 @@ int DAPV2_setParameter(DAPV2Context *pContext, void *pParam, void *pValue) {
         ALOGD("set surround virtualizer enable is %d and surround boost is %d",data->VirtualizerMode, data->VirtualizerSurroundBoost);
         break;
     case DAP_PARAM_DIALOGUE:
-        //The data transmitted from the UI is 2 byte, (from band1 to band2)
-        DAPv2cfg_8bit_a dialogue_enhancer_value;
-        dialogue_enhancer_value = *(DAPv2cfg_8bit_a *)pValue;
-        data->de_enable = (signed int)dialogue_enhancer_value.band1;
-        data->de_amount = (signed int)dialogue_enhancer_value.band2;
-        sprintf(tempbuf,"ms12_runtime=-dap_dialogue_enhancer %d,%d",data->de_enable, data->de_amount);
+        value = *(int32_t *)pValue;
+        if (value <  DIALOGUE_ENHANCEMENT_OFF || value > DIALOGUE_ENHANCEMENT_HIGH) {
+            ALOGE("%s: incorrect dialogue enhancer leveler %d", __FUNCTION__, value);
+            return -EINVAL;
+        }
+        switch (value) {
+            case DIALOGUE_ENHANCEMENT_OFF:
+            data->de_enable = 0;
+            data->de_amount = 0;
+            data->ac4_de_amount = 0;
+            break;
+        case DIALOGUE_ENHANCEMENT_LOW:
+            data->de_enable = 1;
+            data->de_amount = 4;
+            data->ac4_de_amount = 4;
+            break;
+        case DIALOGUE_ENHANCEMENT_MEDIUM:
+            data->de_enable = 1;
+            data->de_amount = 8;
+            data->ac4_de_amount = 8;
+            break;
+        case DIALOGUE_ENHANCEMENT_HIGH:
+            data->de_enable = 1;
+            data->de_amount = 12;
+            data->ac4_de_amount = 12;
+            break;
+        }
+        sprintf(tempbuf,"ms12_runtime=-dap_dialogue_enhancer %d,%d", data->de_enable, data->de_amount);
         setParameters(String8(tempbuf));
-        data->ac4_de_amount = DAPV2_get_ac4_de_amount(data->de_enable, data->de_amount);
-        sprintf(temp,"ms12_runtime=-ac4_de %d",data->ac4_de_amount);
+        sprintf(temp,"ms12_runtime=-ac4_de %d", data->ac4_de_amount);
         setParameters(String8(temp));
-        ALOGD("set dap dialog enhance enable is %d and amount is %d",data->de_enable, data->de_amount);
-        ALOGD("set ac4 dialog enhance amount is %d",data->ac4_de_amount);
+        ALOGD("set dap dialog enhance enable is %d and amount is %d", data->de_enable, data->de_amount);
+        ALOGD("set ac4 dialog enhance amount is %d", data->ac4_de_amount);
         break;
     case DAP_PARAM_BASS_ENHANCER:
         /*
@@ -1260,6 +1297,9 @@ int DAPV2Lib_Create(const effect_uuid_t *uuid, int32_t sessionId __unused, int32
         memcpy((void *) & pContext->gMs12data.dolby_base_profile[5], (void *) &default_dolby_base_user, sizeof(pContext->gMs12data.dolby_base_profile[5]));
         memcpy((void *) & pContext->gMs12data.dolby_base_profile[6], (void *) &default_dolby_base_off, sizeof(pContext->gMs12data.dolby_base_profile[6]));
     }
+
+    pContext->ms12_audio_config = aml_get_jason_str_value("Dolby_MS12_Audio_Config", "Y");
+    ALOGI("%s() line %d ms12_audio_config:%s", __FUNCTION__, __LINE__, pContext->ms12_audio_config);
 
     pContext->itfe = &DAPV2Interface;
     pContext->state = DAPV2_STATE_UNINITIALIZED;

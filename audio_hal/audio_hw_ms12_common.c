@@ -62,7 +62,6 @@
 
 #define DOLBY_DRC_LINE_MODE 0
 #define DOLBY_DRC_RF_MODE   1
-#define DDPI_UDC_COMP_LINE 2
 
 
 
@@ -842,8 +841,8 @@ void dynamic_get_dolby_ms12_drc_parameters(struct aml_audio_device *adev, struct
         return ;
     }
 
-    if (0 == aml_audio_get_dolby_drc_mode(&drc_mode, &drc_cut, &drc_boost))
-        dolby_ms12_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+    if (0 == aml_audio_get_dolby_drc_mode(ms12, &drc_mode, &drc_cut, &drc_boost))
+        dolby_ms12_drc_mode = drc_mode;
 
     //1.through non-dtv patch and is_local_out_bitstream(false):
     //if non-dolby format, use the DRC Line mode;
@@ -858,8 +857,8 @@ void dynamic_get_dolby_ms12_drc_parameters(struct aml_audio_device *adev, struct
     ms12->stereo_drc.mode = dolby_ms12_drc_mode;
 
     if (ms12->output_config & MS12_OUTPUT_MASK_SPEAKER) {
-        if (0 == aml_audio_get_dolby_dap_drc_mode(&drc_mode, &drc_cut, &drc_boost))
-            dolby_ms12_dap_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+        if (0 == aml_audio_get_dolby_dap_drc_mode(ms12, &drc_mode, &drc_cut, &drc_boost))
+            dolby_ms12_dap_drc_mode = drc_mode;
 
         //1.through non-dtv patch and is_local_out_bitstream(false):
         //if non-dolby format, use the DRC Line mode;

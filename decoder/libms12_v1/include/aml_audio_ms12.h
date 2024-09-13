@@ -165,6 +165,34 @@ struct dolby_ms12_desc {
      */
     int ac4_de;
     /*
+     *-dmx              * <int>   Downmix modes
+     *                       0 = Lt/Rt (Default)
+     *                       1 = Lo/Ro
+     */
+    int dmx;
+    /*
+     *-drc              * <int>   DRC modes (for downmixed output)
+     *                       0 = Line (Default)
+     *                       1 = RF
+     *-bs               * <int>   Scale factor for incoming DRC boost value for 2-channel downmix
+     *-cs               * <int>   Scale factor for incoming DRC cut value for 2-channel downmix
+     *                       0 - 100; Default = 100
+     */
+    int drc;
+    int bs;
+    int cs;
+    /*
+     *-dap_drc          * <int>   DAP DRC mode (for multichannel and DAP output)
+     *                       0 = Line (Default)
+     *                       1 = RF
+     *-b                * <int>   Scale factor for incoming DRC boost value
+     *-c                * <int>   Scale factor for incoming DRC cut value
+     *                       0 - 100; Default = 100
+     */
+    int dap_drc;
+    int b;
+    int c;
+    /*
      * these variables are used for ms12 message thread.
      */
     pthread_t ms12_mesg_threadID;

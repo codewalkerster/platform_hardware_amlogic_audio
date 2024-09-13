@@ -71,7 +71,6 @@ namespace android
 #define DEFAULT_SOUNDS_CHANNEL_CONFIGURATION 2//means 2/0 (L, R)
 
 //DRC Mode
-#define DDPI_UDC_COMP_LINE 2
 #define DRC_MODE_BIT  0
 #define DRC_HIGH_CUT_BIT 3
 #define DRC_LOW_BST_BIT 16

@@ -54,8 +54,8 @@ struct audio_board_config {
     int builtinmic_alsa_dev_id;
     /*
       -1: Not support MS12
-      0: config with X
-      1: config with Y
+      0: config with Y
+      1: config with X
       2: config with Z
     */
     int dolby_ms12_audio_config;
@@ -126,6 +126,7 @@ struct audio_board_config {
 
 int aml_audio_config_parser();
 int aml_get_jason_int_value(char* key,int defvalue);
+const char *aml_get_jason_str_value(const char* key, const char* defvalue);
 bool aml_get_codec_support(char* aformat);
 void aml_audio_board_config_init(struct audio_board_config *config);
 char * get_parameters_from_json_config(struct audio_board_config *board_config, const char *keys);

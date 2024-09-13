@@ -95,7 +95,6 @@
 #define MS12_MAIN_BUF_INCREASE_TIME_MS (1000)
 #define MS12_SYS_BUF_INCREASE_TIME_MS (1000)
 #define MS12_DEEP_BUF_INCREASE_TIME_MS (1000)
-#define DDPI_UDC_COMP_LINE 2
 
 
 #define MS12_PCM_FRAME_SIZE         (6144)
@@ -728,8 +727,8 @@ void dynamic_set_dolby_ms12_drc_parameters(struct dolby_ms12_desc *ms12)
         return ;
     }
 
-    if (0 == aml_audio_get_dolby_drc_mode(&drc_mode, &drc_cut, &drc_boost))
-        dolby_ms12_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+    if (0 == aml_audio_get_dolby_drc_mode(ms12, &drc_mode, &drc_cut, &drc_boost))
+        dolby_ms12_drc_mode = drc_mode;
 
     /*
      * if main input is hdmi-in/dtv/other-source PCM
@@ -747,8 +746,8 @@ void dynamic_set_dolby_ms12_drc_parameters(struct dolby_ms12_desc *ms12)
         (dolby_ms12_drc_mode == DOLBY_DRC_RF_MODE) ? "RF MODE" : "LINE MODE", drc_boost, drc_cut);
 
     if (ms12->output_config & MS12_OUTPUT_MASK_DAP) {
-        if (0 == aml_audio_get_dolby_dap_drc_mode(&drc_mode, &drc_cut, &drc_boost))
-            dolby_ms12_dap_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+        if (0 == aml_audio_get_dolby_dap_drc_mode(ms12, &drc_mode, &drc_cut, &drc_boost))
+            dolby_ms12_dap_drc_mode = drc_mode;
 
         /*
          * if main input is hdmi-in/dtv/other-source PCM
@@ -794,7 +793,7 @@ void set_ms12_main_audio_mute(struct dolby_ms12_desc *ms12, bool b_mute, unsigne
     ALOGD("%s b_mute %d, duration %d ", __FUNCTION__, ms12->is_muted, duration);
 }
 
-void set_dolby_ms12_drc_parameters(audio_format_t input_format, int output_config_mask)
+void set_dolby_ms12_drc_parameters(audio_format_t input_format, int output_config_mask, struct dolby_ms12_desc *ms12)
 {
     int dolby_ms12_drc_mode = DOLBY_DRC_RF_MODE;
     int dolby_ms12_dap_drc_mode = DOLBY_DRC_RF_MODE;
@@ -802,8 +801,8 @@ void set_dolby_ms12_drc_parameters(audio_format_t input_format, int output_confi
     int drc_cut = 0;
     int drc_boost = 0;
 
-    if (0 == aml_audio_get_dolby_drc_mode(&drc_mode, &drc_cut, &drc_boost))
-        dolby_ms12_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+    if (0 == aml_audio_get_dolby_drc_mode(ms12, &drc_mode, &drc_cut, &drc_boost))
+        dolby_ms12_drc_mode = drc_mode;
     //for mul-pcm
     dolby_ms12_set_drc_boost(drc_boost);
     dolby_ms12_set_drc_cut(drc_cut);
@@ -824,8 +823,8 @@ void set_dolby_ms12_drc_parameters(audio_format_t input_format, int output_confi
     ALOGI("%s dolby_ms12_set_drc_mode %s", __FUNCTION__, (dolby_ms12_drc_mode == DOLBY_DRC_RF_MODE) ? "RF MODE" : "LINE MODE");
 
     if (output_config_mask & MS12_OUTPUT_MASK_DAP) {
-        if (0 == aml_audio_get_dolby_dap_drc_mode(&drc_mode, &drc_cut, &drc_boost))
-            dolby_ms12_dap_drc_mode = (drc_mode == DDPI_UDC_COMP_LINE) ? DOLBY_DRC_LINE_MODE : DOLBY_DRC_RF_MODE;
+        if (0 == aml_audio_get_dolby_dap_drc_mode(ms12, &drc_mode, &drc_cut, &drc_boost))
+            dolby_ms12_dap_drc_mode = drc_mode;
         /*
          * if main input is hdmi-in/dtv/other-source PCM
          * would not go through the DRC processing
@@ -847,14 +846,16 @@ static void set_dolby_ms12_dap_init_mode(struct aml_audio_device *adev)
     int dap_init_mode = 0;
 
     /* Dolby MS12 V2 uses DAP Tuning file */
-    if (adev->is_ms12_tuning_dat) {
+    if (adev->is_ms12_tuning_dat
+        && ((adev->board_config.dolby_ms12_audio_config == MS12_CONFIG_X)
+        || (adev->board_config.dolby_ms12_audio_config == MS12_CONFIG_Z))) {
         dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || is_SBR(adev));
     }
 
     if (adev->dolby_ms12_dap_init_mode) {
         dap_init_mode = adev->dolby_ms12_dap_init_mode;
     }
-    ALOGI("%s dap_init_mode = %d", __func__, dap_init_mode);
+    ALOGI("dap_init_mode = %d", dap_init_mode);
     dolby_ms12_set_dap2_initialisation_mode(dap_init_mode);
 }
 
@@ -1086,7 +1087,7 @@ int get_the_dolby_ms12_prepared(
     // if video boot up, this set_dolby_ms12_drc_parameters() will set RF mode
     // but the steam format is non-dolby under local play.
     // This lead volume is louder, it is uncorrect.
-    //set_dolby_ms12_drc_parameters(input_format, output_config);
+    //set_dolby_ms12_drc_parameters(input_format, output_config, ms12);
 
     if (is_dev_patch_valid(adev) && is_dev_patch_exist(adev) && get_dev_patch(adev)->input_src == AUDIO_DEVICE_IN_HDMI) {
         if (!adev->continuous_audio_mode &&
@@ -5516,7 +5517,7 @@ int aml_dap_open(
     struct audio_board_config *bd_config = &adev->board_config;
     ms12->dual_bitstream_support = adev->dual_spdif_support;
     output_config = MS12_OUTPUT_MASK_SPEAKER;
-    set_dolby_ms12_drc_parameters(input_format, output_config);
+    set_dolby_ms12_drc_parameters(input_format, output_config, ms12);
 
     aml_ms12_config(ms12, input_format, input_channel_mask, input_sample_rate, output_config, get_ms12_path());
     if (ms12->dolby_ms12_enable) {

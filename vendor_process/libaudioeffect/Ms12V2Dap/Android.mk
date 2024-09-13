@@ -16,7 +16,7 @@ LOCAL_SHARED_LIBRARIES := \
     android.hardware.audio@4.0 \
     android.hardware.audio.common@4.0 \
     android.hardware.audio.common@4.0-util \
-
+    audio.primary.amlogic\
 
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH) \
@@ -26,6 +26,8 @@ LOCAL_C_INCLUDES := \
     system/media/audio/include \
     vendor/amlogic/frameworks/av/libaudioeffect/Utility \
     system/core/libutils/include \
+    hardware/amlogic/audio/audio_hal \
+    hardware/amlogic/audio/utils/cJSON \
 
 LOCAL_SRC_FILES := ms12v2_dap_wrapper.cpp
 
