@@ -1174,17 +1174,6 @@ int get_the_dolby_ms12_prepared(
         goto Err_Iec61937_Calloc;
     }
 
-    /*ms12 related resources are prepared, we can start ms12 thread*/
-    if (continuous_mode(adev) && ms12->dolby_ms12_enable) {
-        ms12->dolby_ms12_thread_exit = false;
-        ret = pthread_create(&(ms12->dolby_ms12_threadID), NULL, &dolby_ms12_threadloop, out);
-        if (ret != 0) {
-            ALOGE("%s, Create dolby_ms12_thread fail!\n", __FUNCTION__);
-            goto Err_DolbyMs12_Thread;
-        }
-        ALOGI("%s() thread is build, get dolby_ms12_threadID %ld\n", __FUNCTION__, ms12->dolby_ms12_threadID);
-    }
-
     /*coverity[missing_lock]*/
     aml_ac3_parser_open(&ms12->ac3_parser_handle);
     aml_ac3_parser_open(&ms12->info_ac3_parser_handle);
@@ -1211,9 +1200,6 @@ int get_the_dolby_ms12_prepared(
         set_dolby_ms12_main_speed(&adev->ms12, (double)aml_out->output_speed);
         ALOGI("%s(), aml_out->output_speed %f", __FUNCTION__,aml_out->output_speed);
     }
-    ALOGI("--%s(), locked", __FUNCTION__);
-    pthread_mutex_unlock(&ms12->main_lock);
-    pthread_mutex_unlock(&ms12->lock);
 
     //update the runtime parameters after ms12 initialization is completed.
     if (input_format == AUDIO_FORMAT_AC4) {
@@ -1263,11 +1249,24 @@ int get_the_dolby_ms12_prepared(
     set_ms12_scheduler_sleep(ms12, true);
     ms12->scheduler_run_count = 0;
 
+    /*ms12 related resources are prepared, we can start ms12 thread*/
+    if (continuous_mode(adev) && ms12->dolby_ms12_enable) {
+        ms12->dolby_ms12_thread_exit = false;
+        ret = pthread_create(&(ms12->dolby_ms12_threadID), NULL, &dolby_ms12_threadloop, out);
+        if (ret != 0) {
+            ALOGE("%s, Create dolby_ms12_thread fail!\n", __FUNCTION__);
+            goto Err_DolbyMs12_Thread;
+        }
+        ALOGI("%s() thread is build, get dolby_ms12_threadID %ld\n", __FUNCTION__, ms12->dolby_ms12_threadID);
+    }
+
+    ALOGI("--%s(), locked", __FUNCTION__);
+    pthread_mutex_unlock(&ms12->main_lock);
+    pthread_mutex_unlock(&ms12->lock);
+
     ALOGI("-%s()\n\n", __FUNCTION__);
 
     return ret;
-Err_RingBuf_Init:
-    ring_buffer_release(&ms12->spdif_ring_buffer);
 Err_DolbyMs12_Thread:
     if (continuous_mode(adev)) {
         if (ms12->dolby_ms12_enable) {
@@ -1276,6 +1275,8 @@ Err_DolbyMs12_Thread:
             ms12->dolby_ms12_threadID = 0;
         }
     }
+Err_RingBuf_Init:
+    ring_buffer_release(&ms12->spdif_ring_buffer);
 Err_Iec61937_Calloc:
     if (ms12->iec61937_ddp_buf) {
         aml_audio_free(ms12->iec61937_ddp_buf);
