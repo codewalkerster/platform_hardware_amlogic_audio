@@ -324,7 +324,7 @@ int aml_audio_ms12_render(struct audio_stream_out *stream, const void *buffer, s
      * 1+2, can go through ms12 processing
      */
     if (is_dolby_ms12_support_compression_format(aml_out->hal_internal_format)
-        || is_multi_channel_pcm(stream)) {
+        || is_multi_channel_48k_pcm(stream)) {
         bypass_aml_dec = true;
     }
 

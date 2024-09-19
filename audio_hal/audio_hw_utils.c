@@ -2022,6 +2022,13 @@ bool is_multi_channel_pcm(struct audio_stream_out *stream) {
            (aml_out->hal_ch > 2));
 }
 
+bool is_multi_channel_48k_pcm(struct audio_stream_out *stream) {
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+
+    return (audio_is_linear_pcm(aml_out->hal_internal_format) &&
+           (aml_out->hal_ch > 2) && (aml_out->hal_rate == 48000));
+}
+
 bool is_high_rate_pcm(struct audio_stream_out *stream) {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
 
