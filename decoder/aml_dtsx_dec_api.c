@@ -199,6 +199,7 @@ typedef struct dtsx_config_params_s {
     bool neuralx_up_mix;
     bool neox_down_mix;
     bool sink_support_multich_pcm;
+    bool type1_relable_enable;
 } dtsx_config_params_t;
 
 static dtsx_debug_t _dtsx_debug = {0};
@@ -247,7 +248,9 @@ static dtsx_config_params_t _dtsx_config_params = {
     .loudness_target[DTSX_OUTPUT_RAW] = -31,
     .loudness_target[DTSX_OUTPUT_HP] = -20,
     .neuralx_up_mix = 0,
-    .neox_down_mix = 1
+    .neox_down_mix = 1,
+    .sink_support_multich_pcm = 0,
+    .type1_relable_enable = 1
 };
 
 /*dts decoder lib function*/
@@ -983,6 +986,7 @@ static int _aml_dtsx_dualcore_init(dtsx_dec_t *p_dtsx_dec)
     snprintf(p_dtsx_dec->init_argv[cmd_count++], DTSX_PARAM_STRING_LEN, "dtsx_dec_sinkdevtype=%d", _dtsx_config_params.dec_sink_dev_type);
     snprintf(p_dtsx_dec->init_argv[cmd_count++], DTSX_PARAM_STRING_LEN, "dtsx_passthrough_enable=%d", _dtsx_config_params.bPassthrough);
     snprintf(p_dtsx_dec->init_argv[cmd_count++], DTSX_PARAM_STRING_LEN, "dtsx_sink_support_multich_pcm=%d", _dtsx_config_params.sink_support_multich_pcm);
+    snprintf(p_dtsx_dec->init_argv[cmd_count++], DTSX_PARAM_STRING_LEN, "dtsx_type1_relable_enable=%d", _dtsx_config_params.type1_relable_enable);
 
     ret = (_aml_dts_decoder_init)(&p_dtsx_dec->p_dtsx_dec_inst, cmd_count, (const char **)(p_dtsx_dec->init_argv));
     if (ret != 0) {
@@ -2142,6 +2146,27 @@ static int _dtsx_hp_loudness_target(dtsx_dec_t *dtsx_dec, int target)
     return ret;
 }
 
+static int _dtsx_type1_relable_enable(dtsx_dec_t *dtsx_dec, int value)
+{
+    int ret = -1;
+    char cmd[DTSX_PARAM_STRING_LEN] = {0};
+    bool enable = !!value;
+
+    if (dtsx_dec && DCA_CHECK_STATUS(dtsx_dec->status, DCA_INITED)) {
+        snprintf(cmd, DTSX_PARAM_STRING_LEN, "dtsx_type1_relable_enable=%d", enable);
+        ret = _dtsx_set_postprocess_dynamic_parameter(dtsx_dec, cmd);
+    }
+    _dtsx_config_params.type1_relable_enable = enable;
+
+    if (ret != 0) {
+        ALOGW("[%s:%d] DTSX type1 relable %sable failed", __func__, __LINE__, enable ? "en" : "dis");
+    } else {
+        ALOGI("[%s:%d] DTSX type1 relable %sable success", __func__, __LINE__, enable ? "en" : "dis");
+    }
+
+    return ret;
+}
+
 int aml_dtsx_update_runtime_params(dtsx_dec_t *dtsx_dec, struct str_parms *parms)
 {
     int ret = -1;
@@ -2315,6 +2340,18 @@ int aml_dtsx_update_runtime_params(dtsx_dec_t *dtsx_dec, struct str_parms *parms
     if (ret >= 0 ) {
         _dtsx_hp_loudness_target(dtsx_dec, val);
         ALOGI("[%s:%d] dtsx_hp_loudness_target:%d", __func__, __LINE__, val);
+        return ret;
+    }
+
+    ret = str_parms_get_int(parms, "dtsx_type1_relable_enable", &val);
+    if (ret >= 0 ) {
+        if (val == 1) {
+            _dtsx_type1_relable_enable(dtsx_dec, true);
+        }
+        else {
+            _dtsx_type1_relable_enable(dtsx_dec, false);
+        }
+        ALOGI("[%s:%d] dtsx_type1_relable_enable:%d", __func__, __LINE__, val);
         return ret;
     }
 
