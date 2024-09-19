@@ -241,6 +241,8 @@ void dolby_ms12_set_dap2_initialisation_mode(int val);
  */
 void dolby_ms12_set_dap2_virtual_bass_enable(bool flag);
 
+bool dolby_ms12_get_dap2_virtual_bass_enable(void);
+
 /**
  * @brief DRC modes (for downmixed output)
  * 0 = Line (Default)

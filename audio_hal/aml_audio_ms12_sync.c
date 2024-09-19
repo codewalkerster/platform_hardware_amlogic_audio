@@ -183,14 +183,25 @@ int get_sink_dv_latency_offset(bool tunnel, bool is_netflix)
     int ret = -1;
     int latency_ms = 0;
     char *prop_name = NULL;
+    struct aml_audio_device *adev = adev_get_handle();
 
     if (is_netflix) {
-        if (tunnel) {
-            prop_name = AVSYNC_DV_NETFLIX_TUNNEL_LATENCY_PROPERTY;
-            latency_ms = AVSYNC_DV_NETFLIX_TUNNEL_LATENCY;
+        if (is_SBR_active(adev)) {
+            if (tunnel) {
+                prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_DV_TUNNEL_LATENCY_PROPERTY;
+                latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_DV_TUNNEL_LATENCY;
+            } else {
+                prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_DV_NONTUNNEL_LATENCY_PROPERTY;
+                latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_DV_NONTUNNEL_LATENCY;
+            }
         } else {
-            prop_name = AVSYNC_DV_NETFLIX_NONTUNNEL_LATENCY_PROPERTY;
-            latency_ms = AVSYNC_DV_NETFLIX_NONTUNNEL_LATENCY;
+            if (tunnel) {
+                prop_name = AVSYNC_DV_NETFLIX_TUNNEL_LATENCY_PROPERTY;
+                latency_ms = AVSYNC_DV_NETFLIX_TUNNEL_LATENCY;
+            } else {
+                prop_name = AVSYNC_DV_NETFLIX_NONTUNNEL_LATENCY_PROPERTY;
+                latency_ms = AVSYNC_DV_NETFLIX_NONTUNNEL_LATENCY;
+            }
         }
     } else {
         if (tunnel) {
@@ -326,6 +337,9 @@ static int get_ms12_netflix_nontunnel_input_latency(audio_format_t input_format)
         if (is_TV(adev)) {
             prop_name = AVSYNC_MS12_TV_NETFLIX_NONTUNNEL_PCM_LATENCY_PROPERTY;
             latency_ms = AVSYNC_MS12_TV_NETFLIX_NONTUNNEL_PCM_LATENCY;
+        } else if (is_SBR_active(adev)) {
+            prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY;
         } else {
             prop_name = AVSYNC_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY_PROPERTY;
             latency_ms = AVSYNC_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY;
@@ -337,6 +351,9 @@ static int get_ms12_netflix_nontunnel_input_latency(audio_format_t input_format)
         if (is_TV(adev)) {
             prop_name = AVSYNC_MS12_TV_NETFLIX_NONTUNNEL_DDP_LATENCY_PROPERTY;
             latency_ms = AVSYNC_MS12_TV_NETFLIX_NONTUNNEL_DDP_LATENCY;
+        } else if (is_SBR_active(adev)) {
+            prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_DDP_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_DDP_LATENCY;
         } else {
             prop_name = AVSYNC_MS12_NETFLIX_NONTUNNEL_DDP_LATENCY_PROPERTY;
             latency_ms = AVSYNC_MS12_NETFLIX_NONTUNNEL_DDP_LATENCY;
@@ -364,13 +381,15 @@ static int get_ms12_netflix_tunnel_input_latency(audio_format_t input_format) {
     int latency_ms = 0;
     char *prop_name = NULL;
     struct aml_audio_device *adev = adev_get_handle();
-
     switch (input_format) {
     case AUDIO_FORMAT_PCM_16_BIT: {
         /*for non tunnel ddp2h/heaac case:netflix AL1 case */
         if (is_TV(adev)) {
             prop_name = AVSYNC_MS12_TV_NETFLIX_TUNNEL_PCM_LATENCY_PROPERTY;
             latency_ms = AVSYNC_MS12_TV_NETFLIX_TUNNEL_PCM_LATENCY;
+        } else if (is_SBR_active(adev)) {
+            prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_PCM_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_PCM_LATENCY;
         } else {
             prop_name = AVSYNC_MS12_NETFLIX_TUNNEL_PCM_LATENCY_PROPERTY;
             latency_ms = AVSYNC_MS12_NETFLIX_TUNNEL_PCM_LATENCY;
@@ -383,6 +402,9 @@ static int get_ms12_netflix_tunnel_input_latency(audio_format_t input_format) {
         if (is_TV(adev)) {
             prop_name = AVSYNC_MS12_TV_NETFLIX_TUNNEL_DDP_LATENCY_PROPERTY;
             latency_ms = AVSYNC_MS12_TV_NETFLIX_TUNNEL_DDP_LATENCY;
+        } else if (is_SBR_active(adev)) {
+            prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_DDP_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_DDP_LATENCY;
         } else {
             prop_name = AVSYNC_MS12_NETFLIX_TUNNEL_DDP_LATENCY_PROPERTY;
             latency_ms = AVSYNC_MS12_NETFLIX_TUNNEL_DDP_LATENCY;
@@ -450,25 +472,46 @@ static int get_ms12_netflix_output_latency(audio_format_t output_format) {
     int ret = -1;
     int latency_ms = 0;
     char *prop_name = NULL;
+    struct aml_audio_device *adev = adev_get_handle();
+
     switch (output_format) {
     case AUDIO_FORMAT_PCM_16_BIT: {
-        latency_ms = AVSYNC_MS12_NETFLIX_PCM_OUT_LATENCY;
-        prop_name = AVSYNC_MS12_NETFLIX_PCM_OUT_LATENCY_PROPERTY;
+        if (is_SBR_active(adev)) {
+             // Default is pcm, no need tuning parameters.
+        } else {
+            latency_ms = AVSYNC_MS12_NETFLIX_PCM_OUT_LATENCY;
+            prop_name = AVSYNC_MS12_NETFLIX_PCM_OUT_LATENCY_PROPERTY;
+        }
         break;
     }
     case AUDIO_FORMAT_AC3: {
-        latency_ms = AVSYNC_MS12_NETFLIX_DD_OUT_LATENCY;
-        prop_name = AVSYNC_MS12_NETFLIX_DD_OUT_LATENCY_PROPERTY;
+        if (is_SBR_active(adev)) {
+            latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_DD_LATENCY;
+            prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_DD_LATENCY_PROPERTY;
+        } else {
+            latency_ms = AVSYNC_MS12_NETFLIX_DD_OUT_LATENCY;
+            prop_name = AVSYNC_MS12_NETFLIX_DD_OUT_LATENCY_PROPERTY;
+        }
         break;
     }
     case AUDIO_FORMAT_E_AC3: {
-        latency_ms = AVSYNC_MS12_NETFLIX_DDP_OUT_LATENCY;
-        prop_name = AVSYNC_MS12_NETFLIX_DDP_OUT_LATENCY_PROPERTY;
+        if (is_SBR_active(adev)) {
+            latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_DDP_LATENCY;
+            prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_DDP_LATENCY_PROPERTY;
+        } else {
+            latency_ms = AVSYNC_MS12_NETFLIX_DDP_OUT_LATENCY;
+            prop_name = AVSYNC_MS12_NETFLIX_DDP_OUT_LATENCY_PROPERTY;
+        }
         break;
     }
     case AUDIO_FORMAT_MAT: {
-        latency_ms = AVSYNC_MS12_NETFLIX_MAT_OUT_LATENCY;
-        prop_name = AVSYNC_MS12_NETFLIX_MAT_OUT_LATENCY_PROPERTY;
+        if (is_SBR_active(adev)) {
+            latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_MAT_LATENCY;
+            prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_MAT_LATENCY_PROPERTY;
+        } else {
+            latency_ms = AVSYNC_MS12_NETFLIX_MAT_OUT_LATENCY;
+            prop_name = AVSYNC_MS12_NETFLIX_MAT_OUT_LATENCY_PROPERTY;
+        }
         break;
     }
     default:
@@ -485,6 +528,58 @@ static int get_ms12_netflix_output_latency(audio_format_t output_format) {
     return latency_ms;
 
 }
+
+static int get_ms12_netflix_soundeffect_latency(bool dap_enable, bool virtual_bass_enable)
+{
+    char buf[PROPERTY_VALUE_MAX];
+    int ret = -1;
+    int latency_ms = 0;
+    int dap_latency_ms = 0;
+    int dap_tuning_ms = 0;
+    int cus_latency_ms = 0;
+    char *prop_name = NULL;
+    struct aml_audio_device *adev = adev_get_handle();
+
+    if (dap_enable) {
+        if (virtual_bass_enable) {
+            dap_latency_ms = 1536/48;
+        } else {
+            dap_latency_ms = 512/48;
+        }
+
+        if (is_SBR_active(adev)) {
+            dap_tuning_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_DAP_TUNING_LATENCY;
+            prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_DAP_TUNING_LATENCY_PROPERTY;
+        }
+        if (prop_name) {
+            memset(buf, 0, sizeof(buf));
+            ret = property_get(prop_name, buf, NULL);
+            if (ret > 0) {
+                dap_tuning_ms = atoi(buf);
+            }
+        }
+    }
+
+    // customer soundeffect process
+    if (is_SBR_active(adev)) {
+        cus_latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_CUS_PROCESS_LATENCY;
+        prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_CUS_PROCESS_LATENCY_PROPERTY;
+
+        if (prop_name) {
+            memset(buf, 0, sizeof(buf));
+            ret = property_get(prop_name, buf, NULL);
+            if (ret > 0) {
+                cus_latency_ms = atoi(buf);
+            }
+        }
+    }
+
+    latency_ms = dap_latency_ms + dap_tuning_ms + cus_latency_ms;
+    ALOGV("%s dap_enable=%d, virtual_bass_enable=%d, dap_latency_ms=%d, dap_tuning_ms=%d cus_latency_ms=%d, latency_ms=%d",
+        __func__, dap_enable, virtual_bass_enable, dap_latency_ms, dap_tuning_ms, cus_latency_ms, latency_ms);
+    return latency_ms;
+}
+
 
 int get_ms12_netflix_port_latency( enum OUT_PORT port, audio_format_t output_format)
 {
@@ -634,13 +729,19 @@ static int get_ms12_nontunnel_latency_offset(enum OUT_PORT port
     int output_latency_ms = 0;
     int port_latency_ms = 0;
     bool is_tunnel = false;
+    int sound_effect_latency_ms = 0;
     struct aml_audio_device *adev = adev_get_handle();
+    bool dap_enable = is_audio_postprocessing_add_dolbyms12_dap(adev);
+    bool virtual_bass_enable = get_ms12_dap_virtual_bass_enable();
 
     if (is_netflix) {
         input_latency_ms  = get_ms12_netflix_nontunnel_input_latency(input_format);
         output_latency_ms = get_ms12_netflix_output_latency(output_format);
         if (adev->bDVEnable && !is_TV(adev)) {
             output_latency_ms += get_sink_dv_latency_offset(false, true);
+        }
+        if (port == OUTPORT_SPEAKER) {
+            sound_effect_latency_ms = get_ms12_netflix_soundeffect_latency(dap_enable, virtual_bass_enable);
         }
         port_latency_ms = get_ms12_netflix_port_latency(port, output_format);
     } else {
@@ -651,9 +752,9 @@ static int get_ms12_nontunnel_latency_offset(enum OUT_PORT port
         }
         port_latency_ms   = get_ms12_port_latency(port, output_format, is_eARC, is_tunnel);
     }
-    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms;
-    ALOGV("%s total latency =%d ms in=%d ms out=%d ms port=%d ms", __func__,
-        latency_ms, input_latency_ms, output_latency_ms, port_latency_ms);
+    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms + sound_effect_latency_ms;
+    ALOGV("%s total latency =%d ms in=%d ms out=%d ms port=%d ms sound_effect=%d ms", __func__,
+        latency_ms, input_latency_ms, output_latency_ms, port_latency_ms, sound_effect_latency_ms);
     return latency_ms;
 }
 
@@ -695,8 +796,12 @@ static int get_ms12_tunnel_latency_offset(enum OUT_PORT port
     int input_latency_ms = 0;
     int output_latency_ms = 0;
     int port_latency_ms = 0;
+    int sound_effect_latency_ms = 0;
     int is_dv = getprop_bool(MS12_OUTPUT_5_1_DDP); /* suppose that Dolby Vision is under test */
     bool is_tunnel = true;
+    struct aml_audio_device *adev = adev_get_handle();
+    bool dap_enable = is_audio_postprocessing_add_dolbyms12_dap(adev);
+    bool virtual_bass_enable = get_ms12_dap_virtual_bass_enable();
 
 
     //ALOGD("%s  prot:%d, is_netflix:%d, input_format:0x%x, output_format:0x%x", __func__,
@@ -708,6 +813,9 @@ static int get_ms12_tunnel_latency_offset(enum OUT_PORT port
             output_latency_ms += AVSYNC_MS12_NETFLIX_DDP_OUT_TUNNEL_TUNING;
         }
         port_latency_ms   = get_ms12_netflix_port_latency(port, output_format);
+        if (port == OUTPORT_SPEAKER) {
+            sound_effect_latency_ms = get_ms12_netflix_soundeffect_latency(dap_enable, virtual_bass_enable);
+         }
     } else {
         /*
          * TODO:
@@ -727,9 +835,9 @@ static int get_ms12_tunnel_latency_offset(enum OUT_PORT port
         }
         port_latency_ms   = get_ms12_port_latency(port, output_format, is_eARC, is_tunnel);
     }
-    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms;
-    ALOGV("%s total latency =%d ms in=%d ms out=%d ms(is output ddp_atmos %d) port=%d ms", __func__,
-        latency_ms, input_latency_ms, output_latency_ms, is_output_ddp_atmos, port_latency_ms);
+    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms + sound_effect_latency_ms;
+    ALOGV("%s total latency =%d ms in=%d ms out=%d ms(is output ddp_atmos %d) port=%d ms sound_effect=%d ms", __func__,
+        latency_ms, input_latency_ms, output_latency_ms, is_output_ddp_atmos, port_latency_ms, sound_effect_latency_ms);
     return latency_ms;
 }
 
@@ -740,16 +848,30 @@ int get_ms12_atmos_latency_offset(bool tunnel, bool is_netflix)
     int ret = -1;
     int latency_ms = 0;
     char *prop_name = NULL;
+    struct aml_audio_device *adev = adev_get_handle();
+
     if (is_netflix) {
-        if (tunnel) {
-            /*tunnel atmos case*/
-            prop_name = AVSYNC_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY_PROPERTY;
-            latency_ms = AVSYNC_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY;
+        if (is_SBR_active(adev)) {
+            if (tunnel) {
+                /*tunnel atmos case*/
+                prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY_PROPERTY;
+                latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY;
+            } else {
+                /*non tunnel atmos case*/
+                prop_name = AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY_PROPERTY;
+                latency_ms = AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY;
+            }
         } else {
-            /*non tunnel atmos case*/
-            prop_name = AVSYNC_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY_PROPERTY;
-            latency_ms = AVSYNC_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY;
-        }
+            if (tunnel) {
+                /*tunnel atmos case*/
+                prop_name = AVSYNC_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY_PROPERTY;
+                latency_ms = AVSYNC_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY;
+            } else {
+               /*non tunnel atmos case*/
+                prop_name = AVSYNC_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY_PROPERTY;
+                latency_ms = AVSYNC_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY;
+           }
+       }
     } else {
         if (tunnel) {
             /*tunnel atmos case*/
@@ -960,8 +1082,12 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
     else if (is_TV(adev)) {
         platform_type = TV;
     }
-    else if (is_SBR(adev)) {
-        platform_type = SBR;
+    else if (is_SBR_active(adev)) {
+        if (is_SBR_active(adev)) {
+            platform_type = SBR;
+        } else {
+            platform_type = STB;
+        }
     }
 
     //ALOGI("latency_frames =%d", latency_frames);
@@ -1286,7 +1412,7 @@ int aml_audio_get_nonms12_tunnel_latency(struct audio_stream_out * stream, audio
     else if (is_TV(adev)) {
         platform_type = TV;
     }
-    else if (is_SBR(adev)) {
+    else if (is_SBR_active(adev)) {
         platform_type = SBR;
     }
 
@@ -1348,7 +1474,7 @@ int aml_audio_get_ms12_nontunel_tune_latency(const struct audio_stream_out * str
         platform_type = STB;
     } else if (is_TV(adev)) {
         platform_type = TV;
-    } else if (is_SBR(adev)) {
+    } else if (is_SBR_active(adev)) {
         platform_type = SBR;
     }
 

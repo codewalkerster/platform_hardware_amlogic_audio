@@ -748,6 +748,8 @@ struct aml_stream_out {
     uint64_t alsa_write_frames;
     aml_audio_ease_t  *audio_stream_ease;
     audio_data_handle_state_t audio_data_handle_state;
+    uint64_t audio_data_detected_bytes;
+    int audio_data_max_detect_time_ms;
     uint16_t easing_time;
     float output_speed;
     int dtvsync_enable;

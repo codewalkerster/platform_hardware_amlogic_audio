@@ -1032,7 +1032,7 @@ static int mixer_inports_read(struct amlAudioMixer *audio_mixer)
                     if (adev && adev->is_netflix) {
                         // prepare for the next writing.
                         in_port->first_read = true;
-                        out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
+                        aml_audio_data_handle_init((struct audio_stream_out *)out);
                     }
                 } else if (fade_in) {
                     AM_LOGI("input port:%s fade in", mixerInputType2Str(type));

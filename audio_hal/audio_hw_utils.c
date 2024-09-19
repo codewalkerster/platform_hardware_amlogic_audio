@@ -1713,6 +1713,7 @@ int aml_audio_data_handle(struct audio_stream_out *stream, const void* buffer, s
     int16_t *pcm16_buf = NULL;
     size_t pcm16_buf_size = 0;
     int8_t *curr_detect_ptr = NULL;
+    uint64_t had_detected_time_ms = 0;
 
     if (!audio_is_linear_pcm(out->hal_format)) {
         if (out->aml_dec == NULL) {
@@ -1778,9 +1779,18 @@ int aml_audio_data_handle(struct audio_stream_out *stream, const void* buffer, s
                     memset((int8_t *)buffer + detected_size, 0, unit_size);
                     remaining_size -= unit_size;
                     detected_size += unit_size;
+                    out->audio_data_detected_bytes += unit_size;
                     if (false == ret) {
                         out->audio_data_handle_state = AUDIO_DATA_HANDLE_DETECTED;
                         ALOGD("%s  detected the nonzero data, remaining_size:%zu  detected_size:%u", __func__, remaining_size, detected_size);
+                        break;
+                    }
+                    // If data detected time is too long, it will affect NTS avsync test cases first tone's waveform,
+                    // causing slope exceed 0.03 and failure.
+                    had_detected_time_ms = (out->audio_data_detected_bytes / hal_frame_size) *1000 / hal_rate;
+                    if (out->audio_data_max_detect_time_ms > 0 && had_detected_time_ms >= out->audio_data_max_detect_time_ms) {
+                        AM_LOGD("had detected too much time (%"PRIu64" ms), skip data handle", had_detected_time_ms);
+                        out->audio_data_handle_state = AUDIO_DATA_HANDLE_FINISHED;
                         break;
                     }
                 }
@@ -1821,6 +1831,19 @@ int aml_audio_data_handle(struct audio_stream_out *stream, const void* buffer, s
     }
 
     return 0;
+}
+
+
+void aml_audio_data_handle_init(struct audio_stream_out *stream)
+{
+    struct aml_stream_out *out = (struct aml_stream_out *)stream;
+    if (out == NULL) {
+        AM_LOGE("stream is NULL");
+        return;
+    }
+    out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
+    out->audio_data_detected_bytes = 0;
+    out->audio_data_max_detect_time_ms = 0;
 }
 
 

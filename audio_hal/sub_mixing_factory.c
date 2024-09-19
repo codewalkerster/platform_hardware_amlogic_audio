@@ -135,11 +135,13 @@ static ssize_t aml_out_write_to_mixer(struct audio_stream_out *stream, const voi
     size_t written_total = 0, frame_size = 4;
     uint32_t latency_frames = 0;
     struct timespec ts;
+    int fadein_detect_time_ms = adev->is_netflix ? NETFLIX_FADEIN_MAX_DETECT_TIME_MS : 0;
 
     if (adev->is_netflix && (STREAM_PCM_NORMAL == out->usecase
         || STREAM_PCM_HWSYNC == out->usecase
         || (STREAM_RAW_HWSYNC == out->usecase && adev->dolby_decode_enable)
         || (STREAM_RAW_DIRECT == out->usecase && adev->dolby_decode_enable))) {
+        out->audio_data_max_detect_time_ms = fadein_detect_time_ms;
         aml_audio_data_handle(stream, buffer, bytes);
     }
 
@@ -467,7 +469,7 @@ static ssize_t out_write_hwsync_lpcm(struct audio_stream_out *stream, const void
         AM_LOGI("hwsync port type = %d",
                 get_input_port_type(&out->audioCfg, out->flags));
         out->standby = false;
-        out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
+        aml_audio_data_handle_init((struct audio_stream_out *)out);
         mixer_set_continuous_output(sm->mixerData, false);
         /*wait video ready*/
         if (out->hwsync->use_mediasync) {
@@ -1338,7 +1340,7 @@ ssize_t mixer_aux_buffer_write_sm(struct audio_stream_out *stream, const void *b
             ALOGI("%s : netflix case, padding_bytes change to 16ms", __func__);
         }
 
-        aml_out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
+        aml_audio_data_handle_init((struct audio_stream_out *)aml_out);
         //set_thread_affinity();
         init_mixer_input_port(sm->mixerData, &aml_out->audioCfg, aml_out->flags,
             on_notify_cbk, aml_out, on_input_avail_cbk, aml_out,

@@ -115,6 +115,8 @@ typedef enum tv_standards_t
 } tv_standards_t;
 #define AUDIO_FIFO_THREAD_DEFAULT_PRIORITY 5
 
+#define NETFLIX_FADEIN_MAX_DETECT_TIME_MS  2000
+
 int64_t aml_gettime(void);
 int get_sysfs_uint(const char *path, uint *value);
 int set_sysfs_int(const char *path, int value);
@@ -160,6 +162,7 @@ void * aml_audio_get_muteframe(audio_format_t output_format, int * frame_size, i
 void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format, AM_AOUT_OutputMode_t mode);
 bool aml_audio_data_detect(int16_t *buf, size_t bytes, int detect_value);
 int aml_audio_data_handle(struct audio_stream_out *stream, const void* buffer, size_t bytes);
+void aml_audio_data_handle_init(struct audio_stream_out *stream);
 int aml_audio_compensate_video_delay( int enable);
 int aml_audio_get_ms12_timestamp_offset(void);
 int aml_audio_delay_timestamp(struct timespec *timestamp, int delay_time_us);

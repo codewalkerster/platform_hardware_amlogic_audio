@@ -208,6 +208,10 @@ public:
     {
         mDAPVirtualBassEnable = flag;    // 0 or 1
     }
+    virtual bool getDAPV2VirtualBassEnable(void)
+    {
+        return mDAPVirtualBassEnable;    // 0 or 1
+    }
     virtual void setDRCMode(int val)
     {
         mDRCModesOfDownmixedOutput = val;    // 0 or 1

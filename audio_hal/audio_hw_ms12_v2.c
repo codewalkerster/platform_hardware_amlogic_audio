@@ -604,6 +604,10 @@ void set_ms12_main_volume(struct dolby_ms12_desc *ms12, float volume) {
     //}
 }
 
+int set_ms12_fadein_max_detect_time_ms(int time_ms)
+{
+    return dolby_ms12_set_fadein_max_detect_time_ms(time_ms);
+}
 
 void set_ms12_ac4_presentation_group_index(struct dolby_ms12_desc *ms12, int index)
 {
@@ -840,7 +844,7 @@ static void set_dolby_ms12_dap_init_mode(struct aml_audio_device *adev)
 
     /* Dolby MS12 V2 uses DAP Tuning file */
     if (adev->is_ms12_tuning_dat) {
-        dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || is_SBR(adev));
+        dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || is_SBR_active(adev));
     }
     if (adev->dolby_ms12_dap_init_mode) {
         dap_init_mode = adev->dolby_ms12_dap_init_mode;
@@ -1047,7 +1051,7 @@ int get_the_dolby_ms12_prepared(
         }
     }
     /* for soundbar, we still need stereo pcm, sometimes the dap will be disabled*/
-    if (is_SBR(adev) /*&& (adev->enable_soundbar_mode == 1)*/)
+    if (is_SBR_active(adev) /*&& (adev->enable_soundbar_mode(adev) == 1)*/)
         output_config |= MS12_OUTPUT_MASK_SPEAKER | MS12_OUTPUT_MASK_STEREO;
 
 
@@ -2152,6 +2156,7 @@ int dolby_ms12_multi_app_process(
     int dolby_ms12_input_bytes = 0;
     int ms12_output_size = 0;
     int ret = 0;
+
     if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
         check_audio_level("ms12_app", buffer, bytes);
     }
@@ -4951,7 +4956,7 @@ bool is_audio_postprocessing_add_dolbyms12_dap(struct aml_audio_device *adev)
         }
     }
 
-    if (is_SBR(adev) && (adev->enable_soundbar_mode == 0)) {
+    if (is_SBR(adev) && (is_SBR_active(adev) == 0)) {
         is_dap_enable =  false;
     }
 
@@ -4969,6 +4974,10 @@ bool is_dolbyms12_dap_enable(struct aml_stream_out *aml_out) {
 #else
     return is_audio_postprocessing_add_dolbyms12_dap(adev);
 #endif
+}
+
+bool get_ms12_dap_virtual_bass_enable(void) {
+    return dolby_ms12_get_dap2_virtual_bass_enable();
 }
 
 int dolby_ms12_hwsync_init(void) {

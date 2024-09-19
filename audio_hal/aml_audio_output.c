@@ -91,7 +91,7 @@ static int a2dp_or_usb_sound_output(struct audio_stream_out *stream,
 
         /*volume process*/
         float volume = aml_audio_get_s_gain_by_src(adev, get_dev_patch_src(adev));
-        if (is_SBR(adev)) {
+        if (is_SBR_active(adev)) {
             if (is_include_a2dp_out_port(adev->cur_out_devices)) {
                 volume *= adev->sink_gain[OUTPORT_A2DP];
             } else if (is_include_usb_out_port(adev->cur_out_devices)){
@@ -167,7 +167,7 @@ ssize_t processing_multich_pcm(struct audio_stream_out *stream,
 
             /* apply volume for spk/hp, SPDIF/HDMI keep the max volume */
             float gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
-            if (!adev->enable_soundbar_mode && (adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI)/*(eDolbyMS12Lib == adev->dolby_lib_type) && aml_out->ms12_vol_ctrl*/) {
+            if (!is_SBR_active(adev) && (adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI)/*(eDolbyMS12Lib == adev->dolby_lib_type) && aml_out->ms12_vol_ctrl*/) {
                 gain_speaker = 1.0;
             }
             apply_volume_16to32(gain_speaker, (int16_t *)buffer, adev->out_32_buf, bytes);
@@ -344,7 +344,7 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
     }
 
     /*if it is more than 2 ch, we need to use below channel map process*/
-    if (ch > 2 || is_SBR(adev)) {
+    if (ch > 2 || is_SBR_active(adev)) {
         processing_multich_pcm(stream, buffer, bytes, in_data_info, output_buffer, output_buffer_bytes, out_data_info);
         return 0;
     }

@@ -460,6 +460,17 @@ extern "C" void dolby_ms12_set_dap2_virtual_bass_enable(bool flag)
     }
 }
 
+extern "C" bool dolby_ms12_get_dap2_virtual_bass_enable(void)
+{
+    ALOGV("%s()\n", __FUNCTION__);
+    android::DolbyMS12ConfigParams *config_param = getInstance();
+    if (config_param) {
+        return config_param->getDAPV2VirtualBassEnable();
+    }
+    return false;
+}
+
+
 extern "C" void dolby_ms12_set_drc_mode(int val)
 {
     ALOGV("%s()\n", __FUNCTION__);

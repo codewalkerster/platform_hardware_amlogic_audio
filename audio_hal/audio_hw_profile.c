@@ -702,7 +702,7 @@ char*  get_hdmi_sink_cap_new(const char *keys, audio_format_t format, struct aml
         goto fail;
     }
     /*only soundbar mode case we don't need get the sink cap*/
-    if (!is_HDMI_connected(adev) && is_SBR(adev) && adev->enable_soundbar_mode) {
+    if (!is_HDMI_connected(adev) && is_SBR(adev) && is_SBR_active(adev)) {
         memset(&hdmi_audio_profile, 0, sizeof(struct hdmi_audio_profile_t));
     } else {
         aml_hdmi_audio_profile_parser();

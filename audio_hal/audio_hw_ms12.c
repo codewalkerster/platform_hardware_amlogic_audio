@@ -503,6 +503,12 @@ void set_ms12_main_volume(struct dolby_ms12_desc *ms12, float volume) {
     //}
 }
 
+int set_ms12_fadein_max_detect_time_ms(int time_ms __unused)
+{
+    // now not implement
+    return 0;
+}
+
 void set_ms12_ac4_presentation_group_index(struct dolby_ms12_desc *ms12, int index)
 {
     char parm[64] = "";
@@ -2804,6 +2810,10 @@ bool is_dolbyms12_dap_enable(struct aml_stream_out *aml_out) {
 #else
     return is_audio_postprocessing_add_dolbyms12_dap(adev);
 #endif
+}
+
+bool get_ms12_dap_virtual_bass_enable(void) {
+    return false;
 }
 
 int dolby_ms12_hwsync_init(void) {

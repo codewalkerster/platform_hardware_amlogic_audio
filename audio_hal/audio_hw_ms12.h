@@ -212,7 +212,7 @@ bool is_support_ms12_reset(struct audio_stream_out *stream);
 bool is_bypass_dolbyms12(struct audio_stream_out *stream);
 bool is_dolbyms12_dap_enable(struct aml_stream_out *aml_out);
 
-
+bool get_ms12_dap_virtual_bass_enable(void);
 int dolby_ms12_hwsync_init(void);
 int dolby_ms12_hwsync_release(void);
 int dolby_ms12_hwsync_checkin_pts(int offset, int apts);
@@ -310,6 +310,8 @@ audio_format_t ms12_get_audio_hal_format(audio_format_t hal_format);
 void set_dolby_ms12_main_speed(struct dolby_ms12_desc *ms12, double speed);
 
 int dolby_ms12_main_resume_prepare(struct audio_stream_out *stream);
+
+int set_ms12_fadein_max_detect_time_ms(int time_ms);
 
 #endif //end of _AUDIO_HW_MS12_H_
 

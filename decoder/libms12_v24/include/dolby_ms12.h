@@ -286,6 +286,11 @@ int dolby_ms12_get_mat_dec_latency();
 int dolby_ms12_set_main_volume(float volume);
 
 /*@@
+    @brief set ms12 data handle max fadein detect time ms
+*/
+int dolby_ms12_set_fadein_max_detect_time_ms(int time_ms);
+
+/*@@
     @brief set the mat stream profile
 */
 int dolby_ms12_set_mat_stream_profile(int stream_profile);

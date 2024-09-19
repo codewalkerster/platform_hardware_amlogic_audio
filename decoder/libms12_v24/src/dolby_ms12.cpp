@@ -541,6 +541,16 @@ extern "C" int dolby_ms12_set_main_volume(float volume)
     return -1;
 }
 
+extern "C" int dolby_ms12_set_fadein_max_detect_time_ms(int time_ms)
+{
+    ALOGV("%s()\n", __FUNCTION__);
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->DolbyMS12SetFadeInMaxDetectTimeMs(time_ms);
+    }
+    return -1;
+}
+
 extern "C" int dolby_ms12_set_mat_stream_profile(int stream_profile)
 {
     ALOGV("%s()\n", __FUNCTION__);

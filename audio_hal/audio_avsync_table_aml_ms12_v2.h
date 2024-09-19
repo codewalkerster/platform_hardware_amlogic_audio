@@ -421,6 +421,49 @@
 #define  AVSYNC_DV_NETFLIX_TUNNEL_LATENCY_PROPERTY                  "vendor.media.audio.hal.dv.netflix.tunnel"
 #define  AVSYNC_DV_NETFLIX_NONTUNNEL_LATENCY_PROPERTY               "vendor.media.audio.hal.dv.netflix.nontunnel"
 
+// default soundbar output format is pcm
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY             -52  // -52
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_DDP_LATENCY             -15  // -15
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY           -10    // 0
+
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY_PROPERTY    "vendor.media.audio.hal.soundbar.ms12.netflix.nontunnel.pcm"
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_DDP_LATENCY_PROPERTY    "vendor.media.audio.hal.soundbar.ms12.netflix.nontunnel.ddp"
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_NONTUNNEL_ATMOS_LATENCY_PROPERTY  "vendor.media.audio.hal.soundbar.ms12.netflix.nontunnel.atmos"
+
+
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_PCM_LATENCY                -45 // -45
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_DDP_LATENCY                -28  // -28
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY              2   // 2
+
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_PCM_LATENCY_PROPERTY       "vendor.media.audio.hal.soundbar.ms12.netflix.tunnel.pcm"
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_DDP_LATENCY_PROPERTY       "vendor.media.audio.hal.soundbar.ms12.netflix.tunnel.ddp"
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_TUNNEL_ATMOS_LATENCY_PROPERTY     "vendor.media.audio.hal.soundbar.ms12.netflix.tunnel.atmos"
+
+
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_DAP_TUNING_LATENCY              0
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_DAP_TUNING_LATENCY_PROPERTY     "vendor.media.audio.hal.soundbar.ms12.netflix.dap"
+
+// Customer/Third sound effect processing latency
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_CUS_PROCESS_LATENCY               0
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_CUS_PROCESS_LATENCY_PROPERTY      "vendor.media.audio.hal.soundbar.ms12.netflix.cus.process"
+
+// Base on roku tv
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_DV_NONTUNNEL_LATENCY              (-25)
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_DV_TUNNEL_LATENCY                 (-15)
+
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_DV_NONTUNNEL_LATENCY_PROPERTY     "vendor.media.audio.hal.soundbar.ms12.netflix.dv.nontunnel"
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_DV_TUNNEL_LATENCY_PROPERTY        "vendor.media.audio.hal.soundbar.ms12.netflix.dv.tunnel"
+
+
+// Will these scenarios happen?
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_DD_LATENCY                 0
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_DDP_LATENCY                0
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_MAT_LATENCY                0
+
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_DD_LATENCY_PROPERTY        "vendor.media.audio.hal.soundbar.ms12.netflix.output.dd"
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_DDP_LATENCY_PROPERTY       "vendor.media.audio.hal.soundbar.ms12.netflix.output.ddp"
+#define  AVSYNC_SOUNDBAR_MS12_NETFLIX_OUTPUT_MAT_LATENCY_PROPERTY       "vendor.media.audio.hal.soundbar.ms12.netflix.output.mat"
+
 
 
 /*below DDP tuning is for roku tv*/

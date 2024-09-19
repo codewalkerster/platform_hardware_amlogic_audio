@@ -553,7 +553,7 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
 
     if (p_hwsync->use_mediasync) {
         uint64_t apts64 = 0;
-        if (p_hwsync->first_apts_flag == false && (apts >= abs(latency_pts))) {
+        if (p_hwsync->first_apts_flag == false && (apts >= abs(latency_pts) || latency_pts <= 0)) {
             ALOGI("%s apts =%" PRIx64 "", __func__, apts);
             ALOGI("%s alsa pcm delay =%d bitstream delay =%d pipeline =%d", __func__, alsa_pcm_delay_frames, alsa_bitstream_delay_frames, ms12_pipeline_delay_frames);
             ALOGI("%s apts = 0x%" PRIx64 " (%" PRIu64 " ms) latency=0x%x (%d ms)", __func__, apts, apts / 90, latency_pts, latency_pts/90);

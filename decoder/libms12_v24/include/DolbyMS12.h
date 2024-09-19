@@ -43,6 +43,7 @@ typedef enum  {
     MS12_CONFIG_ALSA_DELAY_FRAME,
     MS12_CONFIG_ALSA_LIMIT_FRAME,
     MS12_CONFIG_SCHEDULER_SLEEP,
+    MS12_CONFIG_FADEIN_MAX_DETECT_TIME_MS,
 }ms12_config_type_t;
 
 typedef union ms12_config {
@@ -274,6 +275,8 @@ public:
     virtual int DolbyMS12SetAlsaLimitFrame(int limit_frame);
 
     virtual int DolbyMS12SetSchedulerSleep(int enable_sleep);
+
+    virtual int DolbyMS12SetFadeInMaxDetectTimeMs(int time_ms);
 
     // protected:
 

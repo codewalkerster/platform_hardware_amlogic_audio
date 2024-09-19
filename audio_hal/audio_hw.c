@@ -4995,7 +4995,7 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         ALOGI("temp_buf %s", temp_buf);
         return strdup(temp_buf);
     } else if (strstr (keys, "hal_param_get_dap_speaker_status")) {
-        bool dap_speaker_status = adev->is_ms12_tuning_dat && (adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER) && (is_TV(adev) || is_SBR(adev));
+        bool dap_speaker_status = adev->is_ms12_tuning_dat && (adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER) && (is_TV(adev) || is_SBR_active(adev));
         sprintf(temp_buf, "hal_param_get_dap_speaker_status=%d", dap_speaker_status);
         ALOGI("temp_buf %s dap_speaker_status=%d", temp_buf, dap_speaker_status);
         return strdup(temp_buf);
@@ -6043,6 +6043,7 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, const void *buf
     int return_bytes = bytes;
     uint64_t apts64 = 0;
     bool amaster_mode = true;
+    int fadein_detect_time_ms  = 0;
 
     audio_hwsync_t *hw_sync = aml_out->hwsync;
     bool digital_input_src = (aml_out->is_tv_src_stream && patch && \
@@ -6089,6 +6090,11 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, const void *buf
             hw_sync->first_apts_flag = false; //start tsync again.
             hw_sync->wait_video_done = false;
         }
+
+        if (adev->is_netflix) {
+            fadein_detect_time_ms = NETFLIX_FADEIN_MAX_DETECT_TIME_MS;
+        }
+        set_ms12_fadein_max_detect_time_ms(fadein_detect_time_ms);
 
         aml_out->standby = false;
         if (adev->ms12_out) {
@@ -6835,6 +6841,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
     uint64_t leave_ns = 0;
     uint64_t sleep_time_us = 0;
     bool is_deep_buf = aml_out->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER;
+    int fadein_detect_time_ms = adev->is_netflix ? NETFLIX_FADEIN_MAX_DETECT_TIME_MS : 0;
 
     if (eDolbyMS12Lib == adev->dolby_lib_type && continuous_mode(adev)) {
         enter_ns = aml_audio_get_systime_ns();
@@ -6861,7 +6868,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
 
     if (aml_out->standby) {
         AM_LOGI("io %d: out:%p usecase:%s standby to unstandby", aml_out->io_handle, aml_out, usecase2Str(aml_out->usecase));
-        aml_out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
+        aml_audio_data_handle_init(stream);
         aml_out->standby = false;
 #ifndef AUDIO_HAL_DISABLE_MS12
         // NTS PCM mode: volume-tunel-nontunel/audio-lat-heaac testcase.
@@ -6995,6 +7002,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
         } else {
             /* audio zero data detect, and do fade in */
             if (adev->is_netflix && (STREAM_PCM_NORMAL == aml_out->usecase || STREAM_PCM_DEEP_BUF == aml_out->usecase)) {
+                aml_out->audio_data_max_detect_time_ms = fadein_detect_time_ms;
                 aml_audio_data_handle(stream, buffer, bytes);
             }
 
@@ -7213,6 +7221,7 @@ ssize_t process_buffer_write(struct audio_stream_out *stream,
     struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = aml_out->dev;
     audio_data_info_t data_info = { 0 };
+    int fadein_detect_time_ms = adev->is_netflix ? NETFLIX_FADEIN_MAX_DETECT_TIME_MS : 0;
 
     if (adev->cur_out_devices != aml_out->out_device) {
         AM_LOGD("out:%p device:%x,%x", stream, aml_out->out_device, adev->cur_out_devices);
@@ -7226,7 +7235,7 @@ ssize_t process_buffer_write(struct audio_stream_out *stream,
     if (aml_out->standby) {
         AM_LOGI("io %d: out:%p usecase:%s standby to unstandby", aml_out->io_handle,
             aml_out, usecase2Str(aml_out->usecase));
-        aml_out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
+        aml_audio_data_handle_init(stream);
         aml_out->standby = false;
     }
 
@@ -7249,6 +7258,7 @@ ssize_t process_buffer_write(struct audio_stream_out *stream,
     }
 
     if ((eDolbyMS12Lib != adev->dolby_lib_type) && (STREAM_PCM_NORMAL == aml_out->usecase)) {
+        aml_out->audio_data_max_detect_time_ms = fadein_detect_time_ms;
         aml_audio_data_handle(stream, buffer, bytes);
     }
 
@@ -8453,7 +8463,7 @@ static int adev_dump(const audio_hw_device_t *device, int fd)
     }
 
     dprintf(fd, "\n");
-    dprintf(fd, "[AML_HAL]      TV platform     : %10d   |  SoundBar platform :    %d\n", is_TV(aml_dev), is_SBR(aml_dev));
+    dprintf(fd, "[AML_HAL]      TV platform     : %10d   |  SoundBar platform :    %d\n", is_TV(aml_dev), is_SBR_active(aml_dev));
     dprintf(fd, "[AML_HAL] digital_audio_mode   : %10s   |  cur_out_devices   :    %#x\n",
         digitalAudioModeType2Str(aml_dev->digital_audio_mode), aml_dev->cur_out_devices);
     dprintf(fd, "[AML_HAL]      A2DP gain       : %10f |  patch_src         :    %s\n",

@@ -739,6 +739,15 @@ bool is_STB(struct aml_audio_device *adev)
     return mgr->platform_types.is_STB;
 }
 
+bool is_SBR_active(struct aml_audio_device *adev)
+{
+    audio_hw_resource_mgr *mgr = get_hw_resource_manger(adev);
+    if (mgr->platform_types.is_SBR && adev->enable_soundbar_mode) {
+        return true;
+    }
+    return false;
+}
+
 void confirm_platform_type(audio_hw_resource_mgr *mgr)
 {
 #if defined(TV_AUDIO_OUTPUT)

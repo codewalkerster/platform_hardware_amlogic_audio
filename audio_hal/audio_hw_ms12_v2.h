@@ -289,6 +289,8 @@ bool is_dolby_ms12_main_stream(struct audio_stream_out *stream);
 bool is_support_ms12_reset(struct audio_stream_out *stream);
 bool is_bypass_dolbyms12(struct audio_stream_out *stream);
 bool is_dolbyms12_dap_enable(struct aml_stream_out *aml_out);
+bool get_ms12_dap_virtual_bass_enable(void);
+
 /*
  *@brief init the ms12 hwsync module to save pts info
  */
@@ -442,5 +444,7 @@ int aml_dap_process(
     , const void *buffer
     , size_t bytes
     , size_t *use_size);
+
+int set_ms12_fadein_max_detect_time_ms(int time_ms);
 
 #endif //end of _AUDIO_HW_MS12_H_

@@ -1135,6 +1135,21 @@ int DolbyMS12::DolbyMS12SetMainVolume(float volume)
     return ret;
 }
 
+int DolbyMS12::DolbyMS12SetFadeInMaxDetectTimeMs(int time_ms)
+{
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncDolbyMS12Config)(MS12_CONFIG_FADEIN_MAX_DETECT_TIME_MS, (ms12_config_t *)&time_ms);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+
+
 int DolbyMS12::DolbyMS12SetMATStreamProfile(int stream_profile)
 {
     int ret = 0;
