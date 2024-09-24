@@ -331,7 +331,7 @@ bool signal_status_check(audio_devices_t in_device, int *mute_time,
     }
 
     if ((in_device & AUDIO_DEVICE_IN_HDMI_ARC) &&
-            !is_earc_in_stable_hw(stream)) {
+            !is_earc_in_status_change(stream)) {
         *mute_time = 1000;
         return false;
     }
@@ -908,14 +908,19 @@ bool is_spdif_in_stable_hw(struct audio_stream_in *stream)
     return true;
 }
 
-bool is_earc_in_stable_hw(struct audio_stream_in *stream)
+bool is_earcrx_stable(struct aml_mixer_handle *alsa_mixer)
+{
+    return !!aml_mixer_ctrl_get_int(alsa_mixer, AML_MIXER_ID_EARCRX_STABLE);
+}
+
+bool is_earc_in_status_change(struct audio_stream_in *stream)
 {
     struct aml_stream_in *in = (struct aml_stream_in *)stream;
     struct aml_audio_device *aml_dev = in->dev;
     struct aml_audio_patch *patch = get_dev_patch(aml_dev);
     int stable = 0, type = 0;
 
-    stable = aml_mixer_ctrl_get_int(&aml_dev->alsa_mixer, AML_MIXER_ID_EARCRX_STABLE);
+    stable = is_earcrx_stable(&aml_dev->alsa_mixer);
     if (!stable) {
         ALOGV("%s() amixer %s get %d\n", __func__, "HDMIIN audio stable", stable);
         return false;

@@ -75,7 +75,8 @@ int set_spdifin_pao(struct aml_mixer_handle *mixer_handle,int enable);
 /*@brief check the hdmi rx audio stability by HW register */
 bool is_hdmi_in_stable_hw(struct audio_stream_in *stream);
 bool is_spdif_in_stable_hw(struct audio_stream_in *stream);
-bool is_earc_in_stable_hw(struct audio_stream_in *stream);
+bool is_earc_in_status_change(struct audio_stream_in *stream);
+bool is_earcrx_stable(struct aml_mixer_handle *mixer_handle);
 
 /*@brief check the hdmi rx audio format stability by SW parser */
 bool is_hdmi_in_stable_sw(struct audio_stream_in *stream);

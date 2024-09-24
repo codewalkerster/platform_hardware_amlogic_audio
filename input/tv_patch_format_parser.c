@@ -986,7 +986,6 @@ static void* audio_type_parse_threadloop(void *data)
             }
         } else {
             if (auge_chip || txlx_chip) {
-                bool layout_b = false;
                 bool mute = false;
                 // get audio format from hw.
                 if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
@@ -1000,6 +999,8 @@ static void* audio_type_parse_threadloop(void *data)
                         audio_type_status->earc_mute = mute;
                     if (type != NOT_READY)
                         audio_type_status->cur_audio_type = type;
+                    if (!is_earcrx_stable(audio_type_status->mixer_handle))
+                        audio_type_status->fmt_change = true;
                 }
 
                 if (audio_type_status->audio_type != LPCM && audio_type_status->cur_audio_type == LPCM) {
