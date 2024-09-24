@@ -1455,8 +1455,12 @@ int dtsx_decoder_process_patch(aml_dec_t *aml_dec, unsigned char *buffer, int by
                                          &dtsx_dec->core1_pcm_out_info.sample_rate,
                                          &dtsx_dec->core1_pcm_out_info.channel_num,
                                          &bits_per_sample);
-        if (ret != 0) {
-            ALOGW("[%s:%d] dtsx decode fail:%d", __func__, __LINE__, ret);
+        if (ret != 0
+            || dtsx_dec->core1_pcm_out_info.sample_rate <= 0
+            || dtsx_dec->core1_pcm_out_info.channel_num <= 0
+            || bits_per_sample <= 0) {
+            ALOGW("[%s:%d] dtsx decode fail:%d sr:%d ch:%d bw:%d", __func__, __LINE__,
+                ret, dtsx_dec->core1_pcm_out_info.sample_rate, dtsx_dec->core1_pcm_out_info.channel_num, bits_per_sample);
             return AML_DEC_RETURN_TYPE_NEED_DEC_AGAIN;
         }
 
