@@ -590,7 +590,7 @@ int stream_check_reconfig_param(struct audio_stream_out *stream)
     return 0;
 }
 
-bool is_data_packet_change_to_HBR(struct aml_stream_in *stream_in)
+bool is_data_packet_changed(struct aml_stream_in *stream_in)
 {
     struct aml_audio_device *aml_dev = stream_in->dev;
     bool is_audio_packet_changed = false;
@@ -610,7 +610,7 @@ bool is_data_packet_change_to_HBR(struct aml_stream_in *stream_in)
 
     stream_in->tv_param.cur_audio_packet_type = cur_audio_packet;
 
-    return ((cur_audio_packet == AUDIO_PACKET_HBR) && is_audio_packet_changed);
+    return is_audio_packet_changed;
 }
 
 /*==================================mixer control commands=========================================*/

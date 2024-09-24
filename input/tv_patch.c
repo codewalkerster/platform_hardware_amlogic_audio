@@ -216,10 +216,15 @@ static bool reconfig_stream_param(struct aml_stream_in *stream_in, struct aml_au
 
 bool check_stream_reconfigure(struct aml_stream_in *stream_in, struct aml_audio_patch *patch)
 {
-     if (patch && (patch->input_src == AUDIO_DEVICE_IN_HDMI) && is_data_packet_change_to_HBR(stream_in)) {
-         stream_in->tv_param.change_to_HBR_stream = true;
-         ALOGI("%s Change to HBR stream %d", __func__, stream_in->tv_param.change_to_HBR_stream);
-         return true;
+     if (patch && (patch->input_src == AUDIO_DEVICE_IN_HDMI) && is_data_packet_changed(stream_in)) {
+         if (stream_in->tv_param.cur_audio_packet_type == AUDIO_PACKET_HBR) {
+             stream_in->tv_param.change_to_HBR_stream = true;
+             ALOGI("%s Change to HBR stream %d", __func__, stream_in->tv_param.change_to_HBR_stream);
+             return true;
+         } else if (stream_in->tv_param.is_HBR_stream && stream_in->tv_param.cur_audio_packet_type == AUDIO_PACKET_AUDS) {
+             ALOGI("%s Change to none HBR stream", __func__);
+             return true;
+         }
      }
 
      return false;

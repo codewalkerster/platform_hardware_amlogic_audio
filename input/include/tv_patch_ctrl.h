@@ -86,7 +86,7 @@ bool is_atv_in_stable_hw(struct audio_stream_in *stream);
 bool is_av_in_stable_hw(struct audio_stream_in *stream);
 bool is_hdmi_in_sample_rate_changed(struct audio_stream_in *stream);
 bool is_hdmi_in_hw_format_change(struct audio_stream_in *stream);
-bool is_data_packet_change_to_HBR(struct aml_stream_in *stream_in);
+bool is_data_packet_changed(struct aml_stream_in *stream_in);
 bool is_earcrx_support_hw_multi_ch_resample(struct aml_mixer_handle *alsa_mixer);
 
 #endif /* _TV_PATCH_CTRL_H_ */
