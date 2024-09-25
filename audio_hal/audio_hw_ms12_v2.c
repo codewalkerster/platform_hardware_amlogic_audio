@@ -1158,6 +1158,7 @@ int get_the_dolby_ms12_prepared(
     ms12->aaudio_low_latency = false;
     ms12->tempo_speed        = 1.0f;
     ms12->ms12_continuous_state = MS12_SCHEDULER_RUNNING;
+    ms12->ms12_scheduler_state = MS12_SCHEDULER_RUNNING;
 
     if (sem_init(&ms12->standby_sem, 0, 1)) {
         ALOGE("%s init ms12 standby semaphore failed\n", __FUNCTION__);
@@ -1247,26 +1248,6 @@ int get_the_dolby_ms12_prepared(
     ms12->system_sound_target = 0 - get_ms12_syss_mixgain_target();
     ALOGI("%s() line %d system_sound_target %d dB (only do pre attenuation for DTV-patch&System PCM on DRC-RF mode)\n",
         __FUNCTION__, __LINE__, ms12->system_sound_target);
-
-
-    /*1)switch AudioPatch to AF stream, need send SCHEDULER_RUNNING state again.
-    **  to avoid ms12 not wakeup, so that the device no sound.
-    **2)ms12_cleanup maybe be called in close_output_stream when connecting ARC.
-    **  here should send SCHEDULER_RUNNING again to wakeup ms12 scheduler_run.
-    **3)system_stream send the MS12_SCHEDULER_RUNNING message to ms12 and call ms12_cleanup/ms12_prepare
-    **  when device bootup to config ms12. this patch add detecting(dolby_ms12_enable) logic in get_dolby_ms12_cleanup,
-    **  it lead to cleanup not execute finished. so the last_scheduler_state/MS12_SCHEDULER_RUNNING state can't
-    **  send to ms12, ms12 always sleep status.
-    **  the system stream data can't send to ms12/speaker when bootup,
-    **  this lead to system stream always pop noise when playback YouTuBe.
-    */
-    if (adev->audio_patch_2_af_stream || (adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI_ARC) != 0
-        || ms12->ms12_scheduler_state == MS12_SCHEDULER_RUNNING) {
-        ms12->last_scheduler_state = MS12_SCHEDULER_NONE;
-        adev->audio_patch_2_af_stream = false;
-
-        aml_audiohal_sch_state_2_ms12(ms12, MS12_SCHEDULER_RUNNING);
-    }
 
     /* In Netflix test case, the volume should add into the list. */
     /* In DTV case, at start, will set the 0.0 to mute, after about 100~200ms, the volume will set to normal value.*/
