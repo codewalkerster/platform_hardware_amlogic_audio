@@ -173,6 +173,12 @@ void *input_stream_do_resample(struct audio_stream_in *stream, void *buffer, int
     void *buf_ret = buffer;
     int ret = 0;
 
+    /* From T7C+, enable HW resampler for earcrx as it supports multi-ch processing
+     * and skip this SW resample.
+     */
+    if (is_earcrx_support_hw_multi_ch_resample(&adev->alsa_mixer))
+        return buf_ret;
+
     if (in->config.channels > 2) {
         /* only pcm support multi-ch config which needs SW resampler */
         int cur_samplerate = audio_parse_get_audio_samplerate(patch->audio_parse_para);
@@ -876,8 +882,7 @@ static int eArcIn_audio_format_detection(struct audio_stream_in *stream)
     int audio_code = 0;
 
     type = eArcIn_coding_type_detection(&aml_dev->alsa_mixer);
-    if ((type == EARC_AC3_LAYOUT_B || type >= EARC_EAC3_LAYOUT_B) &&
-        (aml_mixer_ctrl_get_int(&aml_dev->alsa_mixer, AML_MIXER_ID_AML_CHIP_ID) < 0x36))
+    if (type == EARC_AC3_LAYOUT_B || type >= EARC_EAC3_LAYOUT_B)
         patch->arc_layout_b = true;
     else
         patch->arc_layout_b = false;
@@ -978,3 +983,7 @@ bool is_hdmi_in_hw_format_change(struct audio_stream_in *stream)
     return ret;
 }
 
+bool is_earcrx_support_hw_multi_ch_resample(struct aml_mixer_handle *alsa_mixer)
+{
+    return aml_mixer_ctrl_get_int(alsa_mixer, AML_MIXER_ID_AML_CHIP_ID) >= 0x36;
+}

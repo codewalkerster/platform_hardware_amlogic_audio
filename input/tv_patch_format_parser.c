@@ -837,6 +837,7 @@ static void* audio_type_parse_threadloop(void *data)
         cur_samplerate = set_resample_source(audio_type_status->mixer_handle, resample_src);
     } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
         cur_samplerate = set_resample_source(audio_type_status->mixer_handle, RESAMPLE_FROM_EARCRX_DMAC);
+        audio_type_status->earcrx_hw_resample = is_earcrx_support_hw_multi_ch_resample(audio_type_status->mixer_handle);
     } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_SPDIF) {
         cur_samplerate = set_resample_source(audio_type_status->mixer_handle, RESAMPLE_FROM_SPDIFIN);
     }
@@ -865,7 +866,7 @@ static void* audio_type_parse_threadloop(void *data)
          * it shows that stream is unstable, don't update sample rate.
          */
         if (cur_samplerate != last_cur_samplerate && cur_samplerate != HW_RESAMPLE_DISABLE) {
-            if (audio_type_status->audio_type == LPCM  && type != NOT_READY) {
+            if (is_linear_pcm_type(audio_type_status->audio_type)  && type != NOT_READY) {
                 enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
                 AM_LOGD("Reset hdmiin/spdifin audio resample sr from %d to %d\n",
                     last_cur_samplerate, cur_samplerate);
@@ -987,6 +988,8 @@ static void* audio_type_parse_threadloop(void *data)
         } else {
             if (auge_chip || txlx_chip) {
                 bool mute = false;
+                // multi-pcm HW resample is not supported for some earcrx
+                bool bypass_hw_resample = false;
                 // get audio format from hw.
                 if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
                     audio_type_status->cur_audio_type = hdmiin_audio_format_detection(audio_type_status->mixer_handle);
@@ -1001,14 +1004,17 @@ static void* audio_type_parse_threadloop(void *data)
                         audio_type_status->cur_audio_type = type;
                     if (!is_earcrx_stable(audio_type_status->mixer_handle))
                         audio_type_status->fmt_change = true;
+                    if (type == MULTICH_LPCM && !audio_type_status->earcrx_hw_resample)
+                        bypass_hw_resample = true;
                 }
 
-                if (audio_type_status->audio_type != LPCM && audio_type_status->cur_audio_type == LPCM) {
-                    enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
+                if (!is_linear_pcm_type(audio_type_status->audio_type) && is_linear_pcm_type(audio_type_status->cur_audio_type)) {
+                    if (!bypass_hw_resample)
+                        enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
                     audio_type_status->fmt_change = true;
-                    AM_LOGI("type %d", audio_type_status->audio_type);
-                } else if (audio_type_status->audio_type == LPCM && audio_type_status->cur_audio_type != LPCM){
-                    AM_LOGI("Raw data found: type(%d)\n", audio_type_status->cur_audio_type);
+                    AM_LOGI("format_change: type %d->%d", audio_type_status->audio_type, audio_type_status->cur_audio_type);
+                } else if (is_linear_pcm_type(audio_type_status->audio_type) && !is_linear_pcm_type(audio_type_status->cur_audio_type)) {
+                    AM_LOGI("Raw data found: type(%d)\n", type);
                     enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
                     audio_type_status->fmt_change = true;
                 } else if (audio_type_status->earc_mute && !mute && type != NOT_READY) {

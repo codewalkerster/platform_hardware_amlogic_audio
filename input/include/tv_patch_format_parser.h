@@ -35,6 +35,11 @@ enum audio_type {
     MULTICH_LPCM
 };
 
+static inline bool is_linear_pcm_type(enum audio_type type)
+{
+    return (type == LPCM) || (type == MULTICH_LPCM);
+};
+
 /*
  * eARC type:
  *  0: "UNDEFINED"
@@ -152,6 +157,7 @@ typedef struct audio_type_parse {
     bool fmt_change;
     bool pcpd_monitor_flag;
     bool earc_mute;
+    bool earcrx_hw_resample;
 } audio_type_parse_t;
 
 int create_pthread_for_audio_type_parse(
