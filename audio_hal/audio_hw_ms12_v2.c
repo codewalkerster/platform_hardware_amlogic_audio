@@ -4446,6 +4446,10 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
         patch_set_ms12_start_threshold(adev, hal_internal_format);
     }
 
+    if (hal_internal_format == AUDIO_FORMAT_AAC || hal_internal_format == AUDIO_FORMAT_AAC_LATM) {
+        dolby_ms12_set_heaac_default_dialnorm_value(adev->loudness_level);
+    }
+
     aml_ms12_main_decoder_open(ms12, hal_internal_format, aml_out->hal_channel_mask, sample_rate);
 
 #ifdef ENABLE_DVB_PATCH
@@ -4460,9 +4464,6 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
         aml_out->b_install_sync_callback = true;
     }
 
-    if (hal_internal_format == AUDIO_FORMAT_AAC || hal_internal_format == AUDIO_FORMAT_AAC_LATM) {
-        dolby_ms12_set_heaac_default_dialnorm_value(adev->loudness_level);
-    }
 
 #ifdef ENABLE_DVB_PATCH
 

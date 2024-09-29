@@ -365,6 +365,7 @@ public:
         //Default dialnorm value (dB/4)
         //0 - 127; Default = 92 (-23dB)
         mDefDialnormVal = val * (-4);
+        ALOGI("%s mDefDialnormVal %d loudness level at -%d(dB)", __FUNCTION__, mDefDialnormVal, val);
     }
     virtual void setDualMonoreproductionMode(int val)
     {
