@@ -1420,6 +1420,10 @@ int dolby_ms12_main_process(
                             (ms12_hal_format == AUDIO_FORMAT_HE_AAC_V2));
     struct aml_audio_patch *patch = get_dev_patch(adev);
     bool do_sync_flag = is_same_patch_src(adev, SRC_DTV) && patch && patch->skip_amadec_flag;
+    int ddp_1st_used_size = 0;
+    void * ddp_1st_main_frame_buffer = NULL;
+    int ddp_1st_main_frame_size = 0;
+    int ddp_1st_numblks = 0;
 
     if (adev->debug_flag >= 2) {
         ALOGI("\n%s() in continuous %d input ms12 bytes %d input bytes %zu\n",
@@ -1551,9 +1555,7 @@ int dolby_ms12_main_process(
             struct ac3_parser_info ac3_info = { 0 };
             void * inbuf = NULL;
             int32_t buf_size = 0;
-            int temp_used_size = 0;
-            void * temp_main_frame_buffer = NULL;
-            int temp_main_frame_size = 0;
+
             audio_format_t output_format = AUDIO_FORMAT_PCM_16_BIT;
             aml_spdif_decoder_process(ms12->spdif_dec_handle, input_buffer , input_bytes, &spdif_dec_used_size, &main_frame_buffer, &main_frame_size);
             if (main_frame_size && main_frame_buffer) {
@@ -1569,9 +1571,12 @@ int dolby_ms12_main_process(
                 || output_format == AUDIO_FORMAT_AC3) {
                 inbuf = main_frame_buffer;
                 buf_size = main_frame_size;
-                aml_ac3_parser_process(ms12->ac3_parser_handle, inbuf, buf_size, &temp_used_size, &temp_main_frame_buffer, &temp_main_frame_size, &ac3_info);
+                aml_ac3_parser_process(ms12->ac3_parser_handle, inbuf, buf_size, &ddp_1st_used_size, &ddp_1st_main_frame_buffer, &ddp_1st_main_frame_size, &ac3_info);
                 if (ac3_info.sample_rate != 0) {
                     sample_rate = ac3_info.sample_rate;
+                }
+                if (ddp_1st_main_frame_size) {
+                    ddp_1st_numblks = ac3_info.numblks;
                 }
                 ALOGV("Input size =%zu used_size =%d output size=%d rate=%d internal format=0x%x rate=%d",
                     input_bytes, spdif_dec_used_size, main_frame_size, aml_out->hal_rate, aml_out->hal_internal_format, sample_rate);
@@ -1743,6 +1748,50 @@ MAIN_INPUT:
                 } while (aml_out->stream_status != STREAM_STANDBY);
             }
 
+            /*
+            the audio output not is a constant level in data_rate_DRswpddp-ARC case
+            is related to test signal and can observe in IIDK reference code.
+            Regarding your audio latency result, it looks not exceed the criteria too much
+            but I’m not in a position to evaluate the SDK test result is acceptable or not.
+
+            I also want to update how to prevent MS12 queue a frame during transition for your reference.
+            There are two approaches and both should work.
+
+            Method 1: Adding a DDP/DD framer and only send a complete frame into MS12 a time.
+            In this case, when receiving 2 DDP frames (2*2560),
+            one frame would be queue in DDP buffer because UDC decoder assumed to receive a single DDP in force time-sliced mode.
+            If there is a framer to detect frame size is 2560bytes, and send 2560bytes to MS12 a time,
+            it could prevent UDC to buffer a frame in internal buffer.
+
+            //Method 2: Modifying ddpi_udc_addbytes() to parse a complete frame and exit, not to consume all available data.
+            This needs to modify above function in UDC CIDK and a condition in IIDK to make it work.
+            It also needs further testing to check if there is any side effects.
+            */
+            //ddp datarate stream:DR_swp_96k_1280k_200_ddp.ec3
+            if ((is_iec61937_format(stream))
+                && (AUDIO_FORMAT_E_AC3 == aml_spdif_decoder_getformat(ms12->spdif_dec_handle))
+                && (main_frame_size > ddp_1st_main_frame_size)
+                && (ddp_1st_numblks))
+            {
+                dolby_ms12_input_bytes = dolby_ms12_input_main(
+                                                    ms12->dolby_ms12_ptr
+                                                    , ddp_1st_main_frame_buffer
+                                                    , ddp_1st_main_frame_size
+                                                    , main_format
+                                                    , main_channel_num
+                                                    , main_sample_rate);
+                //let the cpu scheduling
+                aml_ms12_main_decoder_process(ms12);
+                char * iec_remaining_frame_buffer = (char *)main_frame_buffer + ddp_1st_main_frame_size;
+                dolby_ms12_input_bytes = dolby_ms12_input_main(
+                                                    ms12->dolby_ms12_ptr
+                                                    , (void *)iec_remaining_frame_buffer
+                                                    , (main_frame_size - ddp_1st_main_frame_size)
+                                                    , main_format
+                                                    , main_channel_num
+                                                    , main_sample_rate);
+            }
+            else {
             dolby_ms12_input_bytes = dolby_ms12_input_main(
                                                 ms12->dolby_ms12_ptr
                                                 , main_frame_buffer
@@ -1750,6 +1799,21 @@ MAIN_INPUT:
                                                 , main_format
                                                 , main_channel_num
                                                 , main_sample_rate);
+            }
+
+            if ((adev->debug_flag >= 2) && is_iec61937_format(stream) && ((main_format == AUDIO_FORMAT_AC3) || (main_format == AUDIO_FORMAT_E_AC3))) {
+                ms12->measure_last_frame_us = ms12->measure_new_frame_us;
+                struct timespec measure_ts;
+                clock_gettime(CLOCK_MONOTONIC, &measure_ts);
+                ms12->measure_new_frame_us = measure_ts.tv_sec * 1000000LL + measure_ts.tv_nsec / 1000LL;
+                uint64_t delta_frame_appear = ms12->measure_new_frame_us - ms12->measure_last_frame_us;
+                aml_audio_trace_int("iec_parser_time", (int)(delta_frame_appear / 1000LL));
+                ALOGI("%s line %d new IEC61937 frame parser done, diff is %"PRId64"\n", __func__, __LINE__, delta_frame_appear);
+                aml_audio_trace_int("iec_parser_time", 0);
+                if ((delta_frame_appear / 1000LL) > 32) {
+                    ALOGI("%s line %d new IEC61937 frame parser done, diff is too large as %"PRId64"\n", __func__, __LINE__, delta_frame_appear);
+                }
+            }
 
             if (adev->debug_flag >= 2)
                 ALOGI("%s line %d main_frame_size %d ret dolby_ms12 input_bytes %d",
@@ -1762,7 +1826,14 @@ MAIN_INPUT:
                 //dolby_ms12_scheduler_run(ms12->dolby_ms12_ptr);
                 aml_audio_trace_int("ms12_scheduler_run", 0);
             }
+
+            int ms12_codecbuf_delay1 = 0;
+            int ms12_codecbuf_delay2 = 0;
+            dolby_ms12_get_latency_for_stereo_out(&ms12_codecbuf_delay1);//here
             aml_ms12_main_decoder_process(ms12);
+            dolby_ms12_get_latency_for_stereo_out(&ms12_codecbuf_delay2);//here
+            if (adev->debug_flag >= 2)
+                ALOGI("%s line %d ms12_codecbuf_delay START %d ms12_codecbuf_delay END %d", __func__, __LINE__, ms12_codecbuf_delay1, ms12_codecbuf_delay2);
             ms12->ms12_main_consume_bytes = dolby_ms12_get_decoder_n_bytes_consumed(ms12->dolby_ms12_ptr, main_format, MAIN_INPUT_STREAM);
             if (dolby_ms12_input_bytes > 0) {
                 /* Passthrough Mode, only get the MAIN data as the single input */
@@ -3143,6 +3214,10 @@ int bitstream_output(void *buffer, void *priv_data, size_t size)
         return 0;
     }
 
+    if (adev->enable_soundbar_mode) {
+        return 0;
+    }
+
     if (is_same_patch_src(adev, SRC_DTV) && is_dev_patch_exist(adev) && get_dev_patch(adev)->need_drop_size > 0) {
         if (adev->debug_flag > 1)
             ALOGI("func:%s, av sync drop data,need_drop_size=%d\n",
@@ -4303,9 +4378,12 @@ static void patch_set_ms12_start_threshold(struct aml_audio_device *adev, audio_
     struct aml_audio_patch *patch = get_dev_patch(adev);
     audio_devices_t src = patch->input_src;
     bool set_start_threshold = false;
+    int start_threshold = 0;
 
-    if (src != AUDIO_DEVICE_IN_HDMI && src != AUDIO_DEVICE_IN_HDMI_ARC)
+    if (src != AUDIO_DEVICE_IN_HDMI && src != AUDIO_DEVICE_IN_HDMI_ARC) {
+        ALOGI("%s line %d out port not need to set start threshold out", __FUNCTION__, __LINE__);
         return;
+    }
 
     if ((fmt == AUDIO_FORMAT_AC3) || (fmt == AUDIO_FORMAT_E_AC3)) {
         dolby_ms12_set_enforce_timeslice(true);
@@ -4315,11 +4393,13 @@ static void patch_set_ms12_start_threshold(struct aml_audio_device *adev, audio_
     if ((src == AUDIO_DEVICE_IN_HDMI) && (fmt == AUDIO_FORMAT_AC3 || fmt == AUDIO_FORMAT_E_AC3 ||
         fmt == AUDIO_FORMAT_E_AC3_JOC || fmt == AUDIO_FORMAT_MAT)) {
         set_start_threshold = true;
-    } else if (patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC && fmt == AUDIO_FORMAT_AC3) {
+        start_threshold = 1536;
+    } else if (patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC && (fmt == AUDIO_FORMAT_AC3 || fmt == AUDIO_FORMAT_E_AC3 || fmt == AUDIO_FORMAT_E_AC3_JOC)) {
         set_start_threshold = true;
+        start_threshold = 1792;//duration of DD/DDP is 1536(32ms), the start threshold must be larger than 1536.
     }
+
     if (set_start_threshold) {
-        int start_threshold = 1536;
         struct dolby_ms12_desc *ms12 = &(adev->ms12);
         /* For MAT HBR, set ms12 start threshold about 2 frames */
         set_ms12_set_main_start_threshold(ms12, start_threshold);
@@ -4327,6 +4407,7 @@ static void patch_set_ms12_start_threshold(struct aml_audio_device *adev, audio_
     }
     return;
 }
+
 
 int dolby_ms12_main_open(struct audio_stream_out *stream) {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
@@ -4451,6 +4532,10 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
     }
 
     aml_ms12_main_decoder_open(ms12, hal_internal_format, aml_out->hal_channel_mask, sample_rate);
+    ms12->dap_pcm_frames = 0;
+    ms12->stereo_pcm_frames = 0;
+    ms12->measure_last_frame_us = 0;
+    ms12->measure_new_frame_us = 0;
 
 #ifdef ENABLE_DVB_PATCH
     if (do_sync_flag) {

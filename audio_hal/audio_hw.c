@@ -4600,6 +4600,7 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
     ret = str_parms_get_int(parms, "hal_param_soundbar_mode", &val);
     if (ret >= 0) {
         bool enable  = (val != 0) ? true : false;
+        ALOGI("%s enable %d adev->enable_soundbar_mode %d\n", __func__, enable, adev->enable_soundbar_mode);
         if (adev->enable_soundbar_mode != enable) {
             adev->enable_soundbar_mode = enable;
             ALOGI(" enable_soundbar_mode = %d\n", enable);

@@ -748,6 +748,12 @@ void *audio_patch_output_threadloop(void *data)
         if (is_game_mode(aml_dev))
             write_bytes = LOW_LATENCY_PLAYBACK_PERIOD_SIZE * audio_stream_out_frame_size(&out->stream);
 
+        //easily to complete the ac3/eac3 iec61937 one frame.
+        if ((patch->aformat == AUDIO_FORMAT_AC3) || (patch->aformat == AUDIO_FORMAT_E_AC3)) {
+            write_bytes = LOW_LATENCY_CAPTURE_PERIOD_SIZE;
+            ALOGV("%s line %d write_bytes %d aformat %#x", __func__, __LINE__, write_bytes, patch->aformat);
+        }
+
         // buffer size diff from allocation size, need to resize.
         ret = aml_audio_check_and_realloc(&patch->out_buf, &patch->out_buf_size, write_bytes * period_mul);
         if (ret != 0) {

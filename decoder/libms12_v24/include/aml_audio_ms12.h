@@ -237,6 +237,8 @@ struct dolby_ms12_desc {
     bool deep_buf_write2alsa_status;
     int ms12_continuous_state;
     sem_t standby_sem;
+    uint64_t measure_last_frame_us;
+    uint64_t measure_new_frame_us;
 };
 
 /*

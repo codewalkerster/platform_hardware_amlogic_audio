@@ -579,6 +579,12 @@ void get_sink_format(struct audio_stream_out *stream)
             optical_audio_format = sink_audio_format;
             break;
         }
+        if (adev->enable_soundbar_mode) {
+            sink_audio_format = AUDIO_FORMAT_PCM_16_BIT;
+            optical_audio_format = sink_audio_format;
+            ALOGI("%s() enable_soundbar_mode %d sink_audio_format %#x optical_audio_format %#x",
+                __FUNCTION__, adev->enable_soundbar_mode, sink_audio_format, optical_audio_format);
+        }
     }
     /*when device is SPEAKER/HEADPHONE*/
     else {
@@ -1181,12 +1187,19 @@ static int update_audio_hal_info(struct aml_audio_device *adev, audio_format_t f
         if (is_dts_format(format) && is_headphone_x) {
             aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_AUDIO_HAL_FORMAT, TYPE_DTS_HP);
         }
-        aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_AUDIO_HAL_FORMAT, update_type);
         ALOGD("%s() audio hal format change to %x, atmos flag = %d, is_dolby_atmos = %d, dts_hp_x = %d, update_type = %d is_dolby_atmos_off = %d\n",
             __FUNCTION__, adev->audio_hal_info.format, adev->audio_hal_info.is_dolby_atmos, adev->ms12.is_dolby_atmos,
             is_headphone_x, adev->audio_hal_info.update_type, is_dolby_atmos_off);
         ALOGD("%s() cur_out_devices %#x, dap_bypass_enable = %d, is_ms12_tuning_dat = %d, dolby_ms12_enable = %d, output_config = %#x\n",
             __FUNCTION__, adev->cur_out_devices, adev->ms12.dap_bypass_enable, adev->is_ms12_tuning_dat, ms12->dolby_ms12_enable, ms12->output_config);
+
+        if (eDolbyMS12Lib == adev->dolby_lib_type && adev->enable_soundbar_mode && ((update_type >= TYPE_AC3) && (update_type <=TYPE_MAT))) {
+            ALOGD("%s() MS12 inside, enable_soundbar_mode %d, update_type = %d, DONOT popup the Dolby Audio in Config Z device!\n",
+                __FUNCTION__, adev->enable_soundbar_mode, update_type);
+            return 0;
+        }
+
+        aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_AUDIO_HAL_FORMAT, update_type);
     }
 
     return 0;
