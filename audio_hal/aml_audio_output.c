@@ -50,6 +50,68 @@
 #include "dtv_private_object.h"
 #include "audio_hw_resource_mgr.h"
 
+static int a2dp_or_usb_sound_output(struct audio_stream_out *stream,
+                                const void *buffer, /* pcm buffer address */
+                                size_t bytes, /* pcm buffer length, unit is bytes */
+                                int bytes_per_sample, /* pcm's bytes per sample  */
+                                size_t buffer_need_size /*a2dp or usb output bytes*/
+                                )
+{
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = aml_out->dev;
+    int ret = 0;
+
+    //suppose it is the stereo-16bits-PCM
+    audio_config_base_t in_data_config = {48000, AUDIO_CHANNEL_OUT_STEREO, AUDIO_FORMAT_PCM_16_BIT};
+
+    {
+        bool dap_processing = is_audio_postprocessing_add_dolbyms12_dap(adev) && adev->ms12.dolby_ms12_enable;
+        //ALOGD("%s line %d dap_processing %d\n",__func__, __LINE__, dap_processing);
+        if (dap_processing) {
+            //re-alloc the audioeffect_tmp_buffer
+            ret = aml_audio_check_and_realloc((void **)&adev->audioeffect_tmp_buffer, &adev->audioeffect_tmp_buffer_size, buffer_need_size);
+            R_CHECK_RET(ret, "alloc audioeffect_tmp_buffer size:%zu fail", buffer_need_size);
+            //reset the audioeffect_tmp_buffer
+            memset(adev->audioeffect_tmp_buffer, 0, adev->audioeffect_tmp_buffer_size);
+            //copy the stereo data(spdif_ring_buffer) to target buffer(audioeffect_tmp_buffer)
+            if (adev->ms12.spdif_ring_buffer.size && get_buffer_read_space(&adev->ms12.spdif_ring_buffer) >= (int)buffer_need_size) {
+                ring_buffer_read(&adev->ms12.spdif_ring_buffer, (unsigned char*)adev->audioeffect_tmp_buffer, buffer_need_size);
+            }
+        }
+        else {
+            //re-alloc the audioeffect_tmp_buffer
+            buffer_need_size = bytes;
+            ret = aml_audio_check_and_realloc((void **)&adev->audioeffect_tmp_buffer, &adev->audioeffect_tmp_buffer_size, buffer_need_size);
+            R_CHECK_RET(ret, "alloc audioeffect_tmp_buffer size:%zu fail", buffer_need_size);
+            //reset the audioeffect_tmp_buffer
+            memset(adev->audioeffect_tmp_buffer, 0, adev->audioeffect_tmp_buffer_size);
+            //copy the stereo data(buffer) to target buffer(audioeffect_tmp_buffer)
+            memcpy(adev->audioeffect_tmp_buffer, buffer, bytes);
+        }
+
+        /*volume process*/
+        float volume = aml_audio_get_s_gain_by_src(adev, get_dev_patch_src(adev));
+        if (is_SBR(adev)) {
+            if (is_include_a2dp_out_port(adev->cur_out_devices)) {
+                volume *= adev->sink_gain[OUTPORT_A2DP];
+            } else if (is_include_usb_out_port(adev->cur_out_devices)){
+                volume *= adev->sink_gain[OUTPORT_USB_HEADSET];
+            }
+        }
+        bytes_per_sample;
+        //ALOGV("%s bytes_per_sample %d audio_bytes_per_sample(AUDIO_FORMAT_PCM_16_BIT) %d\n",__func__, bytes_per_sample, audio_bytes_per_sample(AUDIO_FORMAT_PCM_16_BIT));
+        apply_volume(volume, adev->audioeffect_tmp_buffer, sizeof(uint16_t), buffer_need_size);
+
+        if (is_include_a2dp_out_port(adev->cur_out_devices)) {
+            a2dp_out_write(adev, &in_data_config, adev->audioeffect_tmp_buffer, buffer_need_size);
+        } else {
+            usb_check_write(adev, adev->audioeffect_tmp_buffer, buffer_need_size, &in_data_config);
+        }
+    }
+
+    return 0;
+}
+
 ssize_t processing_multich_pcm(struct audio_stream_out *stream,
                                 const void *buffer,
                                 size_t bytes,
@@ -75,11 +137,18 @@ ssize_t processing_multich_pcm(struct audio_stream_out *stream,
 
 
     out_frames = bytes / (nchannels * bytes_per_sample);
+    /*USB or BT speaker, the default format is stereo/16bits PCM */
+    size_t buffer_need_size = out_frames * 2 * bytes_per_sample;
 
     int enable_dump = aml_getprop_bool("vendor.media.audiohal.outdump");
     if (adev->debug_flag) {
         ALOGD("%s,size %zu,format %x,ch %d\n",__func__,bytes,output_format,nchannels);
     }
+
+    if (is_include_a2dp_out_port(adev->cur_out_devices) || is_include_usb_out_port(adev->cur_out_devices)) {
+        a2dp_or_usb_sound_output(stream, buffer, bytes, bytes_per_sample, buffer_need_size);
+    }
+
     {
         /* nchannels 16 bit PCM, and there is no effect applied after MS12 processing */
         {
