@@ -68,6 +68,10 @@ static void aml_audio_stream_volume_process(struct audio_stream_out *stream, voi
         } else if (is_include_a2dp_out_port(aml_dev->cur_out_devices)) {
             if (is_dev_patch_running(aml_dev))
                port_gain = aml_dev->sink_gain[OUTPORT_A2DP];
+        } else if (is_include_usb_out_port(aml_dev->cur_out_devices)) {
+            if (is_dev_patch_running(aml_dev)) {
+               port_gain = aml_dev->sink_gain[OUTPORT_USB_HEADSET];
+            }
         } else  if ((aml_dev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER) != 0) {
             port_gain = aml_dev->sink_gain[OUTPORT_SPEAKER];
         }
