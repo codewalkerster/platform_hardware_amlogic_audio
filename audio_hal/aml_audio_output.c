@@ -822,25 +822,14 @@ ssize_t hw_write (struct audio_stream_out *stream
                 }
             }
         }
-
-        if (!is_TV(adev) && !adev->control_hdmitx_mute &&
-            (is_include_a2dp_out_port(adev->cur_out_devices) ||
-            is_include_sco_out_port(adev->cur_out_devices) ||
-            is_include_usb_out_port(adev->cur_out_devices))) {
-            // For STB, do not send data to spdif/hdmitx when bt/usb/sco is connected and mute hdmitx cannot be controlled.
-            memset((void *) buffer, 0, bytes);
-            ret = aml_alsa_output_write(stream, (void *) buffer, bytes);
-        } else {
 #ifdef AUDIO_KARA
-            check_switch_audio_kara(stream);
-            if (aml_out->kara) {
-                // WARNING: buffer is changed, discard 'const' qualifiers
-                ret = audio_kara_mix(aml_out->kara, (void *)buffer, bytes);
-            }
-#endif
-            ret = aml_alsa_output_write(stream, (void *) buffer, bytes); // HDMI output HERE
+        check_switch_audio_kara(stream);
+        if (aml_out->kara) {
+            // WARNING: buffer is changed, discard 'const' qualifiers
+            ret = audio_kara_mix(aml_out->kara, (void *)buffer, bytes);
         }
-
+#endif
+        ret = aml_alsa_output_write(stream, (void *) buffer, bytes); // HDMI output HERE
         //ALOGE("!!aml_alsa_output_write"); ///zzz
         if (ret < 0) {
             ALOGE("ALSA out write fail");

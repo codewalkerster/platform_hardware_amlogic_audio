@@ -629,27 +629,20 @@ static int mixer_output_write(struct amlAudioMixer *audio_mixer)
                 }
             }
 
-            if (!is_TV(adev) && !adev->control_hdmitx_mute &&
-                (is_include_a2dp_out_port(adev->cur_out_devices) ||
-                is_include_usb_out_port(adev->cur_out_devices))) {
-                // For STB, do not send data to spdif/hdmitx when bt/usb is connected and mute hdmitx cannot be controlled.
-
+            if (audio_mixer->submix_standby) {
+                pthread_mutex_unlock(&audio_mixer->outport_locks[port_index]);
+                mixer_output_startup(audio_mixer);
+                pthread_mutex_lock(&audio_mixer->outport_locks[port_index]);
+            }
+            if (out_port->pcm_handle == NULL) {
+                alsa_status = false;
             } else {
-                if (audio_mixer->submix_standby) {
-                    pthread_mutex_unlock(&audio_mixer->outport_locks[port_index]);
-                    mixer_output_startup(audio_mixer);
-                    pthread_mutex_lock(&audio_mixer->outport_locks[port_index]);
-                }
-                if (out_port->pcm_handle == NULL) {
-                    alsa_status = false;
-                } else {
-                    pcm_ioctl(out_port->pcm_handle, SNDRV_PCM_IOCTL_STATUS, &status);
-                    alsa_status = (status.state == PCM_STATE_RUNNING);
-                }
+                pcm_ioctl(out_port->pcm_handle, SNDRV_PCM_IOCTL_STATUS, &status);
+                alsa_status = (status.state == PCM_STATE_RUNNING);
+            }
 
-                if (mixed_out_bytes > 0) {
-                    out_port->write(out_port, mixed_out_buffer, mixed_out_bytes);
-                }
+            if (mixed_out_bytes > 0) {
+                out_port->write(out_port, mixed_out_buffer, mixed_out_bytes);
             }
         }
 

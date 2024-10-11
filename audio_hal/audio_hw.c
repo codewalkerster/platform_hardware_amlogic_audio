@@ -3945,16 +3945,6 @@ static void aml_audio_output_routing(struct aml_audio_device *adev, audio_device
     uint16_t i = 0;
     audio_devices_t device = 0;
 
-    // 1. When playing an offload stream and then playing TalkBack(AUDIO_STREAM_ACCESSIBILITY), framework will delete
-    // the hdmitx device, resulting in no sound.
-    // 2. So, for stb, we don't mute the hdmitx. When customer needs to force speaker, it can be configured as mute tx.
-    if (!is_TV(adev) && !adev->control_hdmitx_mute) {
-        if ((need_mute_devices & AUDIO_DEVICE_OUT_HDMI) != 0) {
-            adev->cur_out_devices &= ~AUDIO_DEVICE_OUT_HDMI;
-            need_mute_devices &= (~AUDIO_DEVICE_OUT_HDMI);
-            AM_LOGI("Non TV, control_hdmitx_mute false, do not control the hdmitx mute.");
-        }
-    }
     AM_LOGI("cur_devices:%#x unmute_devices:%#x, mute_devices:%#x",
         adev->cur_out_devices, need_unmute_devices, need_mute_devices);
     if (adev->is_arc_updating_sad) {
@@ -9221,7 +9211,6 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->dolby_ms12_dap_init_mode = property_get_int32("ro.vendor.platform.ms12.dap_init_mode", 0);
     /*this flag is for issue SWPL-80881*/
     adev->aml_truehd_passthrough_support = property_get_bool("ro.vendor.platform.is.aml_truehd_passthrough", false);
-    adev->control_hdmitx_mute = property_get_bool(PROP_AUDIO_OUTPUT_HDMITX_CONTROL_MUTE, false);
     adev->spdif_coexist_other = property_get_bool(PROP_AUDIO_OUTPUT_SPDIF_COEXIST, true);
     adev->continuous_enable_mixer_max_size = property_get_bool("ro.vendor.media.audio.continuous.enable_mixer_max_size", true);
     adev->stream_pause_delay = property_get_int32("ro.vendor.media.audio.stream.pause.delay", 24);
