@@ -621,6 +621,7 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, const void *buffer
 
             } else if (is_dts_format(aml_out->hal_internal_format) && (dec_raw_data->data_format == AUDIO_FORMAT_PCM_16_BIT ||
                         dec_raw_data->data_format ==AUDIO_FORMAT_PCM_32_BIT)) {
+                aml_audio_stream_volume_process(stream, dec_raw_data->buf, audio_bytes_per_sample(dec_raw_data->data_format), dec_raw_data->data_ch, dec_raw_data->data_len);
                 aml_audio_spdif_output(stream, &aml_out->spdifout_handle, dec_raw_data);
             }
 
