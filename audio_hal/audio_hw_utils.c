@@ -1365,7 +1365,8 @@ int aml_audio_get_hdmi_latency_offset(audio_format_t source_format,
               * old tuning value is -30 as the avsync(avg) result is about -3.8(Self-test).so in OTT-22450
               * change the (-30) to (-45), finally the avsync(avg) result change to -12.6(Self-test)
               */
-            latency_ms = -130; /*TB44 v1.2, pcm(DDP with omx decoder), target [-40, 40]*/
+            //latency_ms = -130; /*TB44 v1.2, pcm(DDP with omx decoder), target [-40, 40]*/
+            latency_ms = -40;  // If abs(latency_ms) too large, youtube will write data slowly and cause audio glitch.
         }
     } else {
         prop_name = "vendor.media.audio.hal.hdmi_latency.raw";
