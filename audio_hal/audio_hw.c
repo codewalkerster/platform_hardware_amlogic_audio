@@ -6879,16 +6879,24 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, const void *buff
         }
 #endif
     }
-    /* for asdk14 cases:
-     * atmos_stickiness_usage_media_ddp_out-no_cfg-v241-HDMI (6581)
-     * atmos_stickiness_usage_media_mat_out-no_cfg-v241-HDMI (6612)
-     */
+
+    // 1. If "setprop persist.vendor.audio.ms12.default.values true"
+    // these following ASDK Test cases can passed
+    // atmos_stickiness_usage_media_ddp_out-no_cfg-v241-HDMI (6581)
+    // atmos_stickiness_usage_media_mat_out-no_cfg-v241-HDMI (6612)
+    // 2. If "setprop persist.vendor.audio.ms12.default.values false"
+    // when BT input sounds(deepbuffer audiotrack) during EXO playing AAC/MPEG file(main stream as Tunnel mode).
+    // we can keep "deep buffer stream" and "main stream" both working.
+    // to avoid Soundbar speaker output noise.
+    bool is_asdk_test = property_get_bool("persist.vendor.audio.ms12.default.values", false);
+
     if (((aml_out->track_base_usage == AUDIO_USAGE_MEDIA) || is_deep_buf) && !adev->is_netflix && !aml_out->is_tv_src_stream && !is_dev_patch_exist(adev)) {
         aml_out->is_system_audio_usage_media = true;
         struct aml_stream_out *out = NULL;
         for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
             out = adev->active_outputs[i];
-            if (out && out->is_ms12_main_decoder && !out->is_preempt_system_audio_usage_media_stream) {
+            if (out && out->is_ms12_main_decoder && !out->is_preempt_system_audio_usage_media_stream && is_asdk_test) {
+                ALOGI("%s() line %d close ms12 main stream", __func__, __LINE__);
                 pthread_mutex_lock(&out->lock);
                 if (out->is_ms12_main_decoder) {
                     ALOGI("%s() line %d close ms12 main stream", __func__, __LINE__);
