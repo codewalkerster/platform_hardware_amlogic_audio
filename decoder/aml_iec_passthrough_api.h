@@ -17,6 +17,11 @@
 #ifndef _AML_IEC_DEC_API_H_
 #define _AML_IEC_DEC_API_H_
 
+struct iec_dec_t {
+    aml_dec_t  aml_dec;
+    aml_iec_config_t iec_config;
+};
+
 extern aml_dec_func_t aml_iec_func;
 
 #endif

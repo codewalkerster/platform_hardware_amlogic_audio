@@ -4837,6 +4837,7 @@ bool is_bypass_dolbyms12(struct audio_stream_out *stream)
 
     return (is_dts
             || is_mpegh
+            || (is_iec61937_format(stream) && !aml_out->is_tv_src_stream)
             || is_high_rate_pcm(stream)
             || (is_multi_channel_pcm(stream) && (aml_out->current_digital_audio_format == AML_DIGITAL_AUDIO_MODE_BYPASS)));
 }
