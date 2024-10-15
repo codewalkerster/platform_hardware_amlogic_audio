@@ -618,6 +618,7 @@ struct aml_audio_device {
     pthread_mutex_t streamList_MutexLock;
     uint32_t streamCount;
     bool reset_hdmitx_audio;
+    bool is_dtg_case;//dtg case at the UK
 };
 
 struct meta_data {

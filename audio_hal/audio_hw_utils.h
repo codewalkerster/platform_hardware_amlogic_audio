@@ -357,5 +357,6 @@ void aml_audio_stream_delete_migrate_flag(struct aml_stream_out *aml_out);
 void aml_load_lock_lib_address(void);
 void aml_lock_lib_address(void);
 void aml_unlock_lib_address(void);
+bool is_locale_at_United_Kingdom_device();
 
 #endif

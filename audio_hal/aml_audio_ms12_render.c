@@ -377,10 +377,11 @@ int aml_audio_ms12_render(struct audio_stream_out *stream, void *abuffer)
                     //         Audio Mode(NONE), PCM output, -23dB
                     //         Audio Mode(AUTO), DD  output, -31dB
                     // The AUDIO_FORMAT_AAC/AUDIO_FORMAT_AAC_LATM/AUDIO_FORMAT_MP2/AUDIO_FORMAT_MP3 Data will be decoded by this flow.
+                    bool is_mpeg_es_with_bitstream_out = (aml_out->hal_internal_format == AUDIO_FORMAT_MP2 || aml_out->hal_internal_format == AUDIO_FORMAT_MP3);
+                    is_mpeg_es_with_bitstream_out = is_mpeg_es_with_bitstream_out && (adev->sink_format > AUDIO_FORMAT_PCM_16_BIT);
                     if (aml_out->hal_internal_format == AUDIO_FORMAT_AAC ||
                         aml_out->hal_internal_format == AUDIO_FORMAT_AAC_LATM ||
-                        aml_out->hal_internal_format == AUDIO_FORMAT_MP2 ||
-                        aml_out->hal_internal_format == AUDIO_FORMAT_MP3) {
+                        is_mpeg_es_with_bitstream_out) {
                         pcm_data_do_pre_attenuation(
                             dec_data
                             , dec_pcm_data->data_len
@@ -388,7 +389,7 @@ int aml_audio_ms12_render(struct audio_stream_out *stream, void *abuffer)
                             , dtv_stream_flag
                             , (adev->ms12.stereo_drc.mode == DOLBY_DRC_RF_MODE)
                             , adev->ms12.system_sound_target
-                            , audio_bytes_per_sample(AUDIO_FORMAT_PCM_16_BIT) //decoded pcm's bps
+                            , audio_bytes_per_sample(dec_pcm_data->data_format) //decoded pcm's bps
                             );
                     }
                     aml_audio_ms12_process_wrapper(stream, dec_data, dec_pcm_data->data_len);

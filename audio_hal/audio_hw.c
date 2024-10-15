@@ -8319,6 +8319,9 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->is_alsa_device_conflict = false;
     adev->arc_delay_ms = property_get_int32("ro.vendor.platform.arc.delay", 100);
 
+    /* to get the DTG case at UK. */
+    adev->is_dtg_case = is_locale_at_United_Kingdom_device();
+
     /*for ms12 case, we set default continuous mode*/
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
         adev->continuous_audio_mode_default = 1;

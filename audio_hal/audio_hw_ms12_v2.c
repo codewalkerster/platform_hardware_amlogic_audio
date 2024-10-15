@@ -488,13 +488,16 @@ static int get_ms12_output_mask(audio_format_t sink_format,audio_format_t  optic
     return output_config;
 }
 
+inline bool is_mpeg_lay2or3_audio(audio_format_t hal_format)
+{
+    return (hal_format == AUDIO_FORMAT_MP2 || hal_format == AUDIO_FORMAT_MP3);
+}
+
 audio_format_t ms12_get_audio_hal_format(audio_format_t hal_format)
 {
     if (hal_format == AUDIO_FORMAT_E_AC3_JOC) {
         return AUDIO_FORMAT_E_AC3;
-    } else if (hal_format == AUDIO_FORMAT_MP2 ||
-               hal_format == AUDIO_FORMAT_MP3 ||
-               hal_format == AUDIO_FORMAT_DRA) {
+    } else if (is_mpeg_lay2or3_audio(hal_format) || hal_format == AUDIO_FORMAT_DRA) {
         return AUDIO_FORMAT_PCM_16_BIT;
     } else {
         if (hal_format == AUDIO_FORMAT_HE_AAC_V1 ||
@@ -948,6 +951,22 @@ void set_ms12_main1_audio_pts(struct dolby_ms12_desc *ms12, uint64_t apts, uint6
     if ((strlen(parm)) > 0 && ms12)
         aml_ms12_update_runtime_params(ms12, parm);
 }
+
+void set_ms12_is_dtg_case(struct dolby_ms12_desc *ms12, int is_dtg_case)
+{
+    char parm[64] = "";
+    struct aml_audio_device *adev = (struct aml_audio_device *)adev_get_handle();
+
+    snprintf(parm, sizeof(parm), "%s %d", "-b_dtg_case", is_dtg_case);
+
+    if (adev->debug_flag)
+        ALOGI("%s b_dtg_case %d", __func__, is_dtg_case);
+
+    if ((strlen(parm)) > 0 && ms12)
+        aml_ms12_update_runtime_params(ms12, parm);
+}
+
+
 
 int get_ms12_mat_dec_delay() {
     return dolby_ms12_get_mat_dec_latency();
@@ -3279,6 +3298,7 @@ static int ms12_output_master(void *buffer, void *priv_data, size_t size, audio_
         adev->ms12_config.format = PCM_FORMAT_S32_LE;
     }
 #endif
+
     ret = aml_audio_pcm_output((struct audio_stream_out *)aml_out, buffer, size, &data_info);
 
     return ret;
@@ -5050,6 +5070,11 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
     set_ms12_ad_mixing_level(stream, mixing_level);
     set_ms12_ad_vol(&aml_out->stream, ad_vol);
 #ifdef ENABLE_DVB_PATCH
+    //this command effect the DRC process in MS12-pcmr, not the decoder process.
+    bool is_aac = (hal_internal_format == AUDIO_FORMAT_AAC || hal_internal_format == AUDIO_FORMAT_AAC_LATM);
+    adev->is_dtg_case = is_locale_at_United_Kingdom_device();
+    set_ms12_is_dtg_case(ms12, is_aac ? adev->is_dtg_case : 0);
+
     if (dtv_stream_flag) {
         aml_ms12_decoder_register_callback(ms12, aml_out->ms12_dec_handle, MS12_CODEC_CALLBACK_SYNC, ms12_dtv_sync_callback, (void *)stream);
         aml_out->b_install_sync_callback = true;
@@ -5106,10 +5131,13 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
     }
 
     if (ms12->dolby_ms12_enable) {
+        bool is_dtv_mp2or3 = is_same_patch_src(adev, SRC_DTV) && patch && is_mpeg_lay2or3_audio(aml_out->hal_internal_format);
+        audio_format_t drc_hal_internal_format  = (is_dtv_mp2or3 == false) ? hal_internal_format : aml_out->hal_internal_format;
+
         set_ms12_drc_params_for_stereo_and_dap_multi_pcm_output(
             adev
             , ms12
-            , hal_internal_format);
+            , drc_hal_internal_format);
 
         // fix case : main audio decoder is paused
         dolby_ms12_main_resume(stream);

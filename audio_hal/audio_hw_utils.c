@@ -4111,6 +4111,7 @@ void aml_unlock_lib_address(void)
 {
     _aml_lock_lib_address(false);
 }
+
 char *aml_strlower(char *str)
 {
     int i = 0;
@@ -4126,5 +4127,21 @@ bool is_float_equal(float a, float b)
 {
     const float PRECISION = 1e-06;
     return (fabs(a - b) < PRECISION);
+}
+
+bool is_locale_at_United_Kingdom_device()
+{
+    char locale[PROPERTY_VALUE_MAX];
+    property_get("persist.sys.locale", locale, "unknown"); // default as "unknown"
+    ALOGI("persist.sys.locale: %s\n", locale);
+    char *result = strcasestr(locale, "GB");
+
+    if (result != NULL) {
+        ALOGI("'GB' found in the string (case-insensitive).\n");
+        return true;
+    } else {
+        ALOGI("'GB' not found in the string.\n");
+        return false;
+    }
 }
 

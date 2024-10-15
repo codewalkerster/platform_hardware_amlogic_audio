@@ -694,6 +694,13 @@ void dynamic_get_dolby_ms12_drc_parameters(struct aml_audio_device *adev, struct
     if (!(is_dtv_patch || is_local_out_bitstream) && !is_dolby_ms12_support_compression_format(format)) {
         dolby_ms12_drc_mode = DOLBY_DRC_LINE_MODE;
     }
+
+    //DTG test case:1.2_Test_2 -HE-AAC_audio_decoding
+    //expect DTG Target mpeg input as 0dB level
+    //use the Line mode to avoid the -3dB lost
+    if (is_dtv_patch && (format == AUDIO_FORMAT_MP2 || format == AUDIO_FORMAT_MP3)) {
+        dolby_ms12_drc_mode = DOLBY_DRC_LINE_MODE;
+    }
     ms12->stereo_drc.boost = drc_boost;
     ms12->stereo_drc.cut = drc_cut;
     ms12->stereo_drc.mode = dolby_ms12_drc_mode;
@@ -710,6 +717,11 @@ void dynamic_get_dolby_ms12_drc_parameters(struct aml_audio_device *adev, struct
         if (!(is_dtv_patch || is_local_out_bitstream) && !is_dolby_ms12_support_compression_format(format)) {
             dolby_ms12_dap_drc_mode = DOLBY_DRC_LINE_MODE;
         }
+        //same as above;
+        if (is_dtv_patch && (format == AUDIO_FORMAT_MP2 || format == AUDIO_FORMAT_MP3)) {
+            dolby_ms12_dap_drc_mode = DOLBY_DRC_LINE_MODE;
+        }
+
 
         ms12->multi_dap_drc.boost = drc_boost;
         ms12->multi_dap_drc.cut = drc_cut;
