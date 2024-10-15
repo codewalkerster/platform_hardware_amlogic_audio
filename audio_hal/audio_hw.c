@@ -7926,7 +7926,8 @@ void adev_close_output_stream_new(struct audio_hw_device *dev,
     /* when switch hdmi output to a2dp output, close hdmi stream maybe after open a2dp stream,
      * and here set audio stop would cause audio stuck
      */
-    if (aml_out->hw_sync_mode
+    if (adev->hw_mediasync
+        && aml_out->hw_sync_mode
         && aml_out->tsync_status != TSYNC_STATUS_STOP
         && !has_hwsync_stream_running(stream)
 #if ENABLE_DVB_PATCH
