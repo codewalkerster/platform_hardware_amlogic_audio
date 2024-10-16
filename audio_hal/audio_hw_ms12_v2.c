@@ -4659,7 +4659,7 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
 
     ms12->is_bypass_ms12 = false;
     /*the main stream is closed, we should update the sink format now*/
-    if (adev->active_outputs[STREAM_PCM_NORMAL] && (adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_BYPASS)) {
+    if (adev->active_outputs[STREAM_PCM_NORMAL] && (adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_BYPASS) && !get_dev_patch(adev)) {
         get_sink_format(&adev->active_outputs[STREAM_PCM_NORMAL]->stream);
     }
 
