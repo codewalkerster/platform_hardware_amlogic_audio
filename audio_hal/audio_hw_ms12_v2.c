@@ -73,6 +73,7 @@
 #include "aml_audio_output.h"
 #include "tv_patch_ctrl.h"
 #include "audio_hw_resource_mgr.h"
+#include "aml_audio_enhancement.h"
 
 //dolby truehd parser
 #include "aml_audio_truehdparser.h"
@@ -301,13 +302,9 @@ static const unsigned int ms12_muted_ddp_raw[] = {
 static int nbytes_of_dolby_ms12_downmix_output_pcm_frame();
 void ms12_do_dtv_sync(struct audio_stream_out *stream);
 static void *dolby_ms12_threadloop(void *data);
-
 static int correct_the_duration_by_align_the_mat_frame_header(char *data, size_t len);
-
 static void update_ms12_focus_info(struct audio_stream_out *stream);
-static int correct_the_duration_by_align_the_mat_frame_header(char *data, size_t len);
-
-
+int ms12_content_process_callback(void *priv_data, void *info);
 
 static int get_ms12_dump_enable(int dump_type) {
     int value = 0;
@@ -1322,6 +1319,11 @@ int get_the_dolby_ms12_prepared(
     set_audio_main_format(input_format);
     dolby_ms12_set_dap_only(0);
 
+    // to do
+    if (adev->board_config.ai_de_config == 1) {
+        dolby_ms12_set_hal_content_process(1);
+    }
+
     /*
      *-tv_tuning    Flag to activate a special processing graph for TV tuning purposes:
      *     * The input is expected to be a MAT tuning signal (-im).
@@ -1442,6 +1444,11 @@ int get_the_dolby_ms12_prepared(
     } while(ms12_init_count < 5);//give the 5 times to config ms12.
     if (ms12_init_count >= 5 || !ms12->dolby_ms12_enable) {
         goto Err_Ms12_Config;
+    }
+
+    //Todo
+    if (adev->board_config.ai_de_config == 1) {
+        dolby_ms12_continuous_register_callback(ms12->dolby_ms12_ptr, MS12_CONTINUOUS_CALLBACK_CONTENT_PROCESS, ms12_content_process_callback, (void *)out);
     }
 
     ms12->dolby_ms12_init_flags = true;
@@ -2478,6 +2485,12 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12, bool set_non_continuous
     } else {
         ALOGD("%s release ms12 standby semaphore successful\n", __FUNCTION__);
     }
+
+    //Todo
+    if (adev->board_config.ai_de_config == 1) {
+        dolby_ms12_continuous_unregister_callback(ms12->dolby_ms12_ptr, MS12_CONTINUOUS_CALLBACK_CONTENT_PROCESS);
+    }
+
     set_audio_system_format(AUDIO_FORMAT_INVALID);
     set_audio_app_format(AUDIO_FORMAT_INVALID);
     set_audio_main_format(AUDIO_FORMAT_INVALID);
@@ -4744,6 +4757,54 @@ int ms12_process_callback(void *priv_data, void *info) {
     ALOGV("FrameType %d, InBuffer %p, InBufferSize %d", pstProcessInfo->s32InFrameType, pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize);
     ms12_decoder_volume_process(aml_out, pstProcessInfo);
     ms12_decoder_sound_mode_process(aml_out, pstProcessInfo);
+
+    pstProcessInfo->s32OutFrameType = pstProcessInfo->s32InFrameType;
+    pstProcessInfo->pu8OutBuffer = pstProcessInfo->pu8InBuffer;
+    pstProcessInfo->u32OutBufferSize = pstProcessInfo->u32InBufferSize;
+
+    return ret;
+}
+
+static int audio_enhancment_process(struct aml_audio_device *adev, Aml_MS12_ProcessInfo_t *pstProcessInfo) {
+    Aml_MS12_ProcessInfo_t *Info = pstProcessInfo;
+    aml_audio_enhancement_module_t *pAudioEnhancementModule = adev->native_postprocess.audio_enhancment_handle;
+
+    if (!pAudioEnhancementModule || !pAudioEnhancementModule->audio_enhancement_enable || !pAudioEnhancementModule->channel_width) {
+        return 0;
+    }
+
+    audio_channel_mask_t channel_mask = acmod_convert_to_channel_mask(Info->as32Acmod[0], Info->as32Acmod[1]);
+    aml_update_audio_channel_mask(&adev->native_postprocess, channel_mask);
+
+    audio_buffer_t in_buf;
+    audio_buffer_t out_buf;
+    int nChannels = pAudioEnhancementModule->channel_width;
+    int frames = Info->u32InBufferSize / sizeof(float) / nChannels;
+    in_buf.frameCount =  out_buf.frameCount = frames;
+    in_buf.raw = out_buf.raw = Info->pu8InBuffer;
+
+    memcpy_to_i32_from_float(in_buf.raw, in_buf.raw, Info->u32InBufferSize / sizeof(float));
+    aml_audio_enhancement_module_process(pAudioEnhancementModule, &in_buf, &out_buf);
+    memcpy_to_float_from_i32(out_buf.raw, out_buf.raw, Info->u32InBufferSize / sizeof(float));
+
+    return 0;
+}
+
+int ms12_content_process_callback(void *priv_data, void *info) {
+    if (priv_data == NULL || info == NULL) {
+        return -1;
+    }
+
+    int ret = 0;
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)priv_data;
+    struct aml_audio_device *adev = aml_out->dev;
+    struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    Aml_MS12_ProcessInfo_t *pstProcessInfo = (Aml_MS12_ProcessInfo_t *)info;
+
+    ALOGV("%s FrameType %d, InBuffer %p, InBufferSize %d", __FUNCTION__,
+        pstProcessInfo->s32InFrameType, pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize);
+
+    audio_enhancment_process(adev, pstProcessInfo);
 
     pstProcessInfo->s32OutFrameType = pstProcessInfo->s32InFrameType;
     pstProcessInfo->pu8OutBuffer = pstProcessInfo->pu8InBuffer;

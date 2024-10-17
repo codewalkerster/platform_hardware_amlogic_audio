@@ -40,6 +40,7 @@
 #include "aml_mmap_audio.h"
 #include "amlAudioMixer.h"
 #include "audio_hw_resource_mgr.h"
+#include "aml_audio_enhancement.h"
 
 #ifdef ENABLE_AEC_APP
 #include "audio_aec.h"
@@ -902,11 +903,11 @@ static ssize_t output_port_post_process(output_port *port, void *buffer, int byt
 static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, int bytes)
 {
     int16_t *buf16 = buffer;
-    int frames = bytes / FRAMESIZE_16BIT_STEREO;
     port->processed_buf = buffer;
     struct audioCfg *src_cfg = &port->src_cfg;
     struct audioCfg *target_cfg = &port->cfg;
     struct aml_audio_device *adev = (struct aml_audio_device *)adev_get_handle();
+    int frames = bytes / src_cfg->frame_size;
 
     if (get_debug_value(AML_DUMP_AUDIOHAL_TV) || get_port_dump_enable(DUMP_OUTPUT_PORT_PROCESS)) {
         aml_dump_audio_bitstreams("/data/vendor/audiohal/port_before_postprocess.raw", buf16, bytes);
@@ -914,6 +915,15 @@ static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, 
 
     if (port->postprocess)
         audio_post_process(port->postprocess, buffer, frames);
+
+    if (adev->native_postprocess.audio_enhancment_handle) {
+        audio_buffer_t in_buf;
+        audio_buffer_t out_buf;
+        in_buf.frameCount =  out_buf.frameCount = frames;
+        in_buf.raw = out_buf.raw = buffer;
+        aml_audio_enhancement_module_process(adev->native_postprocess.audio_enhancment_handle, &in_buf, &out_buf);
+    }
+
     if (adev->enable_soundbar_mode) {
         float port_gain = 1.0;
         if ((adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI) != 0) {

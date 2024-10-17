@@ -56,6 +56,9 @@ int (*FuncDolbyMS12RegisterOutputCallback)(output_callback , void *);
 int (*FuncDolbyMS12Output)(void *, const void *, size_t);
 #endif
 
+int (*FuncMS12ContinuousRegisterCallback)(void *, int, void *, void *);
+int (*FuncMS12ContinuousUnregisterCallback)(void *, int);
+
 int (*FuncDolbyMS12UpdateRuntimeParams)(void *, int , char **);
 int (*FuncDolbyMS12UpdateRuntimeParamsNoLock)(void *, int , char **);
 int (*FuncDolbyMS12SchedulerRun)(void *);
@@ -194,6 +197,18 @@ int DolbyMS12::GetLibHandle(char *dolby_ms12_path)
         goto ERROR;
     }
 #endif
+
+    FuncMS12ContinuousRegisterCallback = (int (*)(void *, int, void *, void *)) dlsym(mDolbyMS12LibHandle, "ms12_continuous_register_callback");
+    if (!FuncMS12ContinuousRegisterCallback) {
+        ALOGE("%s, dlsym ms12_continuous_register_callback fail\n", __FUNCTION__);
+        goto ERROR;
+    }
+
+    FuncMS12ContinuousUnregisterCallback = (int (*)(void *, int)) dlsym(mDolbyMS12LibHandle, "ms12_continuous_unregister_callback");
+    if (!FuncMS12ContinuousUnregisterCallback) {
+        ALOGE("%s, dlsym ms12_continuous_unregister_callback fail\n", __FUNCTION__);
+        goto ERROR;
+    }
 
     FuncDolbyMS12UpdateRuntimeParams = (int (*)(void *, int , char **))  dlsym(mDolbyMS12LibHandle, "ms12_update_runtime_params");
     if (!FuncDolbyMS12UpdateRuntimeParams) {
@@ -658,6 +673,32 @@ int DolbyMS12::DolbyMS12Output(
     return ret;
 }
 #endif
+
+int DolbyMS12::MS12ContinuousRegisterCallback(void *dolbyMS12_pointer, int callback_type, void *callback, void *priv_data) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12ContinuousRegisterCallback)(dolbyMS12_pointer, callback_type, callback, priv_data);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+
+int DolbyMS12::MS12ContinuousUnregisterCallback(void *dolbyMS12_pointer, int callback_type) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12ContinuousUnregisterCallback)(dolbyMS12_pointer, callback_type);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
 
 int DolbyMS12::DolbyMS12UpdateRuntimeParams(void *DolbyMS12Pointer, int configNum, char **configParams)
 {

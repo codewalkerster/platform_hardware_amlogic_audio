@@ -78,8 +78,6 @@ include $(BUILD_PREBUILT)
         aml_audio_stream.c \
         alsa_config_parameters.c \
         spdif_encoder_api.c \
-        ../vendor_process/audio_post_process.c \
-        ../vendor_process/aml_ai_audio.c \
         dolby_lib_api.c \
         amlAudioMixer.c \
         audio_port.c \
@@ -91,6 +89,9 @@ include $(BUILD_PREBUILT)
         aml_audio_delay.c \
         aml_audio_spdifout.c \
         aml_audio_ms12_sync.c \
+        ../vendor_process/audio_post_process.c \
+        ../vendor_process/aml_ai_audio.c \
+        ../vendor_process/aml_audio_enhancement.c \
         ../aml_aq_hw/audio_eq_drc_compensation.c \
         ../aml_aq_hw/audio_eq_drc_parser.c \
         ../aml_aq_hw/ini/dictionary.c \
@@ -134,7 +135,9 @@ include $(BUILD_PREBUILT)
         hardware/amlogic/audio/utils/resampler/include \
         hardware/amlogic/audio/utils/parser/include \
         hardware/amlogic/audio/vendor_process/libaudioeffect/VirtualX \
-        hardware/amlogic/audio/vendor_process/libaudioeffect/aiaq/include \
+        hardware/amlogic/audio/vendor_process/libaudioeffect/AI \
+        hardware/amlogic/audio/vendor_process/libaudioeffect/AI/aiaq \
+        hardware/amlogic/audio/vendor_process/libaudioeffect/AI/audio_enhancement \
         hardware/amlogic/audio/vendor_process/include \
         hardware/amlogic/audio/input/include \
         hardware/amlogic/audio/decoder/include \

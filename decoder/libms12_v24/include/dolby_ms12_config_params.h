@@ -679,6 +679,8 @@ int dolby_ms12_get_lfe_config(audio_channel_mask_t channel_mask);
 
 void dolby_ms12_set_dap_only(int dap_only);
 
+void dolby_ms12_set_hal_content_process(int hal_content_process);
+
 /*End*/
 
 #ifdef __cplusplus

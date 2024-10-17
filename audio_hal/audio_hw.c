@@ -107,6 +107,7 @@
 #include "component_noise_gate.h"
 #include "tv_private_object.h"
 #include "hdmirx_utils.h"
+#include "aml_audio_enhancement.h"
 
 #define ENABLE_NANO_NEW_PATH 1
 #if ENABLE_NANO_NEW_PATH
@@ -4882,6 +4883,12 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
 #endif
         ALOGV("temp_buf %s", temp_buf);
         return strdup(temp_buf);
+    } else if (strstr(keys, "audio_enhancement_gain")) {
+        sprintf(temp_buf, "audio_enhancement_gain=%d", aml_get_audio_enhancement_gain(&adev->native_postprocess));
+        return  strdup(temp_buf);
+    } else if (strstr(keys, "audio_enhancement_enable")) {
+        sprintf(temp_buf, "audio_enhancement_enable=%d", aml_get_audio_enhancement_enable(&adev->native_postprocess));
+        return  strdup(temp_buf);
     }
 
     if (eDTSXLib == adev->dts_lib_type) {
@@ -7874,8 +7881,7 @@ static int adev_close(hw_device_t *device)
 #endif
 
     aml_audio_uevent_close();
-
-
+    aml_close_audio_enhancement_module(&adev->native_postprocess);
     destroy_vendor_post_process(&adev->native_postprocess);
 
     aml_destroy_stream_manager(adev);

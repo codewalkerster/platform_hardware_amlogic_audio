@@ -160,6 +160,7 @@ void aml_audio_board_config_init(struct audio_board_config *config)
         config->force_DDP_Config = aml_get_jason_int_value("Force_DDP_Config", 0);
         config->passthrough_Audio_Config = aml_get_jason_int_value("Passthrough_Audio_Config", 0);
         config->engineer_Mode_Audio_Config = aml_get_jason_int_value("Engineer_Mode_Audio_Config", 0);
+        config->ai_de_config = aml_get_jason_int_value("Effect_Ai_De_Config", 0);
         /* End: Audio Setting UI/Core relevant configurations */
 #ifdef SUPPORT_KARAOKE
         /* get project config of karaoke */
@@ -232,6 +233,10 @@ char * get_parameters_from_json_config(struct audio_board_config *board_config, 
     } else if (!strcmp(keys, "Engineer_Mode_Audio_Config")) {
         sprintf(temp_buf, "Engineer_Mode_Audio_Config=%s",
             (board_config->engineer_Mode_Audio_Config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    }  else if (!strcmp(keys, "Effect_Ai_De_Config")) {
+        sprintf(temp_buf, "Effect_Ai_De_Config=%s",
+             (board_config->ai_de_config == 1 ? "1" : "0"));
         return strdup(temp_buf);
     }
 

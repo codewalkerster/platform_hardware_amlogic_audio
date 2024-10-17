@@ -179,6 +179,7 @@ DolbyMS12ConfigParams::DolbyMS12ConfigParams():
     , mFullDAPDisable(false)
     , mHdmiOutputType(0)
     , mDapOnly(0)
+    , mContentProcessEnable(0)
 {
     ALOGD("+%s() mAudioOutFlags %d mAudioStreamOutFormat %#x mHasAssociateInput %d mHasSystemInput %d AppInput %d\n",
           __FUNCTION__, mAudioOutFlags, mAudioStreamOutFormat, mHasAssociateInput, mHasSystemInput, mHasAppInput);
@@ -924,6 +925,13 @@ int DolbyMS12ConfigParams::SetFunctionalSwitches(char **ConfigParams, int *row_i
         sprintf(ConfigParams[*row_index], "%s", "-dap_only");
         (*row_index)++;
         sprintf(ConfigParams[*row_index], "%d", mDapOnly);
+        (*row_index)++;
+    }
+
+    if (mContentProcessEnable) {
+        sprintf(ConfigParams[*row_index], "%s", "-hal_content_process");
+        (*row_index)++;
+        sprintf(ConfigParams[*row_index], "%d", mContentProcessEnable);
         (*row_index)++;
     }
 

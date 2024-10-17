@@ -1072,6 +1072,17 @@ extern "C" void dolby_ms12_set_dap_only(int dap_only)
     }
 }
 
+extern "C" void dolby_ms12_set_hal_content_process(int hal_content_process)
+{
+    ALOGV("%s()\n", __FUNCTION__);
+    android::DolbyMS12ConfigParams *config_param = getInstance();
+    if (config_param) {
+        config_param->setHalContentProcess(hal_content_process);
+    }
+    else {
+        ALOGW("Found the config_param handle illegal\n");
+    }
+}
 
 /*****************************************************************************************************************/
 /*END*/

@@ -561,6 +561,12 @@ public:
         ALOGI("%s() mDapOnly %d\n", __FUNCTION__, mDapOnly);
     }
 
+    virtual void setHalContentProcess(int ContentProcessEnable)
+    {
+        mContentProcessEnable = ContentProcessEnable;
+        ALOGI("%s() mContentProcessEnable %d\n", __FUNCTION__, mContentProcessEnable);
+    }
+
     virtual void setInputCMDMask(const char *input_cmd);
 
     virtual int getInputCMDMask(void)
@@ -782,6 +788,7 @@ private:
     int mHdmiOutputType;
 
     int mDapOnly;
+    int mContentProcessEnable;
 }; //class DolbyMS12ConfigParams
 
 

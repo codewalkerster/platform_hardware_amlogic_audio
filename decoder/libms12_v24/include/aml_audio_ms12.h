@@ -57,7 +57,7 @@ enum {
     BITSTREAM_OUTPUT_CNT
 };
 
-typedef enum  {
+typedef enum {
     MS12_CODEC_PARAMETER_CMD = 0,
     MS12_CODEC_PARAMETER_PAUSE = 1,
     MS12_CODEC_PARAMETER_FLUSH = 2,
@@ -87,14 +87,21 @@ typedef enum  {
     MS12_CODEC_PARAMETER_CONTENT_VOLUME_LEVELER = 26,
     MS12_CODEC_PARAMETER_CONTENT_DIALOGUE_ENHANCER = 27,
     MS12_CODEC_PARAMETER_MAX,
-}ms12_codec_parameter_type_t;
+} ms12_codec_parameter_type_t;
 
-typedef enum  {
+typedef enum {
     MS12_CODEC_CALLBACK_SYNC,
     MS12_CODEC_CALLBACK_TEMPO,
     MS12_CODEC_CALLBACK_PROCESS,
+    MS12_CODEC_CALLBACK_SCALETEMPO,
+    MS12_CODEC_CALLBACK_CLIPMETA,
     MS12_CODEC_CALLBACK_MAX,
-}ms12_codec_callback_type_t;
+} ms12_codec_callback_type_t;
+
+typedef enum {
+    MS12_CONTINUOUS_CALLBACK_CONTENT_PROCESS,
+    MS12_CONTINUOUS_CALLBACK_MAX,
+} ms12_continuous_callback_type_t;
 
 enum MS12_PROCESS_CALLBACK_PCM_TYPE {
     PCM_INT16 = 0,
@@ -106,7 +113,7 @@ typedef struct ms12_pcminfo {
     int sample_rate;
     int sample_bytes;
     int channel_num;
-}ms12_pcminfo_t;
+} ms12_pcminfo_t;
 
 struct bitstream_out_desc {
     audio_format_t audio_format;
@@ -133,7 +140,9 @@ typedef struct Aml_MS12_ProcessInfo_s {
     char *pu8OutBuffer;
     unsigned int u32OutBufferSize;
     int as32Acmod[2];
+    int as32Reserved[8];
 } Aml_MS12_ProcessInfo_t;
+
 typedef struct Aml_MS12_DecInfo_s {
     int s32SampleRate;
     int s32ChannelAcmod;

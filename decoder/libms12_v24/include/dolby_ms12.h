@@ -119,6 +119,10 @@ int dolby_ms12_output(void *dolby_mS12_pointer
                      );
 #endif
 
+int dolby_ms12_continuous_register_callback(void *dolbyMS12_pointer, int callback_type, void *callback, void *priv_data);
+
+int dolby_ms12_continuous_unregister_callback(void *dolbyMS12_pointer, int callback_type);
+
 /*@@
     @brief get all the runtime config params, as the style of "int argc, char **argv"
 

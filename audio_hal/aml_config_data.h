@@ -121,6 +121,11 @@ struct audio_board_config {
     */
     int passthrough_Audio_Config;
     /*
+      0: hide AI DE UI
+      1: display AI DE UI
+    */
+    int ai_de_config;
+    /*
       0: hide engineer Mode UI
       1: display engineer Mode UI
     */

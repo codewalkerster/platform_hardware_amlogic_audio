@@ -89,6 +89,9 @@ struct aml_native_postprocess {
     int AML_DTS_index;
     //native private process handle: AI AQ
     void *ai_handle;
+    //native private process handle: audio enhancment
+    void *audio_enhancment_handle;
+
     //if any effect is do process() should hold dev->effects_lock
     pthread_mutex_t lock;
     struct aml_post_effect_ctrl effect_ctrl;

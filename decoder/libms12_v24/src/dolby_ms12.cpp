@@ -263,6 +263,26 @@ extern "C" int dolby_ms12_output(void *dolbyMS12_pointer
 }
 #endif
 
+extern "C" int dolby_ms12_continuous_register_callback(void *dolbyMS12_pointer, int callback_type, void *callback, void *priv_data)
+{
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->MS12ContinuousRegisterCallback(dolbyMS12_pointer, callback_type, callback, priv_data);
+    } else {
+        return -1;
+    }
+}
+
+extern "C" int dolby_ms12_continuous_unregister_callback(void *dolbyMS12_pointer, int callback_type)
+{
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->MS12ContinuousUnregisterCallback(dolbyMS12_pointer, callback_type);
+    } else {
+        return -1;
+    }
+}
+
 extern "C" int dolby_ms12_update_runtime_params(void *dolbyMS12_pointer, int configNum, char **configParams)
 {
     android::DolbyMS12* dolby_ms12_instance = getInstance();

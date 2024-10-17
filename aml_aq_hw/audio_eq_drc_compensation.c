@@ -32,9 +32,12 @@
 #include "audio_post_process.h"
 #include "aml_ai_audio.h"
 #include "aml_audio_nonms12_render.h"
+#include "aml_peq.h"
+#include "aml_audio_enhancement.h"
+#include "dolby_lib_api.h"
 
 #undef  LOG_TAG
-#define LOG_TAG  "audio_hw_aq_eqdrc"
+#define LOG_TAG  "audio_hw_aq"
 
 #if ANDROID_PLATFORM_SDK_VERSION < 29
 #define MODEL_SUM_DEFAULT_PATH "/odm/etc/tvconfig/model/model_sum.ini"
@@ -860,6 +863,41 @@ int set_AQ_parameters(struct audio_hw_device *dev, struct str_parms *parms)
 
         ALOGD("set dolby DAP enable %d DTS VX enable %d effect_mode %d", adev->effect_ctrl.dap_enable,
                adev->effect_ctrl.vx_enable, adev->effect_ctrl.effect_mode);
+        goto exit;
+    }
+
+    /* audio enhancement control */
+    ret = str_parms_get_int(parms, "audio_enhancement_gain", &val);
+    if (ret >= 0) {
+        if (val < MIN_AUDIO_ENHANCEMENT_GAIN) {
+            val = MIN_AUDIO_ENHANCEMENT_GAIN;
+        } else if (val > MAX_AUDIO_ENHANCEMENT_GAIN) {
+            val = MAX_AUDIO_ENHANCEMENT_GAIN;
+        }
+        aml_set_audio_enhancement_gain(&adev->native_postprocess, val);
+        ALOGI("audio_enhancement setting gain %d dB", val);
+        goto exit;
+    }
+
+    ret = str_parms_get_int(parms, "audio_enhancement_enable", &val);
+    if (ret >= 0) {
+        if (!adev->native_postprocess.audio_enhancment_handle) {
+            audio_config_base_t audio_config = {0};
+            int channel_width = 2;
+            audio_config.channel_mask = AUDIO_CHANNEL_OUT_STEREO;
+            audio_config.sample_rate = 48000;
+            if (eDolbyMS12Lib == adev->dolby_lib_type) {
+                /* For ms12 callback, the audio format must 8 channel, float */
+                audio_config.format = AUDIO_FORMAT_PCM_32_BIT;
+                channel_width = 8;
+            } else {
+                audio_config.format = get_primary_out_format(adev);
+                channel_width = 2;
+            }
+            aml_open_audio_enhancement_module(&adev->native_postprocess, &audio_config, channel_width);
+        }
+        aml_set_audio_enhancement_enable(&adev->native_postprocess, val);
+        ALOGI("audio_enhancement: %s\n", (val == 1) ? "enable":"disable");
         goto exit;
     }
 
