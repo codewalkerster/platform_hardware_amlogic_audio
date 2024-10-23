@@ -152,7 +152,7 @@ int file_size(char *name)
     return statbuf.st_size;
 }
 
-int write_so_to_dev(void)
+int write_so_to_dev(char *source_file_name)
 {
     int fsize;
     void *buffer;
@@ -165,7 +165,7 @@ int write_so_to_dev(void)
         return 0;
     }
 
-    fsize = file_size(SOURCE_FILE);
+    fsize = file_size(source_file_name);
     if (fsize < 0) {
         ALOGE("%s line %d fsize %d return -1!\n", __func__, __LINE__, fsize);
         return -1;
@@ -177,7 +177,7 @@ int write_so_to_dev(void)
         return -1;
     }
 
-    source_file = open(SOURCE_FILE, O_RDONLY);
+    source_file = open(source_file_name, O_RDONLY);
     if (source_file < 0) {
         ALOGE("%s line %d (%s) open failed because %s, return -1\n", __func__, __LINE__, SOURCE_FILE, strerror(errno));
         if (buffer) {
@@ -272,7 +272,7 @@ enum eDolbyLibType detect_dolby_lib_type(void) {
 #else
         //MS12 V2
         if (get_dev_audio_utils_node() == true) {
-            if (write_so_to_dev() == 0) {
+            if (write_so_to_dev(SOURCE_FILE) == 0) {
                 ALOGI("%s,Write %s to %s success\n", __FUNCTION__, DOLBY_MS12_LIB_PATH_A, FINAL_SO);
                 hDolbyMS12LibHandle = dlopen(FINAL_SO, RTLD_NOW);
             }
@@ -303,7 +303,9 @@ enum eDolbyLibType detect_dolby_lib_type(void) {
     }
 
     // dcv is second priority
-    if (RET_OK == file_accessible(DOLBY_DCV_LIB_PATH_A) || RET_OK == file_accessible(DOLBY_DCV_LIB64_PATH_A)) {
+    if (RET_OK == file_accessible(DOLBY_DCV_LIB_PATH_OEM) ||
+        RET_OK == file_accessible(DOLBY_DCV_LIB_PATH_A) ||
+        RET_OK == file_accessible(DOLBY_DCV_LIB64_PATH_A)) {
         retVal = eDolbyDcvLib;
     } else {
         retVal = eDolbyNull;
@@ -312,18 +314,31 @@ enum eDolbyLibType detect_dolby_lib_type(void) {
     s_aml_so_type = AML_SO_TYPE_NONE;
     if (eDolbyDcvLib == retVal)
     {
-        //try to open lib see if it's OK?
-        hDolbyDcvLibHandle  = dlopen(DOLBY_DCV_LIB_PATH_A, RTLD_NOW);
-        //ALOGI("%s, 32bit lib:%s, hDolbyDcvLibHandle:%p\n", __FUNCTION__, DOLBY_DCV_LIB_PATH_A, hDolbyDcvLibHandle);
+        // try to open /oem/lib/libHwAudio_dcvdec.so and /dev/audio_utils
+        if (RET_OK == file_accessible(DOLBY_DCV_LIB_PATH_OEM) && get_dev_audio_utils_node() == true) {
+            if (write_so_to_dev(DOLBY_DCV_LIB_PATH_OEM) == 0) {
+                ALOGI("%s,Write %s to %s success\n", __FUNCTION__, DOLBY_DCV_LIB_PATH_OEM, FINAL_SO);
+                hDolbyDcvLibHandle = dlopen(FINAL_SO, RTLD_NOW);
+            }
+            else {
+                ALOGE("%s,Write %s to %s failed\n", __FUNCTION__, DOLBY_DCV_LIB_PATH_OEM, FINAL_SO);
+            }
 
-        //open 32bit so failed, here try to open the 64bit dolby dcv so.
-        if (hDolbyDcvLibHandle == NULL) {
-            hDolbyDcvLibHandle = dlopen(DOLBY_DCV_LIB64_PATH_A, RTLD_NOW);
-            if (hDolbyDcvLibHandle != NULL)
-                s_aml_so_type = AML_SO_TYPE_64bit;
-            ALOGI("%s, 64bit lib:%s, hDolbyDcvLibHandle:%p\n", __FUNCTION__, DOLBY_DCV_LIB64_PATH_A, hDolbyDcvLibHandle);
         } else {
-            s_aml_so_type = AML_SO_TYPE_32bit;
+
+            //try to open lib see if it's OK?
+            hDolbyDcvLibHandle  = dlopen(DOLBY_DCV_LIB_PATH_A, RTLD_NOW);
+            //ALOGI("%s, 32bit lib:%s, hDolbyDcvLibHandle:%p\n", __FUNCTION__, DOLBY_DCV_LIB_PATH_A, hDolbyDcvLibHandle);
+
+            //open 32bit so failed, here try to open the 64bit dolby dcv so.
+            if (hDolbyDcvLibHandle == NULL) {
+                hDolbyDcvLibHandle = dlopen(DOLBY_DCV_LIB64_PATH_A, RTLD_NOW);
+                if (hDolbyDcvLibHandle != NULL)
+                    s_aml_so_type = AML_SO_TYPE_64bit;
+                ALOGI("%s, 64bit lib:%s, hDolbyDcvLibHandle:%p\n", __FUNCTION__, DOLBY_DCV_LIB64_PATH_A, hDolbyDcvLibHandle);
+            } else {
+                s_aml_so_type = AML_SO_TYPE_32bit;
+            }
         }
     }
 
@@ -348,15 +363,19 @@ int dolby_lib_decode_enable(eDolbyLibType_t lib_type) {
         struct stat stat_info;
         int ret = 0;
 
-        switch (s_aml_so_type) {
-            case AML_SO_TYPE_32bit:
-                ret = stat(DOLBY_DCV_LIB_PATH_A, &stat_info);
-                break;
-            case AML_SO_TYPE_64bit:
-                ret = stat(DOLBY_DCV_LIB64_PATH_A, &stat_info);
-                break;
-            default:
-                ret = -1;//dlopen failed, so enable should be 0;
+        if (RET_OK == file_accessible(DOLBY_DCV_LIB_PATH_OEM) && get_dev_audio_utils_node() == true) {
+            ret = stat(DOLBY_DCV_LIB_PATH_OEM, &stat_info);
+        } else {
+            switch (s_aml_so_type) {
+                case AML_SO_TYPE_32bit:
+                    ret = stat(DOLBY_DCV_LIB_PATH_A, &stat_info);
+                    break;
+                case AML_SO_TYPE_64bit:
+                    ret = stat(DOLBY_DCV_LIB64_PATH_A, &stat_info);
+                    break;
+                default:
+                    ret = -1;//dlopen failed, so enable should be 0;
+            }
         }
 
         if (ret < 0) {

@@ -72,8 +72,10 @@ enum {
 #define CALCULATE_BITRATE_NEED_TIME 300 //calculate bitrate in the first 300 seconds
 
 #if ANDROID_PLATFORM_SDK_VERSION > 29
+#define DOLBY_DCV_LIB_PATH_OEM "/oem/lib/libHwAudio_dcvdec.so"
 #define DOLBY_DCV_LIB_PATH_A "/odm/lib/libHwAudio_dcvdec.so"
 #define DOLBY_DCV_LIB64_PATH_A "/odm/lib64/libHwAudio_dcvdec.so"
+#define DOLBY_DCV_LIB_FINAL_SO   "/dev/audio_utils"
 
 #else
 #define DOLBY_DCV_LIB_PATH_A "/vendor/lib/libHwAudio_dcvdec.so"
@@ -397,7 +399,12 @@ static  int unload_ddp_decoder_lib()
 static int dcv_decoder_init(int decoding_mode, aml_dec_control_type_t digital_raw)
 {
     int input_mode = 1;
-    gDDPDecoderLibHandler = dlopen(DOLBY_DCV_LIB_PATH_A, RTLD_NOW);
+
+    if (access(DOLBY_DCV_LIB_PATH_OEM, R_OK) == 0)
+        gDDPDecoderLibHandler = dlopen(DOLBY_DCV_LIB_FINAL_SO, RTLD_NOW);
+
+    if (gDDPDecoderLibHandler == NULL)
+        gDDPDecoderLibHandler = dlopen(DOLBY_DCV_LIB_PATH_A, RTLD_NOW);
     //open 32bit so failed, here try to open the 64bit dolby dcv so.
     if (gDDPDecoderLibHandler == NULL) {
         gDDPDecoderLibHandler = dlopen(DOLBY_DCV_LIB64_PATH_A, RTLD_NOW);

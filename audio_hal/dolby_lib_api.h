@@ -23,6 +23,7 @@
 #else
 #define DOLBY_MS12_LIB_PATH_A "/odm/lib/libdolbyms12.so"
 #endif
+#define DOLBY_DCV_LIB_PATH_OEM "/oem/lib/libHwAudio_dcvdec.so"
 #define DOLBY_DCV_LIB_PATH_A "/odm/lib/libHwAudio_dcvdec.so"
 #define DOLBY_DCV_LIB64_PATH_A "/odm/lib64/libHwAudio_dcvdec.so"
 #define DTS_HD_LIB_PATH_A "/odm/lib/libHwAudio_dtshd.so"
