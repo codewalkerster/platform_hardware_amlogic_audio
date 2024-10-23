@@ -785,6 +785,39 @@ static int reconfig_pcm_by_packet_type(audio_type_parse_t *audio_type_status,
     return 0;
 }
 
+static void update_earc_type_parser_status(audio_type_parse_t *type_parser, enum audio_type type, int samplerate)
+{
+    bool mute = eArcIn_get_cs_mute(type_parser->mixer_handle);
+    /* if mute, only set flag as muting is done by driver;
+     * if unmute, after type is reliable then start unmuting flow.
+     */
+    if (mute) {
+        type_parser->earc_mute = mute;
+    } else if (type_parser->earc_mute && type != NOT_READY) {
+        type_parser->fmt_change = true;
+        type_parser->earc_mute = mute;
+        AM_LOGI("earc unmute reset\n");
+    }
+
+    if (!is_earcrx_stable(type_parser->mixer_handle))
+        type_parser->fmt_change = true;
+
+    if (type != NOT_READY)
+        type_parser->cur_audio_type = type;
+    if (type_parser->audio_type != type_parser->cur_audio_type) {
+        type_parser->fmt_change = true;
+        AM_LOGI("format_change: type %d->%d", type_parser->audio_type, type_parser->cur_audio_type);
+        // LPCM<->MULTICH_LPCM switching, bypass HW resampler for chips not supporting
+        if (!type_parser->earcrx_hw_resample && is_linear_pcm_type(type_parser->audio_type) &&
+                is_linear_pcm_type(type_parser->cur_audio_type)) {
+            if (type_parser->cur_audio_type == LPCM)
+                enable_HW_resample(type_parser->mixer_handle, samplerate);
+            else
+                enable_HW_resample(type_parser->mixer_handle, HW_RESAMPLE_DISABLE);
+        }
+    }
+}
+
 #define WAIT_COUNT_MAX 10
 static void* audio_type_parse_threadloop(void *data)
 {
@@ -967,8 +1000,6 @@ static void* audio_type_parse_threadloop(void *data)
                }
             }
         } else {
-            bool mute = false;
-            // multi-pcm HW resample is not supported for some earcrx
             bool bypass_hw_resample = false;
             // get audio format from hw.
             if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
@@ -976,14 +1007,8 @@ static void* audio_type_parse_threadloop(void *data)
             } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_SPDIF) {
                 audio_type_status->cur_audio_type = spdifin_audio_format_detection(audio_type_status->mixer_handle);
             } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
-                mute = eArcIn_get_cs_mute(audio_type_status->mixer_handle);
-                /* earc_mute is only for recording detect the cs mute status */
-                if (mute)
-                    audio_type_status->earc_mute = mute;
-                if (type != NOT_READY)
-                    audio_type_status->cur_audio_type = type;
-                if (!is_earcrx_stable(audio_type_status->mixer_handle))
-                    audio_type_status->fmt_change = true;
+                update_earc_type_parser_status(audio_type_status, type, cur_samplerate);
+                // bypass multi-pcm HW resample, as some earcrx do not support
                 if (type == MULTICH_LPCM && !audio_type_status->earcrx_hw_resample)
                     bypass_hw_resample = true;
             }
@@ -992,17 +1017,11 @@ static void* audio_type_parse_threadloop(void *data)
                 if (!bypass_hw_resample)
                     enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
                 audio_type_status->fmt_change = true;
-                AM_LOGI("format_change: type %d->%d", audio_type_status->audio_type, audio_type_status->cur_audio_type);
+                AM_LOGI("RAW->PCM, format_change: type %d->%d", audio_type_status->audio_type, audio_type_status->cur_audio_type);
             } else if (is_linear_pcm_type(audio_type_status->audio_type) && !is_linear_pcm_type(audio_type_status->cur_audio_type)) {
-                AM_LOGI("Raw data found: type(%d)\n", type);
                 enable_HW_resample(audio_type_status->mixer_handle, HW_RESAMPLE_DISABLE);
                 audio_type_status->fmt_change = true;
-            } else if (audio_type_status->earc_mute && !mute && type != NOT_READY) {
-                /* If we record mute, and now it is unmute, and the type is NOT_READY,
-                 * need reset for channel swap */
-                audio_type_status->fmt_change = true;
-                audio_type_status->earc_mute = mute;
-                AM_LOGI("earc mute reset\n");
+                AM_LOGI("PCM->RAW, format_change: type %d->%d", audio_type_status->audio_type, audio_type_status->cur_audio_type);
             }
 
             audio_type_status->audio_type = audio_type_status->cur_audio_type;
