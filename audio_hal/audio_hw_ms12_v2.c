@@ -3410,9 +3410,19 @@ int mc_pcm_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_
         return 0;
     }
 
+    if (adev->is_netflix && (adev->sink_max_channels >= 6)) {
+        // when enter netflix llp aaudio mode, output mc pcm
+        // mc pcm always has 8ch data, it is ok to fix ch_mask to 5.1
+        if (adev->aaudio_low_latency || (adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_PCM)) {
+            if (adev->debug_flag > 1) {
+                AM_LOGV("ch_mask 0x%x fix to 5.1", ch_mask);
+            }
+            ch_mask = AUDIO_CHANNEL_OUT_5POINT1;
+        }
+    }
+
     if ((adev->optical_format != AUDIO_FORMAT_PCM_16_BIT) || (adev->sink_max_channels < 6) || ms12->is_bypass_ms12
-        || (ch_mask == AUDIO_CHANNEL_OUT_STEREO && !netflix_llp_mode)) {
-        // when enter netflix llp aaudio mode, always output mc pcm
+        || (ch_mask == AUDIO_CHANNEL_OUT_STEREO)) {
         if (bitstream_out->spdifout_handle) {
             ALOGI("%s close mc spdif handle =%p", __func__, bitstream_out->spdifout_handle);
             aml_audio_spdifout_close(bitstream_out->spdifout_handle);
