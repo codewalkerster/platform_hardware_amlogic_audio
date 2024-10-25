@@ -20,6 +20,8 @@
 #include <cinttypes>
 #include <cutils/log.h>
 #include <cutils/properties.h>
+#include <shared_mutex>
+
 #include <android-base/strings.h>
 #include <audio_utils/primitives.h>
 
@@ -34,6 +36,7 @@ extern "C" {
 #include "aml_audio_stream.h"
 #include "aml_audio_timer.h"
 }
+using namespace std;
 using android::bluetooth::audio::aidl::BluetoothAudioPortAidlOut;
 
 #define A2DP_RING_BUFFER_DELAY_TIME_MS              (64)
@@ -63,6 +66,9 @@ struct aml_a2dp_hal {
     pthread_mutex_t out_monitor_thread_mutex;
     pthread_cond_t out_monitor_thread_cond;
 };
+
+static shared_mutex g_a2dp_hal_lock;
+static shared_mutex g_a2dp_state_lock;
 static int a2dp_out_standby(struct aml_audio_device *adev);
 static void a2dp_notify_monitor(aml_a2dp_hal *hal, bool is_sending);
 
@@ -176,17 +182,15 @@ static void *a2dp_out_monitor_thread(void *arg) {
 int a2dp_out_open(struct aml_audio_device *adev) {
     struct aml_a2dp_hal *hal = NULL;
     struct timespec ts = {.tv_sec = 0, .tv_nsec = 0};
-    pthread_mutex_lock(&adev->a2dp_lock);
+    unique_lock<shared_mutex> l(g_a2dp_hal_lock);
 
     if (adev->a2dp_hal != NULL) {
         AM_LOGW("already open");
-        pthread_mutex_unlock(&adev->a2dp_lock);
         return 0;
     }
     hal = new aml_a2dp_hal;
     if (hal == NULL) {
         AM_LOGE("new BluetoothAudioPortAidlOut fail");
-        pthread_mutex_unlock(&adev->a2dp_lock);
         return -1;
     }
     hal->resample = NULL;
@@ -196,7 +200,6 @@ int a2dp_out_open(struct aml_audio_device *adev) {
     hal->a2dp_latency = A2DP_LATENCY_INVALID_NS;
     if (!hal->a2dphw.SetUp(AUDIO_DEVICE_OUT_BLUETOOTH_A2DP)) {
         AM_LOGE("BluetoothAudioPortAidlOut setup fail");
-        pthread_mutex_unlock(&adev->a2dp_lock);
         delete hal;
         return -1;
     }
@@ -204,7 +207,6 @@ int a2dp_out_open(struct aml_audio_device *adev) {
         AM_LOGE("LoadAudioConfig fail");
     }
     adev->a2dp_hal = (void*)hal;
-    pthread_mutex_unlock(&adev->a2dp_lock);
 
     pthread_condattr_t condattr;
     pthread_mutex_init(&hal->out_monitor_thread_mutex, NULL);
@@ -225,11 +227,10 @@ int a2dp_out_open(struct aml_audio_device *adev) {
 }
 
 int a2dp_out_close(struct aml_audio_device *adev) {
-    pthread_mutex_lock(&adev->a2dp_lock);
+    unique_lock<shared_mutex> l(g_a2dp_hal_lock);
     struct aml_a2dp_hal *hal = (struct aml_a2dp_hal *)adev->a2dp_hal;
     if (hal == NULL) {
         AM_LOGW("a2dp hw is already closed.");
-        pthread_mutex_unlock(&adev->a2dp_lock);
         return -1;
     }
 
@@ -251,7 +252,6 @@ int a2dp_out_close(struct aml_audio_device *adev) {
     if (hal->buff_conv_format) {
         aml_audio_free(hal->buff_conv_format);
     }
-    pthread_mutex_unlock(&adev->a2dp_lock);
     delete hal;
     return 0;
 }
@@ -269,6 +269,7 @@ static int a2dp_out_resume(struct aml_audio_device *adev) {
         AM_LOGI("A2dp already resumed. status:%s", streamState2String(hal->state));
         return 0;
     } else if (hal->state == BluetoothStreamState::STANDBY) {
+        unique_lock<shared_mutex> l(g_a2dp_state_lock);
         if (hal->a2dphw.Start()) {
             BluetoothStreamState cur_status = hal->a2dphw.GetState();
             AM_LOGI("status: %s -> %s Resume %s", streamState2String(hal->state), streamState2String(cur_status),
@@ -286,12 +287,10 @@ static int a2dp_out_resume(struct aml_audio_device *adev) {
 }
 
 static int a2dp_out_standby(struct aml_audio_device *adev) {
-    pthread_mutex_lock(&adev->a2dp_lock);
     struct aml_a2dp_hal *hal = (struct aml_a2dp_hal *)adev->a2dp_hal;
     int32_t ret = 0;
     if (hal == NULL) {
         AM_LOGW("a2dp has been released.");
-        pthread_mutex_unlock(&adev->a2dp_lock);
         return -1;
     }
 
@@ -300,6 +299,7 @@ static int a2dp_out_standby(struct aml_audio_device *adev) {
     if (hal->state == BluetoothStreamState::STANDBY) {
         AM_LOGI("A2dp already standby. status:%s", streamState2String(hal->state));
     } else if (hal->state == BluetoothStreamState::STARTED) {
+        unique_lock<shared_mutex> l(g_a2dp_state_lock);
         if (hal->a2dphw.Suspend()) {
             BluetoothStreamState cur_status = hal->a2dphw.GetState();
             AM_LOGI("status: %s -> %s Standby %s", streamState2String(hal->state), streamState2String(cur_status),
@@ -313,7 +313,6 @@ static int a2dp_out_standby(struct aml_audio_device *adev) {
         AM_LOGW("cur state:%s error, can't standby", streamState2String(hal->state));
         ret = -1;
     }
-    pthread_mutex_unlock(&adev->a2dp_lock);
     return ret;
 }
 
@@ -566,7 +565,7 @@ ssize_t a2dp_out_write(struct aml_audio_device *adev, audio_config_base_t *confi
     R_CHECK_POINTER_LEGAL(-1, buffer, "");
 
     uint32_t written_size = 0;
-    pthread_mutex_lock(&adev->a2dp_lock);
+    shared_lock<shared_mutex> l(g_a2dp_hal_lock);
     while (bytes > written_size) {
         uint32_t remain_size = bytes - written_size;
         size_t sent = remain_size;
@@ -578,16 +577,14 @@ ssize_t a2dp_out_write(struct aml_audio_device *adev, audio_config_base_t *confi
         AM_LOGV("written_size:%d, remain_size:%d, sent:%zu", written_size, remain_size, sent);
         written_size += sent;
     }
-    pthread_mutex_unlock(&adev->a2dp_lock);
     return written_size;
 }
 
 uint32_t a2dp_out_get_latency(struct aml_audio_device *adev) {
     uint64_t remote_delay_report_ns = 0;
-    pthread_mutex_lock(&adev->a2dp_lock);
+    shared_lock<shared_mutex> l(g_a2dp_hal_lock);
     struct aml_a2dp_hal * hal = (struct aml_a2dp_hal *)adev->a2dp_hal;
     if (!hal) {
-        pthread_mutex_unlock(&adev->a2dp_lock);
         return DEFAULT_A2DP_LATENCY_NS / NSEC_PER_MSEC;
     }
     /* Some BT devices(eg: Xiaomi Air2) will change the latency after the connection is successful,
@@ -605,7 +602,6 @@ uint32_t a2dp_out_get_latency(struct aml_audio_device *adev) {
             remote_delay_report_ns / NSEC_PER_MSEC, hal->a2dp_latency / NSEC_PER_MSEC);
     }
     remote_delay_report_ns = hal->a2dp_latency;
-    pthread_mutex_unlock(&adev->a2dp_lock);
     return static_cast<uint32_t>(remote_delay_report_ns / NSEC_PER_MSEC + A2DP_STATIC_DELAY_MS);
 }
 
@@ -643,6 +639,7 @@ int a2dp_out_set_parameters(struct aml_audio_device *adev, const char *kvpairs) 
 }
 
 int a2dp_hal_dump(struct aml_audio_device *adev, int fd) {
+    shared_lock<shared_mutex> l(g_a2dp_hal_lock);
     struct aml_a2dp_hal *hal = (struct aml_a2dp_hal *)adev->a2dp_hal;
     if (hal) {
         dprintf(fd, "------------ [AM_HAL][A2DP] -------------------------------------\n");
