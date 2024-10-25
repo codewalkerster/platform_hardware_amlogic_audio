@@ -800,7 +800,7 @@ int aml_alsa_output_get_delayframe(struct audio_stream_out *stream) {
         if (ret < 0) {
             ALOGE("%s:%d, pcm_ioctl fail, ret:%#x, error info:%s",
                 __func__, __LINE__, ret, strerror(errno));
-            return ret;
+            return 0;
         }
         ALOGV("aml_alsa_output_get_delayframe frames %ld",frames);
         if ( frames > 0) {
