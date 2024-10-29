@@ -93,7 +93,7 @@
 
 int uio_init_new(int *fd_uio);
 int uio_deinit_new(int *fd_uio);
-int uio_read_buffer(unsigned char *buffer, int size, int thread_exit);
+int uio_read_buffer(unsigned char *buffer, int size, int *thread_exit);
 int uio_get_buffer_level();
 
 #endif

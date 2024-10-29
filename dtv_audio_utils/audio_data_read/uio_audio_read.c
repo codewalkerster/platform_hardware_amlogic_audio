@@ -140,13 +140,13 @@ int uio_deinit_new(int *fd_uio)
 }
 
 
-static inline void waiting_bits(int bits, int thread_exit)
+static inline void waiting_bits(int bits, int *thread_exit)
 {
     int bytes;
     bytes = READ_MPEG_REG(AIU_MEM_AIFIFO_BYTES_AVAIL);
     while (bytes * 8 < bits)
     {
-        if (thread_exit)
+        if (*thread_exit)
         {
             break;
         }
@@ -156,7 +156,7 @@ static inline void waiting_bits(int bits, int thread_exit)
 }
 
 #define EXTRA_DATA_SIZE 128
-int uio_read_buffer(unsigned char *buffer, int size, int thread_exit)
+int uio_read_buffer(unsigned char *buffer, int size, int *thread_exit)
 {
     int bytes;
     int len;

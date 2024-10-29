@@ -191,6 +191,7 @@ struct aml_audio_patch
     unsigned int input_thread_created;
     unsigned int output_thread_created;
     uint64_t decoder_offset;
+	uint64_t parser_offset;
     uint64_t input_skipped_bytes;
     unsigned int outlen_after_last_validpts;
     unsigned long last_valid_pts;
@@ -264,6 +265,7 @@ struct aml_audio_patch
     void *dtv_package_list;
     struct package *cur_package;
     int audio_pts_dts_flag;
+    int pts_margin;//use for t5d ptsserver lookup
 #endif
     bool skip_amadec_flag;
     int in_read_frame_size;
@@ -277,6 +279,7 @@ struct aml_audio_patch
     int  ad_remain_size;
     void *heaac_parser_handle;
     void *ad_heaac_parser_handle;
+    void *ac4_parser_handle;
     struct heaac_parser_info main_heaac_info;
     struct heaac_parser_info ad_heaac_info;
 
@@ -296,7 +299,6 @@ struct aml_audio_patch
     bool start_mute;
     struct aml_stream_out *output_stream;
     int32_t PServerDev;
-    bool singleDmxNonTunnelMode;
     /* source data format change */
     bool format_change;
     bool input_teardown_over;

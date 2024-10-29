@@ -266,7 +266,7 @@ int32_t PtsServ_ioctl(int32_t PServerDevId,
                              int32_t PServerCmd,
                              uint64_t param) {
     int32_t ret = -1;
-    if (PServerDevId <= 0) {
+    if (PServerDevId < 0) {
         ALOGE("PtsServ_ioctl PServerDevId:%d\n", PServerDevId);
         return ret;
     }
@@ -2110,9 +2110,14 @@ void get_dtv_checkin_pts (struct audio_stream_out *stream, int64_t *in_frame_pts
 
     if (patch->skip_amadec_flag) {
         if (patch->cur_package) {
-            if (!is_dtv_multi_demux(adev) && patch->singleDmxNonTunnelMode) {
+            if (!is_dtv_multi_demux(adev) && adev->singleDmxNonTunnelMode) {
+                /*look up the checkin list by dynamic margin size that valued by es data framesize */
+                if (patch->in_read_frame_size && patch->pts_margin != patch->in_read_frame_size) {
+                   patch->pts_margin = patch->in_read_frame_size;
+                   PtsServ_ioctl(patch->PServerDev, PTSSERVER_IOC_SET_OFFSET_MARGIN, (unsigned long)&patch->pts_margin);
+                }
                 if (aml_out->aml_dec) {
-                    checkout_pts.offset = patch->decoder_offset;
+                    checkout_pts.offset = patch->parser_offset;
                     if (patch->PServerDev != -1) {
                         PtsServ_ioctl(patch->PServerDev, PTSSERVER_IOC_CHECKOUT_APTS, (unsigned long)&checkout_pts);
                     }
@@ -2122,29 +2127,24 @@ void get_dtv_checkin_pts (struct audio_stream_out *stream, int64_t *in_frame_pts
                     if (checkout_pts.pts_90k != -1) {
                         *in_frame_pts = checkout_pts.pts_90k;
                         *out_frames = 0;
-                    } else {
-                        if (out_frame_pts)  {
-                            *in_frame_pts = out_frame_pts;
-                        }
-                        *out_frames = 0;
                     }
-
+                    patch->cur_package->pts = *in_frame_pts;
                     if (adev->debug_flag > 1)
                         ALOGD("offset:%" PRId64 " in_frame_pts:%" PRId64 " PtsServ_checkout_pts64:%" PRId64 " aml_dec->out_frame_pts  %" PRId64 "\n",checkout_pts.offset,*in_frame_pts, checkout_pts.pts_64,out_frame_pts);
                 } else {
-                    checkout_pts.offset = patch->decoder_offset;
+                    checkout_pts.offset = patch->parser_offset;
                     if (patch->PServerDev != -1) {
                         PtsServ_ioctl(patch->PServerDev, PTSSERVER_IOC_CHECKOUT_APTS, (unsigned long)&checkout_pts);
                     }
                     *in_frame_pts = checkout_pts.pts_90k;
                     if (*in_frame_pts != -1) {
-                        patch->last_valid_pts = *in_frame_pts;
+                        patch->dtvsync->last_package_pts = *in_frame_pts;
                     }
                     if (*in_frame_pts == -1) {
-                        *in_frame_pts = 0;
+                        *in_frame_pts = -1;
                     }
                     if (adev->debug_flag > 1)
-                        ALOGD("offset:%" PRId64 " in_frame_pts:%" PRId64 " PtsServ_checkout_pts64:%" PRId64 " aml_dec->out_frame_pts  %" PRId64 "\n",checkout_pts.offset,*in_frame_pts, checkout_pts.pts_64,out_frame_pts);
+                        ALOGD("offset:%" PRId64 " in_frame_pts:%" PRId64 " PtsServ_checkout_pts64:%" PRId64 " \n",checkout_pts.offset,*in_frame_pts,checkout_pts.pts_64);
                 }
             }
             else {

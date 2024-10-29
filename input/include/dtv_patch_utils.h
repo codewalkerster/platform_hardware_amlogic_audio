@@ -135,6 +135,8 @@ struct package {
     uint8_t pts_dts_flag;
     uint64_t ad_pts;
     int split_frame_size;
+    uint8_t adfade;
+    uint8_t adpan;
 };
 
 typedef struct {

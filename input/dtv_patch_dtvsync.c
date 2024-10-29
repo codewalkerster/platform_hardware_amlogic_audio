@@ -593,6 +593,13 @@ int aml_dtvsync_process_resample(struct audio_stream_out *stream,
     struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = aml_out->dev;
     struct aml_audio_patch *patch = get_dev_patch(adev);
+
+    if (!audio_is_linear_pcm(adev->sink_format) &&
+        is_dolby_ddp_support_compression_format(aml_out->hal_internal_format)) {
+        ALOGW("sink_format %0x non ms12 raw output do not support raw speed output !!!",adev->optical_format);
+        return 0;
+    }
+
     float speed = 0.0f;
     int ret = -1;
 
@@ -692,8 +699,22 @@ dtvsync_process_res  aml_dtvsync_nonms12_process(struct audio_stream_out *stream
                 aml_dec->out_frame_pts, patch->dtvsync->cur_outapts,
                 patch->output_thread_exit);
 
-        if (m_audiopolicy.audiopolicy == MEDIASYNC_AUDIO_HOLD)
-            usleep(15*1000);
+        if (m_audiopolicy.audiopolicy == MEDIASYNC_AUDIO_HOLD) {
+            if (m_audiopolicy.param1 != -1) {
+                int32_t  usleepTime = m_audiopolicy.param1;
+                while (patch->output_thread_exit != 1) {
+                    if (usleepTime > 15000) {
+                        usleep(15000);
+                        usleepTime = usleepTime - 15000;
+                    } else {
+                        usleep(usleepTime);
+                        break;
+                    }
+                }
+            } else {
+                usleep(15000);
+            }
+        }
 
         if (patch->output_thread_exit || patch->input_thread_exit) {
             m_audiopolicy.audiopolicy = MEDIASYNC_AUDIO_DROP_PCM;
@@ -752,9 +773,15 @@ void aml_dtvsync_ms12_get_policy(struct audio_stream_out *stream)
     do {
         m_audiopolicy.param1 = patch->dtv_default_i2s_clock;
         m_audiopolicy.param2 = dtv_get_i2s_output_clock(patch);
-        ret = aml_dtvsync_audioprocess(patch->dtvsync, patch->cur_package->pts,
-                                patch->dtvsync->cur_outapts,
-                                MEDIASYNC_UNIT_PTS, &m_audiopolicy);
+        if ((int64_t)patch->cur_package->pts >= 0) {
+            ret = aml_dtvsync_audioprocess(patch->dtvsync, patch->cur_package->pts,
+                                    patch->dtvsync->cur_outapts,
+                                    MEDIASYNC_UNIT_PTS, &m_audiopolicy);
+        } else {
+            ret = aml_dtvsync_audioprocess(patch->dtvsync, patch->dtvsync->last_package_pts,
+                                    patch->dtvsync->cur_outapts,
+                                    MEDIASYNC_UNIT_PTS, &m_audiopolicy);
+        }
 
         if (!ret) {
             ALOGE("aml_dtvsync_audioprocess fail.");
@@ -766,8 +793,22 @@ void aml_dtvsync_ms12_get_policy(struct audio_stream_out *stream)
                 m_audiopolicy.audiopolicy, mediasyncAudiopolicyType2Str(m_audiopolicy.audiopolicy),
                 m_audiopolicy.param1, m_audiopolicy.param2,
                 patch->cur_package->pts, patch->dtvsync->cur_outapts);
-        if (m_audiopolicy.audiopolicy == MEDIASYNC_AUDIO_HOLD)
-            usleep(15*1000);
+        if (m_audiopolicy.audiopolicy == MEDIASYNC_AUDIO_HOLD) {
+            if (m_audiopolicy.param1 != -1) {
+                int32_t  usleepTime = m_audiopolicy.param1;
+                while (patch->output_thread_exit != 1) {
+                    if (usleepTime > 15000) {
+                        usleep(15000);
+                        usleepTime = usleepTime - 15000;
+                    } else {
+                        usleep(usleepTime);
+                        break;
+                    }
+                }
+            } else {
+                usleep(15000);
+            }
+        }
 
         if (patch->output_thread_exit || patch->input_thread_exit || adev->ms12_to_be_cleanup) {
             ALOGI("input exit, break now\n");

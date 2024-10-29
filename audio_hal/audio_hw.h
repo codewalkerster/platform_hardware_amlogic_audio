@@ -555,6 +555,7 @@ struct aml_audio_device {
     /* primary streamout config format, juged by policy */
     audio_format_t primary_out_format;
     pthread_mutex_t bitstream_lock;
+    bool singleDmxNonTunnelMode;
 
     /* if no data write, donot open pcm device and write,
        otherwise bootvideo can't open pcm device and play failed.*/
