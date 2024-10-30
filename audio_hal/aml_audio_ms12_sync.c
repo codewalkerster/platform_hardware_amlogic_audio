@@ -21,7 +21,7 @@
 
 #include "audio_hw.h"
 #include "audio_hw_utils.h"
-#include "a2dp_hal.h"
+#include "audio_bt_hal.h"
 #include "audio_hw_ms12.h"
 #ifndef MS12_V24_ENABLE
 #include "audio_avsync_table_aml_ms12_v1.h"

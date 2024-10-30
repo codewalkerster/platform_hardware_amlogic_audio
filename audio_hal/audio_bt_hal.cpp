@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Amlogic Corporation.
+ * Copyright (C) 2024 Amlogic Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG  "audio_hw_hal_a2dp"
+#define LOG_TAG  "audio_hw_hal_bt"
 //#define LOG_NDEBUG 0
 #include <system/audio.h>
 #include <cinttypes>
@@ -25,8 +25,8 @@
 
 #include "BluetoothAudioSession.h"
 
-#include "a2dp_hal.h"
-#include "a2dp_hw.h"
+#include "audio_bt_hal.h"
+#include "audio_bt_hw.h"
 #include "aml_audio_resampler.h"
 
 

@@ -66,8 +66,8 @@ include $(BUILD_PREBUILT)
         audio_hwsync.c \
         audio_hw_profile.c \
         alsa_manager.c \
-        a2dp_hw.cpp \
-        a2dp_hal.cpp \
+        audio_bt_hw.cpp \
+        audio_bt_hal.cpp \
         audio_bt_sco.c \
         aml_audio_stream.c \
         alsa_config_parameters.c \

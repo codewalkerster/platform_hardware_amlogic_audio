@@ -17,7 +17,7 @@
 #include "aml_audio_ms12.h"
 #include "dolby_lib_api.h"
 #include "alsa_device_parser.h"
-#include "a2dp_hal.h"
+#include "audio_bt_hal.h"
 #include "aml_malloc_debug.h"
 #ifdef ENABLE_AEC_APP
 #include "audio_aec.h"

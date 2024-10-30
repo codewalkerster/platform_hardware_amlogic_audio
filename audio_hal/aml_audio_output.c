@@ -37,7 +37,7 @@
 #include "dolby_lib_api.h"
 #include "aml_audio_report.h"
 #include "aml_audio_sysfs.h"
-#include "a2dp_hal.h"
+#include "audio_bt_hal.h"
 #include "audio_bt_sco.h"
 #include "aml_malloc_debug.h"
 #include "spdif_encoder_api.h"

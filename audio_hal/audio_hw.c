@@ -126,7 +126,7 @@
 
 #include "sub_mixing_factory.h"
 #include "amlAudioMixer.h"
-#include "a2dp_hal.h"
+#include "audio_bt_hal.h"
 #include "audio_bt_sco.h"
 #include "aml_malloc_debug.h"
 #ifdef ENABLE_AEC_APP

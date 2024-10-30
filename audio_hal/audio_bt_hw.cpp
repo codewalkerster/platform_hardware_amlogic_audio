@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 The Android Open Source Project
+ * Copyright 2024 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "audio_hw_hal_a2dp"
+#define LOG_TAG "audio_hw_hal_bt"
 
 #include <android-base/logging.h>
 #include <android-base/stringprintf.h>
@@ -24,7 +24,7 @@
 #include <stdlib.h>
 
 #include "BluetoothAudioSessionControl.h"
-#include "a2dp_hw.h"
+#include "audio_bt_hw.h"
 
 extern "C" {
 #include "audio_hw_utils.h"

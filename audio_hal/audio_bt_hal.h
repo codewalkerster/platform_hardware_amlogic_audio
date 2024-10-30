@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Amlogic Corporation.
+ * Copyright (C) 2024 Amlogic Corporation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,9 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#ifndef _A2DP_HAL_H_
-#define _A2DP_HAL_H_
+#pragma once
 
 #include <sys/types.h>
 #include <hardware/audio.h>
@@ -35,6 +33,4 @@ int a2dp_hal_dump(struct aml_audio_device *adev, int fd);
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

@@ -42,7 +42,7 @@
 #include "audio_virtual_buf.h"
 
 #include "audio_hw.h"
-#include "a2dp_hal.h"
+#include "audio_bt_hal.h"
 #include "audio_bt_sco.h"
 #include "audio_usb_hal.h"
 #include "aml_audio_timer.h"
