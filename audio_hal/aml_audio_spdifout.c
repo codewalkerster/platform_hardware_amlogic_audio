@@ -460,6 +460,7 @@ int aml_audio_spdifout_open(void **pphandle, spdif_config_t *spdif_config)
         stream_config.config.offload_info.format = audio_format;
 
         device_config.device_port = alsa_device_get_port_index(device_id);
+        device_config.alsa_pcm_index = -1;
         phandle->spdif_port       = device_config.device_port;
         phandle->sample_rate      = spdif_config->rate;
         ALOGI("%s   device_id:%d  device_config.device_port:%d", __func__, device_id, device_config.device_port);
@@ -479,11 +480,13 @@ int aml_audio_spdifout_open(void **pphandle, spdif_config_t *spdif_config)
 
             aml_mixer_ctrl_set_int(&aml_dev->alsa_mixer, AML_MIXER_ID_I2S2HDMI_FORMAT, aml_spdif_format);
             if ((aml_spdif_format == AML_TRUE_HD || aml_spdif_format == AML_DTS_HD_MA)
-                && bd_config->hdmitx_hbr_src >= AML_TDM_A_TO_HDMITX)
+                && bd_config->hdmitx_hbr_src >= AML_TDM_A_TO_HDMITX) {
                 hdmitx_src = bd_config->hdmitx_hbr_src;
-            else if (aml_spdif_format == AML_MULTI_CH_LPCM && bd_config->hdmitx_multi_ch_src >= AML_TDM_A_TO_HDMITX)
+                device_config.alsa_pcm_index = hdmitx_src - AML_TDM_A_TO_HDMITX;
+            } else if (aml_spdif_format == AML_MULTI_CH_LPCM && bd_config->hdmitx_multi_ch_src >= AML_TDM_A_TO_HDMITX) {
                 hdmitx_src = bd_config->hdmitx_multi_ch_src;
-            else
+                device_config.alsa_pcm_index = hdmitx_src - AML_TDM_A_TO_HDMITX;
+            } else
                 AM_LOGW("invalid format %d for I2S to HDMITX", aml_spdif_format);
             aml_audio_select_src_to_hdmi(hdmitx_src);
             phandle->restore_hdmitx_selection = 1;

@@ -977,6 +977,26 @@ static void alsa_write_new_rate_control(void *handle) {
     return;
 }
 
+static int alsa_get_device_index(aml_device_config_t *device_config)
+{
+    int pcm_index = 0;
+
+    /* Directly get feasible pcm index from device_config(aml_audio_config.json).
+     * Otherwise use former way to get from dai-link name.
+     */
+    if (device_config->alsa_pcm_index < 0) {
+        int alsa_port = device_config->device_port;
+        if (alsa_port < 0) {
+            ALOGE("Wrong alsa_device ID\n");
+            return -1;
+        }
+        pcm_index = alsa_device_update_pcm_index(alsa_port, PLAYBACK);
+    } else {
+        pcm_index = device_config->alsa_pcm_index;
+    }
+
+    return pcm_index;
+}
 
 int aml_alsa_output_open_new(void **handle, aml_stream_config_t * stream_config, aml_device_config_t *device_config)
 {
@@ -1028,12 +1048,7 @@ int aml_alsa_output_open_new(void **handle, aml_stream_config_t * stream_config,
     config->format = convert_audio_format_2_alsa_format(format);
     config->avail_min = 0;
     card = alsa_device_get_card_index();
-    alsa_port = device_config->device_port;
-    if (alsa_port < 0) {
-        ALOGE("Wrong alsa_device ID\n");
-        return -1;
-    }
-    pcm_index = alsa_device_update_pcm_index(alsa_port, PLAYBACK);
+    pcm_index = alsa_get_device_index(device_config);
 
     ALOGI("In pcm open ch=%d rate=%d\n", config->channels, config->rate);
     ALOGI("%s, audio open card(%d), device(%d) \n", __func__, card, pcm_index);

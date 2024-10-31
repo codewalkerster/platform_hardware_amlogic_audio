@@ -34,7 +34,8 @@ typedef struct aml_stream_config {
 } aml_stream_config_t;
 
 typedef struct aml_device_config {
-    uint32_t device_port;
+    int device_port;
+    int alsa_pcm_index;
 
 } aml_device_config_t;
 
