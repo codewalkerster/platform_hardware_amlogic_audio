@@ -675,10 +675,6 @@ static int dtv_patch_handle_event(struct audio_hw_device *dev, int cmd, int val)
                 }
 
                 if (path_id == dtv_audio_instances->demux_index_working) {
-                    if (val == AUDIO_DTV_PATCH_CMD_STOP) {
-                        /*coverity[sleep]*/
-                        tv_do_ease_out(adev);
-                    }
                     dtv_patch_add_cmd(patch->dtv_cmd_list, val, path_id);
                     pthread_cond_signal(&patch->dtv_cmd_process_cond);
                 } else {
@@ -4702,6 +4698,7 @@ static int release_dtv_output_stream_thread(struct aml_audio_patch *patch)
     aml_dev = (struct aml_audio_device *)patch->dev;
     ALOGI("++%s   ---- %d\n", __FUNCTION__, patch->output_thread_created);
     if (patch->output_thread_created == 1) {
+        tv_do_ease_out(aml_dev);
         patch->output_thread_exit = 1;
         pthread_cond_signal(&patch->cond);
         pthread_join(patch->audio_output_threadID, NULL);
@@ -5023,7 +5020,6 @@ int release_dtv_patch(struct aml_audio_device *aml_dev)
         ALOGI("dtv_instances->dvb_path_count %d",dtv_instances->dvb_path_count);
         if (dtv_instances->dvb_path_count == 0) {
             /*coverity[sleep]*/
-            tv_do_ease_out(aml_dev);
             ret = release_dtv_patch_l(aml_dev);
             set_dtv_volume(aml_dev, 1.0);
         }
