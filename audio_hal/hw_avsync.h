@@ -23,8 +23,8 @@
 #define HW_SYNC_VERSION_SIZE 4
 #define HW_AVSYNC_HEADER_SIZE_V1 16
 #define HW_AVSYNC_HEADER_SIZE_V2 20
-/*  NTS will send frame size 24576 byte(128ms) */
-#define HW_AVSYNC_FRAME_SIZE (8192 * 3)
+/*  MAX size is 2048 * 8ch * 2 byte */
+#define HW_AVSYNC_FRAME_SIZE (8192 * 4)
 
 /*head size is calculated with mOffset = ((int) Math.ceil(HEADER_V2_SIZE_BYTES / frameSizeInBytes)) * frameSizeInBytes;
  *current we only support to 8ch, the headsize is 32

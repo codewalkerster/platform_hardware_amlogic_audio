@@ -116,6 +116,10 @@ void hwsync_header_set_frame_size(struct hw_avsync_header *header, uint32_t fram
     if (frame_size > HW_AVSYNC_FRAME_SIZE || frame_size == 0) {
         ALOGE("%s(), invalid frame size (%d), 0 or exceeds %d",
                 __func__, frame_size, HW_AVSYNC_FRAME_SIZE);
+        /*add protection to avoid crash*/
+        if (frame_size > HW_AVSYNC_FRAME_SIZE) {
+            frame_size = HW_AVSYNC_FRAME_SIZE;
+        }
     }
     header->frame_size = frame_size;
 }
