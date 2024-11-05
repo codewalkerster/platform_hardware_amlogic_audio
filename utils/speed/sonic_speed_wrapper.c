@@ -61,7 +61,7 @@ int sonic_speed_write(sonic_speed_handle_t *handle, void *buf, size_t in_size) {
     return in_frame;
 }
 
-int sonic_speed_read(sonic_speed_handle_t *handle, void *buf, size_t read_size) {
+int sonic_speed_read(void *handle, void *buf, size_t read_size) {
 
     int samplesprocess;
     int read_frame;
@@ -70,12 +70,43 @@ int sonic_speed_read(sonic_speed_handle_t *handle, void *buf, size_t read_size) 
         ALOGI("aml_speed_handle is NULL\n");
         return -1;
     }
-    read_frame = read_size / audio_bytes_per_frame(handle->channels, handle->format);
-    samplesprocess = sonicReadShortFromStream(handle->stream, buf, read_frame);
+    sonic_speed_handle_t *sonic_handle = (sonic_speed_handle_t *)handle;
+    read_frame = read_size / audio_bytes_per_frame(sonic_handle->channels, sonic_handle->format);
+    samplesprocess = sonicReadShortFromStream(sonic_handle->stream, buf, read_frame);
 
     ALOGV("samplesprocess=%d\n", samplesprocess);
     return samplesprocess;
 
+}
+
+int sonic_speed_available_samples(void *handle)
+{
+    if (handle == NULL) {
+        ALOGI("aml_speed_handle is NULL\n");
+        return -1;
+    }
+    sonic_speed_handle_t *sonic_handle = (sonic_speed_handle_t *)handle;
+    return sonicSamplesAvailable(sonic_handle->stream);
+}
+
+int sonic_speed_flush(void *handle)
+{
+    if (handle == NULL) {
+        ALOGI("aml_speed_handle is NULL\n");
+        return -1;
+    }
+    sonic_speed_handle_t *sonic_handle = (sonic_speed_handle_t *)handle;
+    return sonicFlushStream(sonic_handle->stream);
+}
+
+void sonic_set_speed(void *handle, float speed)
+{
+    if (handle == NULL) {
+        ALOGI("aml_speed_handle is NULL\n");
+        return;
+    }
+    sonic_speed_handle_t *sonic_handle = (sonic_speed_handle_t *)handle;
+    sonicSetSpeed(sonic_handle->stream, speed);
 }
 
 int sonic_speed_release(sonic_speed_handle_t *handle)

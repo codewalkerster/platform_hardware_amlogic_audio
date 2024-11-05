@@ -49,7 +49,10 @@ typedef struct audio_speed_func {
     int (*speed_open)(void **handle, audio_speed_config_t *speed_config);
     void (*speed_close)(void *handle);
     int (*speed_process)(void *handle, void * in_buffer, size_t bytes, void * out_buffer, size_t * out_size);
-
+    int (*speed_read)(void *handle, void *buffer, size_t bytes);
+    int (*speed_flush)(void *handle);
+    void (*set_speed)(void *handle, float speed);
+    int (*speed_avail_frames)(void *handle);
 } audio_speed_func_t;
 
 

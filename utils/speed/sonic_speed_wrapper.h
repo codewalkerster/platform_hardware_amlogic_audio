@@ -22,7 +22,11 @@ int sonic_speed_init(sonic_speed_handle_t *handle,
                           int ch);
 
 int sonic_speed_write(sonic_speed_handle_t *handle, void *buf, size_t write_size);
-int sonic_speed_read(sonic_speed_handle_t *handle, void *buf, size_t read_size);
+int sonic_speed_read(void *handle, void *buf, size_t read_size);
 int sonic_speed_release(sonic_speed_handle_t *handle);
+int sonic_speed_available_samples(void *handle);
+int sonic_speed_flush(void *handle);
+void sonic_set_speed(void *handle, float speed);
+
 #endif
 
