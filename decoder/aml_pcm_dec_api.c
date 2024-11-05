@@ -203,8 +203,10 @@ static int pcm_decoder_process(aml_dec_t * aml_dec, unsigned char*buffer, int by
     src_channel = pcm_config->input_channel;
 
     //current change the same channel for input and output.
-    //pcm decoder shouldn't downmix the channel, as ms12/AudioMixer of pipeline can do it.
-    pcm_config->output_channel = pcm_config->input_channel;
+    //if digital_audio_mode != BYPASS, pcm decoder shouldn't downmix the channel, as ms12/AudioMixer of pipeline can do it.
+    if (!pcm_config->output_channel) {
+        pcm_config->output_channel = pcm_config->input_channel;
+    }
     dst_channel = pcm_config->output_channel;//2;
     if (src_channel > dst_channel) {
         downmix_conf = src_channel / dst_channel;
@@ -222,9 +224,8 @@ static int pcm_decoder_process(aml_dec_t * aml_dec, unsigned char*buffer, int by
         memset(dec_pcm_data->buf, 0, downmix_size);
     }
 
-
     if ((pcm_config->input_channel == 2 || pcm_config->input_channel == 1)
-        || (pcm_config->input_channel = pcm_config->output_channel)) {
+        || (pcm_config->input_channel == pcm_config->output_channel)) {
         /*now we only support bypass PCM data*/
         memcpy(dec_pcm_data->buf, buffer, bytes);
     } else if (pcm_config->input_channel == 6 && pcm_config->output_channel == 2) {

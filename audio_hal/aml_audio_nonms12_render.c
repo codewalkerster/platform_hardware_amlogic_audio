@@ -294,12 +294,6 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, void *abuffer)
                 }
             }
 
-            // write pcm data
-            if (dec_pcm_data->data_ch != aml_out->hal_ch) {
-                ALOGI("[%s:%d] open stream channel != decoder config channel dec_pcm_data->data_ch %d aml_out->hal_ch=%d",__FUNCTION__,__LINE__,dec_pcm_data->data_ch,aml_out->hal_ch);
-                aml_out->hal_ch = dec_pcm_data->data_ch;
-                aml_out->hal_channel_mask = audio_channel_out_mask_from_count(aml_out->hal_ch);
-            }
             if (dec_pcm_data->data_len > 0) {
                 // aml_dump_audio_bitstreams("/data/vendor/audiohal/dec_data.raw", dec_pcm_data->buf, dec_pcm_data->data_len);
 #ifdef ENABLE_DVB_PATCH
@@ -901,11 +895,15 @@ static void pcm_decoder_config_prepare(struct audio_stream_out *stream, aml_pcm_
     pcm_config->samplerate = aml_out->hal_rate;
     pcm_config->pcm_format = aml_out->hal_format;
     pcm_config->max_out_channels = hdmi_descs->pcm_fmt.max_channels;
+    pcm_config->output_channel = 0;
     if (ATTEND_TYPE_EARC  == aml_audio_earctx_get_type(adev)) {
         pcm_config->max_out_channels = 8;
     }
-    ALOGV("%s  max_out_channels:%d,  hdmi_descs max_channels:%d",
-        __func__, pcm_config->max_out_channels, hdmi_descs->pcm_fmt.max_channels);
+    if (adev->dolby_lib_type_last == eDolbyMS12Lib && adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_BYPASS ) {
+        pcm_config->output_channel = 2;
+    }
+    ALOGV("%s max_out_channels:%d, hdmi_descs max_channels:%d, pcm_config->output_channel:%d", __func__,
+            pcm_config->max_out_channels, hdmi_descs->pcm_fmt.max_channels, pcm_config->output_channel);
 
     return;
 }
