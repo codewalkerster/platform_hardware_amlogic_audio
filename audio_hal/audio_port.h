@@ -217,6 +217,8 @@ aml_mixer_input_port_type_e get_input_port_type(struct audio_config *config,
 
 int setPortConfig(struct audioCfg *cfg, struct audio_config *config);
 int set_input_port_main_channel_mask(input_port *in_port, uint32_t channel_mask);
+int set_inport_start_threshold(input_port *port, int start_threshold);
+
 
 input_port *new_input_port(
         size_t buf_size,

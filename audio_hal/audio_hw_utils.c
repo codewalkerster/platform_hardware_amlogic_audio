@@ -1126,8 +1126,16 @@ uint32_t out_get_alsa_latency_frames(const struct audio_stream_out *stream)
                 frames = delay_ms * out->config.rate/1000;
             }
         } else {
-            frames = (out->inputPortID == -1) ? 0 : mixer_get_inport_latency_frames(audio_mixer, out->inputPortID)
-                        + mixer_get_outport_latency_frames(audio_mixer);
+            int inport_latency_frames = 0;
+            if (out->inputPortID != -1) {
+                inport_latency_frames = mixer_get_inport_latency_frames(audio_mixer, out->inputPortID);
+            }
+
+            int outport_latency_frames = mixer_get_outport_latency_frames(audio_mixer);
+            if (adev->debug_flag > 1)
+                ALOGI("inport_latency_frames %d outport_latency_frames %d ",
+                    inport_latency_frames, outport_latency_frames);
+            frames = inport_latency_frames + outport_latency_frames;
         }
     } else {
         if (!out->pcm || !pcm_is_ready(out->pcm)) {

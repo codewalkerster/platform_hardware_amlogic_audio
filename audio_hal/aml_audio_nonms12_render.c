@@ -460,6 +460,12 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, void *abuffer)
                     if (adev->useAudioMixer) {
                         init_mixer_input_port(adev->mixerData, &aml_out->audioCfg, aml_out->flags,
                             on_notify_cbk, aml_out, on_input_avail_cbk, aml_out, NULL, NULL, 1.0);
+#ifdef ENABLE_DVB_PATCH
+                        if (dtv_stream_flag) {
+                            int start_threshold = 3 * MIXER_FRAME_COUNT * audio_bytes_per_sample(output_format) * pcmDataFormat.channelCount;//24ms
+                            mixer_set_inport_start_threshold(adev->mixerData, aml_out->inputPortID, start_threshold );
+                        }
+#endif
                         AM_LOGI("direct port:%s", mixerInputType2Str(get_input_port_type(&aml_out->audioCfg, aml_out->flags)));
                     }
                     if (!adev->useAudioMixer && is_dts_format(aml_out->hal_internal_format) && eDolbyMS12Lib != adev->dolby_lib_type_last) {

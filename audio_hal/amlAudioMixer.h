@@ -157,6 +157,8 @@ int send_mixer_outport_message(struct amlAudioMixer *audio_mixer, uint8_t port_i
 int mixer_write_inport(struct amlAudioMixer *audio_mixer, uint8_t port_index, const void *buffer, int bytes);
 int mixer_read_inport(struct amlAudioMixer *audio_mixer, uint8_t port_index, void *buffer, int bytes);
 int mixer_set_inport_state(struct amlAudioMixer *audio_mixer, uint8_t port_index, port_state state);
+int mixer_set_inport_start_threshold(struct amlAudioMixer *audio_mixer, uint8_t port_index, int start_threshold);
+
 int mixer_flush_inport(struct amlAudioMixer *audio_mixer, uint8_t port_index);
 int pcm_mixer_thread_run(struct amlAudioMixer *audio_mixer);
 int pcm_mixer_thread_exit(struct amlAudioMixer *audio_mixer);

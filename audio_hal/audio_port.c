@@ -106,8 +106,7 @@ bool is_direct_flags(audio_output_flags_t flags) {
 }
 
 uint32_t inport_get_latency_frames(input_port *port) {
-    int frame_size = 4;
-    frame_size = port->cfg.frame_size;
+    int frame_size = port->cfg.frame_size;
     uint32_t latency_frames = inport_buffer_level(port) / frame_size;
     return latency_frames;
 }
@@ -664,6 +663,12 @@ int set_port_meta_data_cbk(input_port *port,
 int set_inport_state(input_port *port, port_state status)
 {
     port->port_status = status;
+    return 0;
+}
+
+int set_inport_start_threshold(input_port *port, int start_threshold)
+{
+    port->inport_start_threshold = start_threshold;
     return 0;
 }
 

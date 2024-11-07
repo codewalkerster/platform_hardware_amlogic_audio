@@ -372,6 +372,13 @@ int mixer_set_inport_state(struct amlAudioMixer *audio_mixer, uint8_t port_index
     return set_inport_state(in_port, state);
 }
 
+int mixer_set_inport_start_threshold(struct amlAudioMixer *audio_mixer, uint8_t port_index, int start_threshold)
+{
+    input_port *in_port = audio_mixer->in_ports[port_index];
+    R_CHECK_POINTER_LEGAL(-EINVAL, in_port, "port_index:%d", port_index);
+    return set_inport_start_threshold(in_port, start_threshold);
+}
+
 port_state mixer_get_inport_state(struct amlAudioMixer *audio_mixer, uint8_t port_index)
 {
     input_port *in_port = audio_mixer->in_ports[port_index];
