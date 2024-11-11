@@ -222,6 +222,7 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
     if (demux_info->ad_package_status == -1) {
        ad_status = AD_PACK_STATUS_NORMAL;
     }
+
     int drop_threshold_ms,drop_start_threshold_ms,hold_start_threshold_ms,hold_threshold_ms;
     bool is_dolby_format = (demux_info->main_fmt == ACODEC_FMT_AC3 ||
                             demux_info->main_fmt == ACODEC_FMT_EAC3||
@@ -242,6 +243,16 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
     }
 
     int timems_diff = llabs(main_pts - ad_pts) / 90;
+
+    if (ad_pts == 0) {
+       if (ad_status == AD_PACK_STATUS_HOLD) {
+           return AD_PACK_STATUS_NORMAL;
+       } else {
+            return ad_status;
+       }
+    } else if (main_pts == 0) {
+        return ad_status;
+    }
 
     if (timems_diff > AD_PACK_STATUS_UNNORMAL_THRESHOLD_MS) {
         ALOGI("timems_diff %d it is impossible so do not check", timems_diff);
