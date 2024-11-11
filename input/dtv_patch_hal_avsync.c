@@ -2154,9 +2154,6 @@ void get_dtv_checkin_pts (struct audio_stream_out *stream, int64_t *in_frame_pts
                             *in_frame_pts = patch->cur_package->pts;
                             *out_frames = 0;
                         }
-                     } else {
-                        *in_frame_pts = out_frame_pts;
-                        *out_frames = 0;
                      }
                 }
             }

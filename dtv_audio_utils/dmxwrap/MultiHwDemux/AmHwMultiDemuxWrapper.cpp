@@ -80,7 +80,10 @@ static void getAudioEsData(AmHwMultiDemuxWrapper* mDemuxWrapper, int fid, const 
         mEsData->pts = es_header->pts;
         mEsData->pts_dts_flag = es_header->pts_dts_flag;
         ALOGV("es_header->pts_dts_flag %0x",es_header->pts_dts_flag);
-        mDemuxWrapper->last_queue_es_apts = es_header->pts;
+        if (es_header->pts) {
+            mDemuxWrapper->last_queue_es_apts = es_header->pts;
+        }
+
         mEsData->used_size = 0;
         //ALOGI("getAudioEsData %p mEsData->size %d mEsData->pts %lld, cached size:%d",mEsData, mEsData->size,mEsData->pts, mDemuxWrapper->mDemuxEsDataCacheSize);
         dump_demux_data((void *)data_es, es_header->len, DEMUX_AUDIO_DUMP_PATH);

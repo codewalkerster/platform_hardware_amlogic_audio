@@ -3616,7 +3616,8 @@ void *audio_dtv_patch_input_threadloop(void *data)
                         else {
                             audio_queue_info.isworkingchannel = false;
 
-                            if (Get_Audio_LastES_Apts(demux_handle, &last_queue_es_apts) == 0) {
+                            if (Get_Audio_LastES_Apts(demux_handle, &last_queue_es_apts) == 0 &&
+                                dtv_package->pts) {
                                 audio_queue_info.duration = (int)(last_queue_es_apts - dtv_package->pts);
                             }
                         }
@@ -3624,9 +3625,10 @@ void *audio_dtv_patch_input_threadloop(void *data)
                         aml_dtvsync_queue_audio_frame(Dtvsync, &audio_queue_info);
                         if (aml_dev->debug_flag > 0)
                              ALOGI("working_channel:%d,queue pts:[%" PRIx64 ",%" PRIx64 "], size:%d,"
-                                   "dur:%d ms, isneedupdate %d.\n",\
+                                   "dur:%d ms, isneedupdate %d flag %0x.\n",\
                                    audio_queue_info.isworkingchannel, dtv_package->pts,last_queue_es_apts,\
-                                   dtv_package->size, audio_queue_info.duration/90,audio_queue_info.isneedupdate);
+                                   dtv_package->size, audio_queue_info.duration/90,
+                                   audio_queue_info.isneedupdate, dtv_package->pts_dts_flag);
 
                         if (path_index != dtv_audio_instances->demux_index_working ) {
                             if (aml_dev->debug_flag > 0)
