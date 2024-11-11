@@ -253,9 +253,8 @@ static int spdifin_audio_format_detection(struct aml_mixer_handle *mixer_handle)
     if (type >= LPCM && type <= PAUSE) {
         return type;
     } else {
-        return LPCM;
+        return NOT_READY;
     }
-
 }
 
 /*
@@ -1005,7 +1004,9 @@ static void* audio_type_parse_threadloop(void *data)
             if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
                 audio_type_status->cur_audio_type = hdmiin_audio_format_detection(audio_type_status->mixer_handle);
             } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_SPDIF) {
-                audio_type_status->cur_audio_type = spdifin_audio_format_detection(audio_type_status->mixer_handle);
+                type = spdifin_audio_format_detection(audio_type_status->mixer_handle);
+                if (type != NOT_READY)
+                    audio_type_status->cur_audio_type = type;
             } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
                 update_earc_type_parser_status(audio_type_status, type, cur_samplerate);
                 // bypass multi-pcm HW resample, as some earcrx do not support

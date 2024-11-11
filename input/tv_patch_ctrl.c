@@ -899,7 +899,7 @@ bool is_spdif_in_stable_hw(struct audio_stream_in *stream)
     struct aml_audio_patch *patch = get_dev_patch(aml_dev);
     int type = aml_mixer_ctrl_get_int (&aml_dev->alsa_mixer, AML_MIXER_ID_SPDIFIN_AUDIO_TYPE);
 
-    if (type == NOT_READY) {
+    if (type > PAUSE || type < LPCM) {
         AM_LOGV("%s(), in type is not ready yet", __func__);
         return true;
     }
