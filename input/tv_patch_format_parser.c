@@ -865,6 +865,8 @@ static void* audio_type_parse_threadloop(void *data)
     }
 
     while (audio_type_status->running_flag) {
+        bool bypass_hw_resample = false;
+
         if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
             cur_audio_packet = get_hdmiin_audio_packet(audio_type_status->mixer_handle);
             cur_samplerate = get_hdmiin_samplerate(audio_type_status->mixer_handle);
@@ -875,6 +877,9 @@ static void* audio_type_parse_threadloop(void *data)
             cur_samplerate = get_eArcIn_samplerate(audio_type_status->mixer_handle);
             audio_type_status->audio_samplerate = audio_transfer_samplerate(cur_samplerate);
             type = earc_coding_type_to_codec(eArcIn_coding_type_detection(audio_type_status->mixer_handle));
+            // bypass multi-pcm HW resample, as some earcrx do not support
+            if (type == MULTICH_LPCM && !audio_type_status->earcrx_hw_resample)
+                bypass_hw_resample = true;
         }
 
         if (cur_samplerate == -1)
@@ -884,7 +889,8 @@ static void* audio_type_parse_threadloop(void *data)
          * if type is NOT_READY, it is only for earc rx, and
          * it shows that stream is unstable, don't update sample rate.
          */
-        if (cur_samplerate != last_cur_samplerate && cur_samplerate != HW_RESAMPLE_DISABLE) {
+        if (cur_samplerate != last_cur_samplerate && cur_samplerate != HW_RESAMPLE_DISABLE &&
+                !bypass_hw_resample) {
             if (is_linear_pcm_type(audio_type_status->audio_type)  && type != NOT_READY) {
                 enable_HW_resample(audio_type_status->mixer_handle, cur_samplerate);
                 AM_LOGD("Reset hdmiin/spdifin audio resample sr from %d to %d\n",
@@ -999,7 +1005,6 @@ static void* audio_type_parse_threadloop(void *data)
                }
             }
         } else {
-            bool bypass_hw_resample = false;
             // get audio format from hw.
             if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI) {
                 audio_type_status->cur_audio_type = hdmiin_audio_format_detection(audio_type_status->mixer_handle);
@@ -1009,9 +1014,6 @@ static void* audio_type_parse_threadloop(void *data)
                     audio_type_status->cur_audio_type = type;
             } else if (audio_type_status->input_dev == AUDIO_DEVICE_IN_HDMI_ARC) {
                 update_earc_type_parser_status(audio_type_status, type, cur_samplerate);
-                // bypass multi-pcm HW resample, as some earcrx do not support
-                if (type == MULTICH_LPCM && !audio_type_status->earcrx_hw_resample)
-                    bypass_hw_resample = true;
             }
 
             if (!is_linear_pcm_type(audio_type_status->audio_type) && is_linear_pcm_type(audio_type_status->cur_audio_type)) {
