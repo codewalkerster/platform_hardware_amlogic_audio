@@ -8969,7 +8969,10 @@ static int adev_uevent_callback(int uevent_type) {
             if ((adev->useSubMix)) {
                 subMixingOutputRestart(adev);
             }
+            /*reset raw data output*/
             adev->reset_hdmitx_audio = true;
+            /*reset pcm data output*/
+            adev->raw_to_pcm_flag = true;
             break;
         default:
         break;

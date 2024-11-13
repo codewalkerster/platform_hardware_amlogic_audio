@@ -663,17 +663,6 @@ write:
         return bytes;
     }
 
-    /*when it is pcm output only on hdmi tx, we need reset it*/
-    if (adev->reset_hdmitx_audio &&
-        (adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI) &&
-        adev->sink_max_channels == 2 &&
-        adev->sink_format == AUDIO_FORMAT_PCM_16_BIT) {
-        pcm_stop(aml_out->pcm);
-        adev->reset_hdmitx_audio = false;
-        ALOGI("%s reset hdmitx alsa", __func__);
-    }
-
-
     ret = pcm_write(aml_out->pcm, buffer, bytes);
     if (ret < 0) {
         const char *err_str = pcm_get_error(aml_out->pcm);
