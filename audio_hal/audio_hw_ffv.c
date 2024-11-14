@@ -100,11 +100,6 @@ ssize_t in_read_from_fetch_buf(struct audio_stream_in *stream, void* buffer, siz
         }
         in->dsp_ffv_in_t->fetched_size += rd;
         in->dsp_ffv_in_t->fetch_size -= rd;
-        if (rd >= 0) {
-            in->frames_read += rd / (pcm_format_to_bits(in->config.format) >> 3) * in->config.channels;
-            in->dsp_ffv_in_t->total_read += rd / (pcm_format_to_bits(in->config.format) >> 3) * in->config.channels;
-            in->timestamp_nsec = pcm_get_timestamp_dsp(in->dsp_ffv_in_t->sound_trigger_handle, in->config.rate, 0 /*isOutput*/, in->dsp_ffv_in_t->total_read, in->dsp_ffv_in_t->ts);
-        }
         if (in->dsp_ffv_in_t->fetch_size == 0) {
             set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
             aml_audio_free(in->dsp_ffv_in_t->fetch_buffer);
@@ -129,7 +124,6 @@ int sound_trigger_read(struct aml_stream_in *in, void* buffer, size_t bytes, str
     in->dsp_ffv_in_t->total_read += ret / audio_stream_in_frame_size(&in->stream);
     if (ret <= 0) {
         ALOGE("fail to read ret=%d\n", ret);
-        return 0;
     }
     return ret;
 }
