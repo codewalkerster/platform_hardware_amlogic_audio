@@ -1193,11 +1193,12 @@ static int update_audio_hal_info(struct aml_audio_device *adev, audio_format_t f
         ALOGD("%s() cur_out_devices %#x, dap_bypass_enable = %d, is_ms12_tuning_dat = %d, dolby_ms12_enable = %d, output_config = %#x\n",
             __FUNCTION__, adev->cur_out_devices, adev->ms12.dap_bypass_enable, adev->is_ms12_tuning_dat, ms12->dolby_ms12_enable, ms12->output_config);
 
-        if (eDolbyMS12Lib == adev->dolby_lib_type && adev->enable_soundbar_mode && ((update_type >= TYPE_AC3) && (update_type <=TYPE_MAT))) {
+        /* This dolby audio infor is required by the info bar. */
+        /* if (eDolbyMS12Lib == adev->dolby_lib_type && adev->enable_soundbar_mode && ((update_type >= TYPE_AC3) && (update_type <=TYPE_MAT))) {
             ALOGD("%s() MS12 inside, enable_soundbar_mode %d, update_type = %d, DONOT popup the Dolby Audio in Config Z device!\n",
                 __FUNCTION__, adev->enable_soundbar_mode, update_type);
             return 0;
-        }
+        }*/
 
         aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_AUDIO_HAL_FORMAT, update_type);
     }
