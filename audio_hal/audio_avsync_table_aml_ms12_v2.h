@@ -549,7 +549,7 @@
 #define  AVSYNC_MS12_DTV_DD_LATENCY                     (0)
 #define  AVSYNC_MS12_DTV_DDP_LATENCY                    (0)
 #define  AVSYNC_MS12_DTV_AC4_LATENCY                    (-10)
-#define  AVSYNC_MS12_DTV_AAC_LATENCY                    (50)
+#define  AVSYNC_MS12_DTV_AAC_LATENCY                    (80)
 #define  AVSYNC_MS12_DTV_MP2_LATENCY                    (0)
 
 #define  AVSYNC_MS12_DTV_PCM_LATENCY_PROPERTY         "vendor.media.audio.hal.ms12.dtv.pcm"
@@ -562,7 +562,8 @@
 /* for passthrough(bypass) mode */
 /* if use (-90), DDP passthrough, its target is [-100, 0], result is -120 ~ -167*/
 /* so, set it as (-5), DDP passthrough result is -44 ~ -90*/
-#define  AVSYNC_MS12_DTV_BYPASS_LATENCY                 (-50)
+/* SDK_v2.8: [-40, 40]*/
+#define  AVSYNC_MS12_DTV_BYPASS_LATENCY                 (-30)
 
 #define  AVSYNC_MS12_DTV_BYPASS_LATENCY_PROPERTY      "vendor.media.audio.hal.ms12.dtv.bypass"
 
