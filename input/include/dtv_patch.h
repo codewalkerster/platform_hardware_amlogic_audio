@@ -156,6 +156,7 @@ int out_get_playback_rate_parameters_for_tunerframework(struct audio_stream_out 
 int out_get_presentation_position_for_tunerframework (const struct audio_stream_out *stream, uint64_t *frames, struct timespec *timestamp);
 int out_set_params_for_tunerframework(struct audio_stream_out *stream,struct str_parms *parms);
 #endif
+
 int set_dtv_parameters(struct audio_hw_device *dev, struct str_parms *parms);
 int get_dtv_parameters(struct audio_hw_device *dev, const char *keys);
 int dtv_patch_get_latency(struct aml_audio_device *aml_dev);
@@ -163,4 +164,6 @@ int dtv_patch_get_es_pts_dts_flag(struct aml_audio_device *aml_dev);
 int dtv_patch_get_cmd_close_status(struct aml_audio_device *aml_dev);
 int dtv_patch_get_decoder_fmt(struct aml_audio_device *aml_dev);
 int dtv_patch_get_ac4_acivie_res_id(struct aml_audio_device *aml_dev);
+int dtv_patch_get_decoder_fmt(struct aml_audio_device *aml_dev);
+
 #endif /* _DTV_PATCH_H_ */

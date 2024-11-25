@@ -4874,7 +4874,14 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
 #endif
         ALOGV("temp_buf %s", temp_buf);
         return strdup(temp_buf);
-    } else if (strstr(keys, "dts_x_enable")) {
+    } else if (strstr (keys, "hal_param_dtv_decoder_fmt")) {
+#ifdef ENABLE_DVB_PATCH
+        int decoder_fmt = dtv_patch_get_decoder_fmt(adev);
+        sprintf(temp_buf, "hal_param_dtv_decoder_fmt=%d", decoder_fmt);
+#endif
+        ALOGV("temp_buf %s", temp_buf);
+        return strdup(temp_buf);
+    }  else if (strstr(keys, "dts_x_enable")) {
         int dtsx_enable = (eDTSXLib == adev->dts_lib_type);
         ALOGI("dtsx_enable :%d", dtsx_enable);
         sprintf(temp_buf, "dts_x_enable=%d", dtsx_enable);

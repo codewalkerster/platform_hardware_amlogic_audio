@@ -607,7 +607,6 @@ dtvsync_process_res  aml_dtvsync_nonms12_process(struct audio_stream_out *stream
         ALOGI("set duration from: %d to:%d \n", dtvsync->duration, duration);
         dtvsync->duration = duration;
     }
-
     do {
         //m_audiopolicy.param1 = patch->dtv_default_i2s_clock;
         //m_audiopolicy.param2 = dtv_get_i2s_output_clock(patch);
@@ -693,7 +692,6 @@ void aml_dtvsync_ms12_get_policy(struct audio_stream_out *stream)
         return;
     }
     memset(&m_audiopolicy, 0, sizeof(m_audiopolicy));
-
     do {
         //m_audiopolicy.param1 = patch->dtv_default_i2s_clock;
         //m_audiopolicy.param2 = dtv_get_i2s_output_clock(patch);

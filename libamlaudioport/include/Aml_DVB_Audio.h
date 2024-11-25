@@ -91,6 +91,8 @@ int dvb_audio_get_sound_mode(int demux_id);
 int dvb_audio_set_param(AUDIO_DTV_PATCH_CMD_TYPE para_type, int demux_id, int val);
 int dvb_audio_get_param(AUDIO_DTV_PATCH_CMD_TYPE para_type, int demux_id, int *val);
 int audio_hal_get_status(void *status);//TBD
+int dvb_audio_get_decoder_fmt(int demux_id);
+
 
 #ifdef  __cplusplus
 }
