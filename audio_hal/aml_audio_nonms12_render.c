@@ -158,8 +158,13 @@ ssize_t aml_audio_spdif_output(struct audio_stream_out *stream, void **spdifout_
         }
         if (spdif_config.audio_format == AUDIO_FORMAT_IEC61937) {
             spdif_config.sub_format = data_info->sub_format;
-            if ((spdif_config.sub_format == AUDIO_FORMAT_MPEGH || spdif_config.sub_format == AUDIO_FORMAT_DTS_HD) && spdif_config.data_ch == 8) {
+            if ((spdif_config.sub_format == AUDIO_FORMAT_MPEGH || spdif_config.sub_format == AUDIO_FORMAT_DTS_HD
+                || spdif_config.sub_format == AUDIO_FORMAT_MAT || spdif_config.sub_format == AUDIO_FORMAT_DOLBY_TRUEHD)
+                && spdif_config.data_ch == 8) {
                 spdif_config.channel_mask = AUDIO_CHANNEL_OUT_7POINT1;
+            }
+            if (spdif_config.sub_format == AUDIO_FORMAT_IEC61937) {
+                spdif_config.channel_mask = audio_channel_out_mask_from_count(data_info->data_ch);
             }
         } else if (audio_is_linear_pcm(spdif_config.audio_format)) {
             if (data_info->data_ch == 6) {
@@ -627,6 +632,8 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, const void *buffer
                         dec_raw_data->data_format ==AUDIO_FORMAT_PCM_32_BIT)) {
                 aml_audio_stream_volume_process(stream, dec_raw_data->buf, audio_bytes_per_sample(dec_raw_data->data_format), dec_raw_data->data_ch, dec_raw_data->data_len);
                 aml_audio_spdif_output(stream, &aml_out->spdifout_handle, dec_raw_data);
+            } else if (aml_out->hal_format == AUDIO_FORMAT_IEC61937 && !aml_out->is_tv_src_stream) {
+                aml_audio_spdif_output(stream, &aml_out->spdifout_handle, dec_raw_data);
             }
 
             /*special case  for dts , dts decoder need to follow aml_dec_api.h */
@@ -1015,6 +1022,10 @@ int aml_decoder_config_prepare(struct audio_stream_out *stream, audio_format_t f
     case AUDIO_FORMAT_MPEGH_LC_L3:
     case AUDIO_FORMAT_MPEGH_LC_L4: {
         mpegh_decoder_config_prepare(stream, &dec_config->mpegh_config);
+        break;
+    }
+    case AUDIO_FORMAT_IEC61937: {
+        iec_decoder_config_prepare(stream, &dec_config->iec_config);
         break;
     }
     default:

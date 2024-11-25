@@ -672,6 +672,18 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
             }
         }
 #endif
+    case AUDIO_FORMAT_IEC61937: {
+        if (stream->get_format(stream) == AUDIO_FORMAT_IEC61937) {
+            if ((out->hal_channel_mask == AUDIO_CHANNEL_OUT_STEREO) && (out->hal_rate == 192000))
+                size = BUFF_SIZE_IEC61937_192KHZ_2CH;
+            else if ((out->hal_channel_mask == AUDIO_CHANNEL_OUT_7POINT1) && (out->hal_rate == 192000))
+                size = BUFF_SIZE_IEC61937_192KHZ_8CH;
+            else
+                size = BUFF_SIZE_IEC61937;
+            ALOGI("%s AUDIO_FORMAT_IEC61937 buffer size = %zu frames", __FUNCTION__, size);
+            return size;
+        }
+    }
     default:
         if (adev->continuous_audio_mode && audio_is_linear_pcm(out->hal_internal_format)) {
             /*Tunnel sync HEADER is 20 bytes*/
@@ -3334,21 +3346,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
             out->config.format = PCM_FORMAT_S32_LE;
             break;
         case AUDIO_FORMAT_IEC61937:
-            if (out->config.channels == 2 && (out->config.rate == 192000 || out->config.rate == 176400 || out->config.rate == 128000)) {
-                out->config.rate /= 4;
-                out->hal_internal_format = AUDIO_FORMAT_E_AC3;
-            } else if (out->config.channels == 2 && out->config.rate >= 32000 && out->config.rate <= 48000) {
-                if (adev->audio_type == DTS) {
-                    out->hal_internal_format = AUDIO_FORMAT_DTS;
-                    adev->dolby_lib_type = eDolbyDcvLib;
-                    out->restore_dolby_lib_type = true;
-                } else {
-                    out->hal_internal_format = AUDIO_FORMAT_AC3;
-                }
-            } else if (out->config.channels >= 6 && out->config.rate == 192000) {
-                out->hal_internal_format = AUDIO_FORMAT_DTS_HD;
-            }
-            AM_LOGD("convert format IEC61937 to %s", audioFormat2Str(out->hal_internal_format));
+            AM_LOGD("current format is %s", audioFormat2Str(out->hal_internal_format));
             break;
         case AUDIO_FORMAT_AC3:
         case AUDIO_FORMAT_E_AC3:
@@ -5867,14 +5865,19 @@ void config_output(struct audio_stream_out *stream, bool reset_decoder)
             memset(&aml_out->dec_config, 0, sizeof(aml_dec_config_t));
 
             /*prepare the decoder config*/
-            ret = aml_decoder_config_prepare(stream, aml_out->hal_internal_format, &aml_out->dec_config);
+            if (aml_out->hal_format == AUDIO_FORMAT_IEC61937 && !aml_out->is_tv_src_stream)
+                ret = aml_decoder_config_prepare(stream, aml_out->hal_format, &aml_out->dec_config);
+            else
+                ret = aml_decoder_config_prepare(stream, aml_out->hal_internal_format, &aml_out->dec_config);
 
             if (ret < 0) {
                 ALOGE("config decoder error");
                 return;
             }
-
-            ret = aml_decoder_init(&aml_out->aml_dec, aml_out->hal_internal_format, (aml_dec_config_t *)&aml_out->dec_config);
+            if (aml_out->hal_format == AUDIO_FORMAT_IEC61937 && !aml_out->is_tv_src_stream)
+                ret = aml_decoder_init(&aml_out->aml_dec, aml_out->hal_format, (aml_dec_config_t *)&aml_out->dec_config);
+            else
+                ret = aml_decoder_init(&aml_out->aml_dec, aml_out->hal_internal_format, (aml_dec_config_t *)&aml_out->dec_config);
             if (ret < 0) {
                 ALOGE("aml_decoder_init failed");
             }
@@ -6631,21 +6634,11 @@ hwsync_rewrite:
         cur_aformat = audio_type_convert_to_android_audio_format_t(cur_audio_type);
         ALOGI("cur_aformat:%0x cur_audio_type:%d", cur_aformat, cur_audio_type);
 
-        if (cur_aformat == AUDIO_FORMAT_DTS || cur_aformat == AUDIO_FORMAT_DTS_HD || cur_aformat == AUDIO_FORMAT_MPEGH) {
-            if (cur_audio_type == DTSCD) {
-                aml_out->is_dtscd = true;
-            } else {
-                aml_out->is_dtscd = false;
-            }
-            if (adev->dolby_lib_type == eDolbyMS12Lib) {
-                switch_to_nonms12_case(adev);
-                aml_out->restore_dolby_lib_type = true;
-            }
-        }
-
         if (cur_audio_type != LPCM && cur_audio_type != PAUSE && cur_audio_type != MUTE) {
             aml_out->hal_internal_format = cur_aformat;
             aml_out->iec_check = true;
+            need_reconfig_output = true;
+            need_reset_decoder = true;
         } else {
             return return_bytes;
         }

@@ -107,6 +107,8 @@ static aml_dec_func_t * get_decoder_function(audio_format_t format, int dts_lib_
     case AUDIO_FORMAT_MPEGH_LC_L4: {
         return &aml_mpegh_func;
     }
+    case AUDIO_FORMAT_IEC61937:
+        return &aml_iec_func;
     default:
         if (format == AUDIO_FORMAT_DRA) {
             return  &aml_dra_func;

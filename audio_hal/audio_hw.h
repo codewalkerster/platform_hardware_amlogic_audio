@@ -142,6 +142,10 @@ static unsigned int DEFAULT_OUT_SAMPLING_RATE = 48000;
 #endif
 #endif
 
+#define BUFF_SIZE_IEC61937_192KHZ_8CH (16 * 4096)
+#define BUFF_SIZE_IEC61937_192KHZ_2CH (4 * 4096)
+#define BUFF_SIZE_IEC61937            (4 * 1024)
+
 /*the same as "AUDIO HAL FORMAT" in kernel*/
 enum audio_hal_format {
     TYPE_PCM = 0,
