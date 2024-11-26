@@ -611,7 +611,7 @@ int set_output_device_mute(struct aml_audio_device *adev, audio_devices_t device
 
     pthread_mutex_lock(&mgr->lock);
 
-    switch (device)
+    switch ((int)device)
     {
     case AUDIO_DEVICE_OUT_SPDIF:
         if (extern_arc) {
@@ -666,6 +666,14 @@ int set_output_device_mute(struct aml_audio_device *adev, audio_devices_t device
             port_info->fade_mute = enable;
         }
         port_info->mute = enable;
+        break;
+    case AML_AUDIO_DEVICE_OUT_EXTERNAL_SPEAKER:
+        if (enable) {
+            audio_route_apply_path(mgr->ar, "amp_power_off");
+        } else {
+            audio_route_apply_path(mgr->ar, "amp_power");
+        }
+        audio_route_update_mixer(mgr->ar);
         break;
     default:
         ret = -EINVAL;
@@ -747,6 +755,16 @@ bool is_SBR_active(struct aml_audio_device *adev)
     }
     return false;
 }
+
+bool is_PureOTT_active(struct aml_audio_device *adev)
+{
+    audio_hw_resource_mgr *mgr = get_hw_resource_manger(adev);
+    if (mgr->platform_types.is_SBR && !adev->enable_soundbar_mode) {
+        return true;
+    }
+    return false;
+}
+
 
 void confirm_platform_type(audio_hw_resource_mgr *mgr)
 {

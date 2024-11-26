@@ -227,7 +227,7 @@ typedef enum alsa_device {
     DIGITAL_DEVICE, /*for spdifa*/
     TDM_DEVICE,
     EARC_DEVICE,
-	DIGITAL_DEVICE2, /*for spdifb*/
+    DIGITAL_DEVICE2, /*for spdifb*/
     ALSA_DEVICE_CNT
 } alsa_device_t;
 
@@ -249,6 +249,12 @@ typedef enum fg_stream_type{
     FG_STREAM_TYPE_PATCH,
     FG_STREAM_TYPE_MAX
 } fg_stream_type_t;
+
+typedef enum aml_audio_device_out_type {
+   /* Android define AUDIO_DEVICE_OUT_DEFAULT   0x40000000u*/
+   AML_AUDIO_DEVICE_OUT_EXTERNAL_SPEAKER = AUDIO_DEVICE_OUT_DEFAULT + 1,
+} aml_audio_device_out_type_t;
+
 typedef union {
     unsigned long long timeStamp;
     unsigned char tsB[8];
@@ -570,6 +576,7 @@ struct aml_audio_device {
     bool b_ott_tv_arc_connected;    /*the hdmitx connection is ott --> TV  --> ARC AVR/SOUNDBAR*/
     int arc_delay_ms;               /*assume avr/soundbar delay of above connections is 100ms default value*/
     bool reset_hdmitx_audio;
+    bool is_alsa_device_conflict;
 };
 
 struct meta_data {

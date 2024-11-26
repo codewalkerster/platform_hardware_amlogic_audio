@@ -2103,7 +2103,7 @@ float aml_audio_get_s_gain_by_src(struct aml_audio_device *adev, enum patch_src_
 
 int android_dev_convert_to_hal_dev(audio_devices_t android_dev, int *hal_dev_port)
 {
-    switch (android_dev) {
+    switch ((int)android_dev) {
     /* audio hal output device port */
     case AUDIO_DEVICE_OUT_FM:
         *hal_dev_port = OUTPORT_FM;
@@ -2151,6 +2151,9 @@ int android_dev_convert_to_hal_dev(audio_devices_t android_dev, int *hal_dev_por
     case AUDIO_DEVICE_OUT_USB_ACCESSORY:
     case AUDIO_DEVICE_OUT_USB_DEVICE:
         *hal_dev_port = OUTPORT_USB_HEADSET;
+        break;
+    case AML_AUDIO_DEVICE_OUT_EXTERNAL_SPEAKER:
+        *hal_dev_port = OUTPORT_NULL;
         break;
     /* audio hal input device port */
     case AUDIO_DEVICE_IN_HDMI:

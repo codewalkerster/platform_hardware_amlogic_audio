@@ -850,10 +850,11 @@ static void set_dolby_ms12_dap_init_mode(struct aml_audio_device *adev)
     if (adev->is_ms12_tuning_dat) {
         dap_init_mode = get_ms12_dap_init_mode(is_TV(adev) || is_SBR(adev));
     }
+
     if (adev->dolby_ms12_dap_init_mode) {
         dap_init_mode = adev->dolby_ms12_dap_init_mode;
     }
-    ALOGD("dap_init_mode = %d", dap_init_mode);
+    ALOGI("%s dap_init_mode = %d", __func__, dap_init_mode);
     dolby_ms12_set_dap2_initialisation_mode(dap_init_mode);
 }
 
@@ -3137,13 +3138,22 @@ int dap_pcm_output(void *buffer, void *priv_data, size_t size,aml_ms12_dec_info_
         dump_ms12_output_data(buffer, size, MS12_OUTPUT_SPEAKER_PCM_FILE);
     }
 
+    // Soudbar device, 1 DAP Effect is ON. 2. adev set param kvpairs="hal_param_soundbar_mode=0"
+    if (adev->effect_ctrl.dap_enable && is_SBR(adev)) {
+        if (adev->is_alsa_device_conflict) {
+            ssize_t alsa_ret = aml_audio_close_pcm_output((struct audio_stream_out *)aml_out);
+            ALOGI("-%s() alsa_ret %d is_alsa_device_conflict %d", __FUNCTION__, alsa_ret, adev->is_alsa_device_conflict);
+            adev->is_alsa_device_conflict = false;
+        }
+    }
 
     if (is_dolbyms12_dap_enable(aml_out) || ms12->dap_only_enable) {
         aml_audio_trace_int("aml_dap_output", size);
         ms12_output_master(buffer, priv_data, size, output_format,ms12_info);
         aml_audio_trace_int("aml_dap_output", 0);
-    } else
+    } else {
         return ret;
+    }
     if (adev->debug_flag > 1) {
         ALOGI("-%s() ret %d", __FUNCTION__, ret);
     }
@@ -3172,11 +3182,21 @@ int stereo_pcm_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_i
         dump_ms12_output_data(buffer, size, MS12_OUTPUT_SPDIF_PCM_FILE);
     }
 
+    // Soudbar device, 1 DAP Effect is OFF. 2. adev set param kvpairs="hal_param_soundbar_mode=1"
+    if (!adev->effect_ctrl.dap_enable  && is_SBR(adev)) {
+        if (adev->is_alsa_device_conflict) {
+            ssize_t alsa_ret = aml_audio_close_pcm_output((struct audio_stream_out *)aml_out);
+            ALOGI("-%s() alsa_ret %d is_alsa_device_conflict %d", __FUNCTION__, alsa_ret, adev->is_alsa_device_conflict);
+            adev->is_alsa_device_conflict = false;
+        }
+    }
+
     /*it has dap output, then this will be used for spdif output*/
     if (is_dolbyms12_dap_enable(aml_out)) {
         if (get_buffer_write_space (&ms12->spdif_ring_buffer) >= (int) size) {
             ring_buffer_write(&ms12->spdif_ring_buffer, buffer, size, UNCOVER_WRITE);
         }
+
     } else {
         //when Dolby MS12 use not 1.0 volume "-sys_prim_mixgain <3 int>
         //the PCM Render can not output at a same volume for both DDP and AC4.
@@ -3253,7 +3273,7 @@ int bitstream_output(void *buffer, void *priv_data, size_t size)
         return 0;
     }
 
-    if (adev->enable_soundbar_mode) {
+    if (is_SBR_active(adev)) {
         return 0;
     }
 
@@ -3328,6 +3348,10 @@ int spdif_bitstream_output(void *buffer, void *priv_data, size_t size)
         }
     }
 
+    if (is_SBR_active(adev)) {
+        return 0;
+    }
+
     if (ms12->dual_bitstream_support) {
         bitstream_id = BITSTREAM_OUTPUT_B;
     }
@@ -3385,6 +3409,10 @@ int mat_bitstream_output(void *buffer, void *priv_data, size_t size)
      * when truehd should bypass ms12 and output the MAT, ignore the MS12 MAT output.
      */
     if (ms12->is_bypass_ms12) {
+        return 0;
+    }
+
+    if (is_SBR_active(adev)) {//runtime param is a little later than MS12 initialization
         return 0;
     }
 
@@ -4904,10 +4932,13 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
             output_config |= MS12_OUTPUT_MASK_SPEAKER;
         }
         ALOGI("%s new out config =0x%x", __func__, output_config);
+
         aml_ms12_main_encoder_reconfig(ms12, output_config);
         ms12->b_encoder_reset = true;
     }
     pthread_mutex_unlock(&ms12->lock);
+
+
     return 0;
 }
 
@@ -4996,6 +5027,8 @@ bool is_audio_postprocessing_add_dolbyms12_dap(struct aml_audio_device *adev)
 {
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
     bool is_dap_enable = ((adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER) != 0) && (!adev->ms12.dap_bypass_enable);
+    //ALOGI("%s cur_out_devices %#x SPEAKER %#x dap_bypass_enable %d is_dap_enable %d is_ui_force_dap_disable %d!",
+    //    __func__, adev->cur_out_devices, AUDIO_DEVICE_OUT_SPEAKER,  adev->ms12.dap_bypass_enable, is_dap_enable, adev->is_ui_force_dap_disable);
 
     if (adev->is_ui_force_dap_disable == true) {
         is_dap_enable =  false;
@@ -5004,6 +5037,8 @@ bool is_audio_postprocessing_add_dolbyms12_dap(struct aml_audio_device *adev)
     else {
         /* Dolby MS12 V2 uses DAP Tuning file */
         if (adev->is_ms12_tuning_dat) {
+            //ALOGI("%s dolby_ms12_enable %d is_dap_enable %d output_config & MS12_OUTPUT_MASK_SPEAKER %#x",
+            //    __func__, ms12->dolby_ms12_enable, is_dap_enable, ms12->output_config & MS12_OUTPUT_MASK_SPEAKER );
             if (ms12->dolby_ms12_enable && is_dap_enable && (ms12->output_config & MS12_OUTPUT_MASK_SPEAKER)) {
                 is_dap_enable =  true;
             }
@@ -5019,6 +5054,7 @@ bool is_audio_postprocessing_add_dolbyms12_dap(struct aml_audio_device *adev)
     if (is_SBR(adev) && (adev->enable_soundbar_mode == 0)) {
         is_dap_enable =  false;
     }
+    //ALOGI("%s is_SBR %d is_SBR_active %d is_dap_enable %d!", __func__, is_SBR(adev), is_SBR_active(adev), is_dap_enable);
 
     return is_dap_enable;
 }

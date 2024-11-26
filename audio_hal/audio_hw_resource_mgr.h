@@ -97,6 +97,8 @@ bool is_BDS(struct aml_audio_device *adev);
 bool is_SBR(struct aml_audio_device *adev);
 bool is_STB(struct aml_audio_device *adev);
 bool is_SBR_active(struct aml_audio_device *adev);
+bool is_PureOTT_active(struct aml_audio_device *adev);
+
 
 /* new & init & release & get uniq instance */
 struct audio_hw_resource_mgr *get_hw_resource_manger(struct aml_audio_device *adev);

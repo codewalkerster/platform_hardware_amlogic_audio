@@ -2243,7 +2243,9 @@ static unsigned int select_port_by_device(struct aml_stream_in *in)
         inport = PORT_ECHO_REFERENCE;
     } else if (in_device & AUDIO_DEVICE_IN_LINE) {
         /* TODO: json config the linein device */
-        if (is_SBR(adev) && alsa_device_is_auge())
+        if (adev->board_config.sbr_spk_ott_hbr_same_tdm)
+            inport = PORT_I2S;
+        else if (is_SBR(adev) && alsa_device_is_auge())
             inport = PORT_I2S2HDMI;
         else
             inport = PORT_I2S;
@@ -4608,12 +4610,16 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         ALOGI("%s enable %d adev->enable_soundbar_mode %d\n", __func__, enable, adev->enable_soundbar_mode);
         if (adev->enable_soundbar_mode != enable) {
             adev->enable_soundbar_mode = enable;
-            ALOGI(" enable_soundbar_mode = %d\n", enable);
+            //only s7d(S905X5M) soundbar use the conflict alsa device.
+            adev->is_alsa_device_conflict = adev->board_config.sbr_spk_ott_hbr_same_tdm;
+            ALOGI(" enable_soundbar_mode = %d device status at %s\n", enable, adev->enable_soundbar_mode ? "SBR-Speaker" : "PureOTT-HDMI");
             if (ms12->dolby_ms12_enable) {
                 set_ms12_full_dap_disable(ms12, !enable);
             }
             if (enable)
                 aml_audio_output_routing(adev, AUDIO_DEVICE_OUT_SPEAKER);
+            else
+                set_output_device_mute(adev, (audio_devices_t)AML_AUDIO_DEVICE_OUT_EXTERNAL_SPEAKER, true, 0);
         }
         goto exit;
     }
@@ -8476,7 +8482,7 @@ static int adev_dump(const audio_hw_device_t *device, int fd)
     }
 
     dprintf(fd, "\n");
-    dprintf(fd, "[AML_HAL]      TV platform     : %10d   |  SoundBar platform :    %d\n", is_TV(aml_dev), is_SBR_active(aml_dev));
+    dprintf(fd, "[AML_HAL]      TV platform     : %10d   |  SoundBar platform :    %d\n", is_TV(aml_dev), is_SBR(aml_dev));
     dprintf(fd, "[AML_HAL] digital_audio_mode   : %10s   |  cur_out_devices   :    %#x\n",
         digitalAudioModeType2Str(aml_dev->digital_audio_mode), aml_dev->cur_out_devices);
     dprintf(fd, "[AML_HAL]      A2DP gain       : %10f |  patch_src         :    %s\n",
@@ -9246,6 +9252,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->loudness_level = get_loudness_level();
     adev->ms12_dynamic_sleep = property_get_bool("ro.vendor.media.audio.ms12.dynamic_sleep", false);
     adev->enable_soundbar_mode = false;
+    adev->is_alsa_device_conflict = false;
     adev->arc_delay_ms = property_get_int32("ro.vendor.platform.arc.delay", 100);
 
     /*for ms12 case, we set default continuous mode*/

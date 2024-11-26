@@ -54,4 +54,9 @@ ssize_t aml_audio_pcm_output(struct audio_stream_out *stream,
                                 size_t bytes,
                                 audio_data_info_t * data_info);
 
+//move to here for building issue, and this function define should be put here.
+ssize_t usb_check_write(struct aml_audio_device *adev, const void *buffer, size_t bytes, audio_config_base_t*cfg);
+
+ssize_t aml_audio_close_pcm_output(struct audio_stream_out *stream);
+
 #endif

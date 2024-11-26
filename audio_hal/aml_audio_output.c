@@ -344,7 +344,7 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
     }
 
     /*if it is more than 2 ch, we need to use below channel map process*/
-    if (ch > 2 || is_SBR(adev)) {
+    if (ch > 2 || is_SBR_active(adev) || (is_PureOTT_active(adev) && !adev->board_config.sbr_spk_ott_hbr_same_tdm)) {
         processing_multich_pcm(stream, buffer, bytes, in_data_info, output_buffer, output_buffer_bytes, out_data_info);
         return 0;
     }
@@ -1068,4 +1068,23 @@ ssize_t aml_audio_pcm_output(struct audio_stream_out *stream,
 
     return ret;
 }
+
+ssize_t aml_audio_close_pcm_output(struct audio_stream_out *stream)
+{
+    ssize_t ret = 0;
+    struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
+    struct aml_audio_device *adev = NULL;
+
+    if (aml_out) {
+        adev = aml_out->dev;
+        pthread_mutex_lock(&adev->alsa_pcm_lock);
+        if (aml_out->stream_status == STREAM_HW_WRITING) {
+            aml_alsa_output_close(stream);
+            aml_out->stream_status = STREAM_STANDBY;
+        }
+        pthread_mutex_unlock(&adev->alsa_pcm_lock);
+    }
+    return ret;
+}
+
 

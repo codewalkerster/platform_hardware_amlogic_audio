@@ -37,6 +37,11 @@ struct audio_board_config {
     int ms12_output_mask;
     int DTS_output_ch;
     int cpux_affinity_support;
+    /*
+      0: Soundbar, Speaker(8ch-PCM) vs HDMI(MAT), HBR do not use a same TDM.
+      1: Soundbar, Speaker(8ch-PCM) vs HDMI(MAT), HBR use a same TDM.
+    */
+    int sbr_spk_ott_hbr_same_tdm;
 };
 
 int aml_audio_config_parser();

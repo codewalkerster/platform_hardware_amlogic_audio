@@ -40,6 +40,7 @@
 #include "tv_patch_ctrl.h"
 #include "dtv_private_object.h"
 #include "audio_hal_debug.h"
+#include "audio_hw_resource_mgr.h"
 
 #define AML_ZERO_ADD_MIN_SIZE 1024
 
@@ -249,6 +250,34 @@ int aml_alsa_output_open(struct audio_stream_out *stream) {
             show_pcm_config(config, s, PCM_CONFIG_STR_LEN), path);
     struct pcm *pcm = adev->pcm_handle[device];
 
+    //on some chip(S7D), MAT and Multiple Channel PCM(DAP-2ch + Non-DAP-2ch ...) use same sound card TDM-B
+    //when soundbar mode is true, MS12 only output Stereo(non-dap) and DAP but no bitstream output.
+    //when soundbar mode is false(use the OTT mode), MAT vi TDM-B and PCM vi TDM-C(2.0)
+    //This part is used for OTT/SBR mode both choosing correct sound card.
+    if (is_SBR(adev) && adev->board_config.sbr_spk_ott_hbr_same_tdm) {
+        ALOGI("%s device(%d) enable_soundbar_mode %d", __func__, device, adev->enable_soundbar_mode);
+        if (!adev->enable_soundbar_mode) {
+            config->channels = 2;
+            config->format = PCM_FORMAT_S16_LE;
+            device = PORT_I2S;//TDM-C 0,2 (TDM-C-dummy-alsaPORT-i2s/alsa_port = i2s)
+            path="dlb/ms12&pureOTT_HDMI";
+        }
+    }
+
+    int alsa_port = alsa_device_get_port_index(device);
+    int device_index = alsa_device_update_pcm_index(alsa_port, PLAYBACK);
+
+    if (is_SBR_active(adev) && adev->board_config.sbr_spk_ott_hbr_same_tdm) {
+        ALOGI("%s device(%d) enable_soundbar_mode %d bd_config->hdmitx_multi_ch_src %d",
+            __func__, device, adev->enable_soundbar_mode, bd_config->hdmitx_multi_ch_src);
+        if (bd_config->hdmitx_multi_ch_src >= AML_TDM_A_TO_HDMITX) {
+            config->channels = bd_config->default_alsa_ch;
+            config->format = PCM_FORMAT_S32_LE;
+            device_index = bd_config->hdmitx_multi_ch_src - AML_TDM_A_TO_HDMITX;
+        }
+        path="dlb/ms12&SBR_Speaker";
+    }
+
     // close former and open with configs
     // TODO: check pcm configs and if no changes, do nothing
     if (pcm && device != DIGITAL_DEVICE && device != I2S_DEVICE) {
@@ -268,8 +297,8 @@ int aml_alsa_output_open(struct audio_stream_out *stream) {
             pcm = NULL;
         }
 
-        int alsa_port = alsa_device_get_port_index(device);
-        int device_index = alsa_device_update_pcm_index(alsa_port, PLAYBACK);
+        //int alsa_port = alsa_device_get_port_index(device);
+        //int device_index = alsa_device_update_pcm_index(alsa_port, PLAYBACK);
 
         /*SWPL-114866 when eARC output MAT, should increase the pcm output buffer.*/
         if ((aml_out->hal_internal_format == AUDIO_FORMAT_MAT || aml_out->hal_internal_format == AUDIO_FORMAT_DOLBY_TRUEHD) &&
@@ -296,6 +325,9 @@ int aml_alsa_output_open(struct audio_stream_out *stream) {
     ALOGI("-%s, audio out(%p) device(%d) refs(%d) is_normal_pcm %d, handle %p\n\n",
           __func__, aml_out, device, adev->pcm_refs[device], aml_out->is_normal_pcm, pcm);
     ALOGI("+%s, adev->pcm_handle[%d] %p", __func__, device, adev->pcm_handle[device]);
+    if (is_SBR_active(adev) && adev->board_config.sbr_spk_ott_hbr_same_tdm) {
+        set_output_device_mute(adev, (audio_devices_t)AML_AUDIO_DEVICE_OUT_EXTERNAL_SPEAKER, false, 0);
+    }
 
     return 0;
 }
@@ -308,11 +340,12 @@ void aml_alsa_output_close(struct audio_stream_out *stream) {
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
 
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
-        if (aml_out->is_device_differ_with_ms12) {
+        if (aml_out->is_device_differ_with_ms12 && !is_SBR(adev)) {
             ALOGI("%s stream out device(%d) truly use device(%d)\n", __func__, aml_out->device, ms12->device);
             device = ms12->device;
             aml_out->is_device_differ_with_ms12 = false;
         }
+
     }
 
     struct pcm *pcm = adev->pcm_handle[device];
