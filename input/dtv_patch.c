@@ -3981,7 +3981,6 @@ void *audio_dtv_patch_output_threadloop_v2(void *data)
                     aml_audio_free(p_package->data);
                     p_package->data = NULL;
                 }
-
                 if (p_package->ad_data) {
                     aml_audio_free(p_package->ad_data);
                     p_package->ad_data = NULL;
@@ -5144,6 +5143,7 @@ int disable_dtv_patch_for_tuner_framework(struct audio_stream_out *stream)
         ALOGE("%s[%d]:adev %p, patch %p", __func__, __LINE__, adev, get_dev_patch(adev));
         set_dev_patch_running(adev, 0);
     }
+    dtv_audio_instances->dtv_scene = DTV_AUDIO_PATCH;
     return ret;
 }
 
