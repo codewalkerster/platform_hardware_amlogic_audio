@@ -3640,6 +3640,7 @@ static void close_ms12_output_main_stream(struct audio_stream_out *stream) {
         }
         dolby_ms12_main_close(stream);
         out->is_ms12_main_decoder = false;
+        adev->ms12.dtv_decoder_offset_base = 0;
     }
 
     return;
@@ -7628,6 +7629,10 @@ ssize_t out_write_new(struct audio_stream_out *stream,
             ALOGI("HEAAC LOAS is different with HEAAC ADTS, HEAAC format is changed. Need to reset MS12 pipeline.");
             dolby_ms12_main_close(stream);
             aml_out->is_heaac_changed = false;
+            if (is_same_patch_src(adev, SRC_DTV)) {
+                ms12->dtv_decoder_offset_base = get_dev_patch(adev)->decoder_offset;
+                AM_LOGI("set the base offset =%" PRId64 "", ms12->dtv_decoder_offset_base);
+            }
         }
     }
 

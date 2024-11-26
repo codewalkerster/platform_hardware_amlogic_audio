@@ -1447,6 +1447,7 @@ resync:
         memcpy(parser_buf + heaac_parser_handle->buf_remain, buffer + buf_offset, buf_left);
         heaac_parser_handle->buf_remain += buf_left;
         heaac_parser_handle->status = PARSER_LACK_DATA;
+        heaac_parser_handle->parsed_frame_flag = 1;
         goto error;
     }
     if (heaac_info->debug_print) {
