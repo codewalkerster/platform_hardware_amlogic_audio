@@ -831,14 +831,11 @@ to detect TV/SBR product, audio HAL can also use that.
 */
 bool aml_audio_check_sbr_product()
 {
-    char buf[PROPERTY_VALUE_MAX] ={'\0'};
-    int ret = 0;
-    char *sbr_str = NULL;
-    ret = property_get("persist.vendor.sys.soundbar_mode", buf, NULL);
-    if (ret > 0) {
-        return strcmp(buf, "1") == 0;
-    }
+#ifdef PRODUCT_SOUNDBAR
+    return true;
+#else
     return false;
+#endif
 }
 
 int aml_audio_debug_set_optical_format()

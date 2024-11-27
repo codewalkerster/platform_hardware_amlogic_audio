@@ -3955,6 +3955,12 @@ static void aml_audio_output_routing(struct aml_audio_device *adev, audio_device
         AM_LOGI("updating arc SAD, no routing required.");
         return;
     }
+
+    if (is_SBR(adev) && !is_SBR_active(adev) && cur_output_device == AUDIO_DEVICE_OUT_SPEAKER) {
+        AM_LOGI("Soundbar product in OTT mode, no routing to speaker.");
+        return;
+    }
+
     while ((device = 1 << i) != AUDIO_DEVICE_BIT_DEFAULT) {
         if ((need_unmute_devices & device) != 0) {
             aml_audio_outport_enable(adev, device, true);
@@ -4605,6 +4611,8 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             if (ms12->dolby_ms12_enable) {
                 set_ms12_full_dap_disable(ms12, !enable);
             }
+            if (enable)
+                aml_audio_output_routing(adev, AUDIO_DEVICE_OUT_SPEAKER);
         }
         goto exit;
     }

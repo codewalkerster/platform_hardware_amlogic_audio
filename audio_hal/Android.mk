@@ -46,6 +46,12 @@ include $(BUILD_PREBUILT)
     ifeq ($(shell test $(PLATFORM_SDK_VERSION) -ge 26 && echo OK),OK)
         LOCAL_PROPRIETARY_MODULE := true
     endif
+
+    ifeq ($(TARGET_BUILD_TYPE_SOUNDBAR), true)
+        $(info "--- build product type soundbar ---")
+        LOCAL_CFLAGS += -DPRODUCT_SOUNDBAR
+    endif  #end TARGET_BUILD_TYPE_SOUNDBAR
+
     LOCAL_MODULE_RELATIVE_PATH := hw
     LOCAL_SRC_FILES := \
         audio_hw.c \
