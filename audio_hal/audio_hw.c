@@ -7323,10 +7323,10 @@ int usecase_change_validate_l(struct aml_stream_out *aml_out, bool is_standby)
 ** then enable it.
 **/
 #if 1
-        if (0 == aml_dev->usecase_masks && is_TV(aml_dev)) {
+        if (0 == aml_dev->usecase_masks) {
             // send the SCHEDULER_STANDBY to ms12.
             aml_audiohal_sch_state_2_ms12(ms12, MS12_SCHEDULER_STANDBY);
-            if (aml_dev->useSubMix) {
+            if (aml_dev->useSubMix && is_TV(aml_dev)) {
                 ALOGI("send STANDBY msg to submix");
                 aml_audiohal_sch_state_2_submix(audio_mixer, SUBMIX_SCHEDULER_STANDBY);
             }

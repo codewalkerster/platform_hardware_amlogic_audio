@@ -111,6 +111,7 @@ include $(BUILD_PREBUILT)
         aml_audio_output.c \
         aml_async_write.c \
         audio_dummy_streamout.c \
+        audio_ms12_continuous_standby.c \
 
     LOCAL_C_INCLUDES += \
         system/media/audio_utils/include \

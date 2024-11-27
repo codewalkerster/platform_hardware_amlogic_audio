@@ -459,7 +459,7 @@ int aml_set_ms12_scheduler_state(struct dolby_ms12_desc *ms12)
 
     if (sch_state == MS12_SCHEDULER_STANDBY) {
         /*If there are other streams present, the ms12 status to running*/
-        if (adev->usecase_masks != 0 || !is_TV(adev) || mmap_audio_has_active_client(adev->mmap_audio_manager)) {
+        if (adev->usecase_masks != 0 || mmap_audio_has_active_client(adev->mmap_audio_manager)) {
             sch_state = MS12_SCHEDULER_RUNNING;
         }
     }
@@ -470,7 +470,7 @@ int aml_set_ms12_scheduler_state(struct dolby_ms12_desc *ms12)
        ALOGW("%s  sch_state:%d %s, ms12 scheduler state not changed.", __func__, sch_state, scheduler_state_2_string[sch_state]);
        return 0;
     }
-    if (!is_arc_connecting && !is_netflix) {
+    if ((!is_TV(adev) || !is_arc_connecting) && !is_netflix) {
         remaining_time = audio_timer_remaining_time(ms12->ms12_timer_id);
         if (remaining_time > 0) {
             audio_timer_stop(ms12->ms12_timer_id);

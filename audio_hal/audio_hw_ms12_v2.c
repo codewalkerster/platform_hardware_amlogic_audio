@@ -55,6 +55,7 @@
 #include "audio_hw_ms12_common.h"
 #include "aml_audio_report.h"
 #include "audio_hw_resource_mgr.h"
+#include "audio_ms12_continuous_standby.h"
 
 
 #ifdef ENABLE_DVB_PATCH
@@ -286,6 +287,7 @@ static const unsigned int ms12_muted_ddp_raw[] = {
 static int nbytes_of_dolby_ms12_downmix_output_pcm_frame();
 void ms12_do_dtv_sync(struct audio_stream_out *stream);
 static void *dolby_ms12_threadloop(void *data);
+static int correct_the_duration_by_align_the_mat_frame_header(char *data, size_t len);
 
 static int get_ms12_dump_enable(int dump_type) {
     int value = 0;
@@ -559,6 +561,7 @@ void set_ms12_atmos_lock(struct dolby_ms12_desc *ms12, bool is_atmos_lock_on)
     sprintf(parm, "%s %d", "-atmos_lock", is_atmos_lock_on);
     if ((strlen(parm)) > 0 && ms12)
         aml_ms12_update_runtime_params(ms12, parm);
+    audio_continuous_standby_reset(ms12->continuous_standby_handle);
 }
 
 void set_ms12_acmod2ch_lock(struct dolby_ms12_desc *ms12, bool is_lock_on)
@@ -584,6 +587,7 @@ void set_ms12_chmod_lock(struct dolby_ms12_desc *ms12, bool is_lock_on)
         dolby_ms12_set_encoder_channel_mode_locking_mode(is_lock_on);
         aml_ms12_update_runtime_params(ms12, parm);
     }
+    audio_continuous_standby_reset(ms12->continuous_standby_handle);
 }
 
 void set_ms12_mch_enable(struct dolby_ms12_desc *ms12, bool enable)
@@ -890,15 +894,30 @@ void set_dolby_ms12_main_speed(struct dolby_ms12_desc *ms12, double speed) {
 }
 
 void set_dolby_ms12_continuous_state(struct dolby_ms12_desc *ms12, int state) {
-    ms12->ms12_continuous_state = state;
-    if (state == MS12_SCHEDULER_RUNNING) {
-        if (sem_post(&ms12->standby_sem)) {
-            ALOGE("%s post ms12 unstandby semaphore failed", __FUNCTION__);
+    struct aml_audio_device *adev = aml_adev_get_handle();
+    char parm[64] = "";
+    bool enable;
+    if (is_TV(adev)) {
+        ms12->ms12_continuous_state = state;
+        if (state == MS12_SCHEDULER_RUNNING) {
+            if (sem_post(&ms12->standby_sem)) {
+                ALOGE("%s post ms12 unstandby semaphore failed", __FUNCTION__);
+            } else {
+                ALOGD("%s  post ms12 unstandby semaphore successful", __FUNCTION__);
+            }
         } else {
-            ALOGD("%s  post ms12 unstandby semaphore successful", __FUNCTION__);
+            // do nothing
         }
     } else {
-        // do nothing
+        // ott ms12 continuous thread always running.
+        ms12->ms12_continuous_state = MS12_SCHEDULER_RUNNING;
+        if (state == MS12_SCHEDULER_RUNNING) {
+            enable = false;
+        } else {
+            enable = true;
+        }
+        ALOGD("%s  audio_continuous_standby_set status %d", __FUNCTION__, enable);
+        audio_continuous_standby_set(ms12->continuous_standby_handle, STANDBY_SET_STATUS, enable);
     }
 }
 
@@ -1263,6 +1282,12 @@ int get_the_dolby_ms12_prepared(
         ms12->output_config &= (~MS12_OUTPUT_MASK_MC);
         set_ms12_mch_enable(ms12, false);
     }
+
+    audio_continuous_standby_open(&ms12->continuous_standby_handle, &ms12_output, (void *)out);
+    if (adev->dolby_ms12_dap_init_mode) {
+        output_config |= MS12_OUTPUT_MASK_DAP;
+    }
+    audio_continuous_standby_set(ms12->continuous_standby_handle, STANDBY_SET_OUTPUT_PORT, output_config);
 
     /*ms12 related resources are prepared, we can start ms12 thread*/
     if (continuous_mode(adev) && ms12->dolby_ms12_enable) {
@@ -2280,6 +2305,7 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12, bool set_non_continuous
     ms12->dolby_ms12_init_flags = false;
     ms12->dtv_decoder_offset_base = 0;
     ms12->mat_stream_profile = 0;
+    audio_continuous_standby_close(&ms12->continuous_standby_handle);
 
     audio_virtual_buf_close(&ms12->system_virtual_buf_handle);
     aml_ac3_parser_close(ms12->ac3_parser_handle);
@@ -4044,7 +4070,6 @@ int dolby_ms12_get_latency(audio_format_t output_format, int pcm_type)
     return ms12_total_delay_frames;
 }
 
-#ifdef ENABLE_DVB_PATCH
 static audio_format_t correct_the_output_format_for_only_dolby_truehd(audio_format_t out_format)
 {
     /* for dolby truehd case, we don't support mat, only support ddp*/
@@ -4071,8 +4096,6 @@ static int correct_the_duration_by_align_the_mat_frame_header(char *data, size_t
         return 0;
     }
 }
-
-#endif
 
 int ms12_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_t *ms12_info)
 {
@@ -4136,24 +4159,34 @@ int ms12_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_t 
 
     if (audio_is_linear_pcm(output_format) && ms12_info) {
         if (ms12_info->pcm_type == MC_LPCM) {
+            audio_continuous_standby_attachframe(ms12->continuous_standby_handle, buffer, size, STANDBY_REPEAT_FORMAT_MCH, ms12_info);
             mc_pcm_output(buffer, priv_data, size, ms12_info);
         } else if (ms12_info->pcm_type == DAP_LPCM) {
             if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
                 check_audio_level("ms12_dap_pcm", buffer, size);
             }
+            audio_continuous_standby_attachframe(ms12->continuous_standby_handle, buffer, size, STANDBY_REPEAT_FORMAT_DAP, ms12_info);
             dap_pcm_output(buffer, priv_data, size, ms12_info);
         } else {
             if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
                 check_audio_level("ms12_stereo_pcm", buffer, size);
             }
+            audio_continuous_standby_attachframe(ms12->continuous_standby_handle, buffer, size, STANDBY_REPEAT_FORMAT_PCM, ms12_info);
             stereo_pcm_output(buffer, priv_data, size, ms12_info);
         }
     } else {
         if (output_format == AUDIO_FORMAT_E_AC3) {
+            audio_continuous_standby_attachframe(ms12->continuous_standby_handle, buffer, size, STANDBY_REPEAT_FORMAT_DDP, ms12_info);
             bitstream_output(buffer, priv_data, size);
         } else if (output_format == AUDIO_FORMAT_AC3) {
+            audio_continuous_standby_attachframe(ms12->continuous_standby_handle, buffer, size, STANDBY_REPEAT_FORMAT_DD, ms12_info);
             spdif_bitstream_output(buffer, priv_data, size);
         } else if (output_format == AUDIO_FORMAT_MAT) {
+            if (correct_the_duration_by_align_the_mat_frame_header(buffer, size)) {
+                audio_continuous_standby_attachframe(ms12->continuous_standby_handle, buffer, size, STANDBY_REPEAT_FORMAT_MAT_UPPER, ms12_info);
+            } else {
+                audio_continuous_standby_attachframe(ms12->continuous_standby_handle, buffer, size, STANDBY_REPEAT_FORMAT_MAT_LOWER, ms12_info);
+            }
             mat_bitstream_output(buffer, priv_data, size);
         } else {
             ALOGE("%s  abnormal output_format:0x%x", __func__, output_format);
@@ -4299,11 +4332,18 @@ static void *dolby_ms12_threadloop(void *data)
                 delayframe = 0;
                 ALOGI("%s alsa is not running", __func__);
             }
-            dolby_ms12_set_alsa_delay_frame(delayframe);
-            dolby_ms12_scheduler_run(ms12->dolby_ms12_ptr);
-
-            ms12->scheduler_run_count++;
-            dolby_ms12_sleep(adev, ms12, delayframe);
+            //if alsa status error, ms12 still continuous output.
+            if (delayframe < 0) {
+                delayframe = 0;
+            }
+            if (audio_continuous_standby_check(ms12->continuous_standby_handle)) {
+                audio_continuous_standby_run(ms12->continuous_standby_handle, delayframe);
+            } else {
+                dolby_ms12_set_alsa_delay_frame(delayframe);
+                dolby_ms12_scheduler_run(ms12->dolby_ms12_ptr);
+                ms12->scheduler_run_count++;
+                dolby_ms12_sleep(adev, ms12, delayframe);
+            }
         } else {
             ALOGE("%s() ms12->dolby_ms12_ptr is NULL, fatal error!", __FUNCTION__);
             break;
@@ -4827,6 +4867,11 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
         set_ms12_out_ddp_5_1(AUDIO_FORMAT_E_AC3, is_atmos_supported);
         b_reset = 1;
     }
+
+    if (adev->dolby_ms12_dap_init_mode) {
+        output_config |= MS12_OUTPUT_MASK_DAP;
+    }
+    audio_continuous_standby_set(ms12->continuous_standby_handle, STANDBY_SET_OUTPUT_PORT, output_config);
 
     if (b_reset) {
         if (is_TV(adev) && (output_config & MS12_OUTPUT_MASK_DDP)) {

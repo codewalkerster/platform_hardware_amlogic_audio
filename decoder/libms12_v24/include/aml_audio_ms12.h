@@ -239,6 +239,7 @@ struct dolby_ms12_desc {
     sem_t standby_sem;
     uint64_t measure_last_frame_us;
     uint64_t measure_new_frame_us;
+    void *continuous_standby_handle;
 };
 
 /*
