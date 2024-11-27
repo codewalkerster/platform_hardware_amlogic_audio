@@ -3496,7 +3496,8 @@ void *audio_dtv_patch_input_threadloop(void *data)
                             if (mAdEsData == NULL) {
                                 if (demux_info->dual_decoder_support && VALID_PID(demux_info->ad_pid)) {
                                     nRet = Get_ADAudio_Es(demux_handle, &mAdEsData);
-                                    if (nRet != AM_AUDIO_Dmx_SUCCESS) {
+                                    if (nRet != AM_AUDIO_Dmx_SUCCESS &&
+                                        path_index == dtv_audio_instances->demux_index_working) {
                                         ALOGV("Get_ADAudio_Es failed");
                                         clock_gettime(CLOCK_MONOTONIC, &end_ts);
                                         int  data_get_cost_ms = calc_time_interval_us(&current_ts, &end_ts) / 1000;
