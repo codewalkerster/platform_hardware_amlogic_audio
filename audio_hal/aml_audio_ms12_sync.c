@@ -1082,7 +1082,7 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
     else if (is_TV(adev)) {
         platform_type = TV;
     }
-    else if (is_SBR_active(adev)) {
+    else if (is_SBR(adev)) {
         if (is_SBR_active(adev)) {
             platform_type = SBR;
         } else {

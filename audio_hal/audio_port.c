@@ -916,7 +916,7 @@ static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, 
 
     if (port->postprocess)
         audio_post_process(port->postprocess, buffer, frames);
-    if (is_SBR_active(adev)) {
+    if (adev->enable_soundbar_mode) {
         float port_gain = 1.0;
         if ((adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI) != 0) {
             port_gain = adev->sink_gain[OUTPORT_HDMI];

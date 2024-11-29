@@ -658,7 +658,7 @@ void dtv_set_ms12_volume_on_non_TV_device(struct aml_stream_out *aml_out)
     for tv case, volume control it in audio_hal_data_processing
     for non tv case, dtv stream vol control in dolby_ms12_set_main_volume
     */
-    if (!is_TV(adev) && !is_SBR_active(adev)) {
+    if (!is_TV(adev) && !adev->enable_soundbar_mode) {
         if (is_dev_patch_exist(adev) && is_same_patch_src(adev, SRC_DTV)) {
             //when Dolby MS12 use not 1.0 volume "-sys_prim_mixgain <3 int>
             //the PCM Render can not output at a same volume for both DDP and AC4.
