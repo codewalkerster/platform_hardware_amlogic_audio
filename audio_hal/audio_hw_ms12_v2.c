@@ -2616,11 +2616,15 @@ int ac3_and_eac3_bypass_process(struct audio_stream_out *stream, void *buffer, s
         }
 
         bitstream_out->audio_format = output_format;
-        if (ms12->main_volume < FLOAT_ZERO) {
-            aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 1);
-        } else {
-            aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 0);
+        pthread_mutex_lock(&adev->bitstream_lock);
+        if (bitstream_out->spdifout_handle) {
+            if (ms12->main_volume < FLOAT_ZERO) {
+                aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 1);
+            } else {
+                aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 0);
+            }
         }
+        pthread_mutex_unlock(&adev->bitstream_lock);
         if (is_same_patch_src(adev, SRC_DTV) && is_dev_patch_exist(adev) && get_dev_patch(adev)->need_drop_size > 0) {
             return 0;
         }
