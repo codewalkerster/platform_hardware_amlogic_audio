@@ -1081,7 +1081,11 @@ int get_the_dolby_ms12_prepared(
     struct audio_board_config *bd_config = &adev->board_config;
     if (bd_config->ms12_output_mask)
         output_config = bd_config->ms12_output_mask;
-    set_dolby_ms12_drc_parameters(input_format, output_config);
+
+    // if video boot up, this set_dolby_ms12_drc_parameters() will set RF mode
+    // but the steam format is non-dolby under local play.
+    // This lead volume is louder, it is uncorrect.
+    //set_dolby_ms12_drc_parameters(input_format, output_config);
 
     if (is_dev_patch_valid(adev) && is_dev_patch_exist(adev) && get_dev_patch(adev)->input_src == AUDIO_DEVICE_IN_HDMI) {
         if (!adev->continuous_audio_mode &&
