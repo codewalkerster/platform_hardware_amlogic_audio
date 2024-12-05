@@ -4286,7 +4286,7 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
-    
+
         ret = str_parms_get_str(parms, "hal_param_dmx_mode", value, sizeof(value));
         if (ret >= 0) {
             switch (atoi(value)) {
@@ -4310,7 +4310,7 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
-    
+
         ret = str_parms_get_str(parms, "hal_param_enable_drc_rf_mode", value, sizeof(value));
         if (ret >= 0) {
             char parm[64] = "";
@@ -4336,7 +4336,7 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
-    
+
         ret = str_parms_get_str(parms, "hal_param_drc_boost_value", value, sizeof(value));
         if (ret >= 0) {
             int drc_boost_value = atoi(value);
@@ -4351,7 +4351,7 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
-    
+
         ret = str_parms_get_str(parms, "hal_param_drc_cut_value", value, sizeof(value));
         if (ret >= 0) {
             int drc_cut_value = atoi(value);
@@ -6193,13 +6193,14 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
         ret = aml_audio_nonms12_render(stream, abuffer);
     }
 
-    if (write_bytes > 0 && aml_out->streamType == STREAM_PCM_HWSYNC) {
+    if (write_bytes > 0 && aml_out->streamType == STREAM_PCM_HWSYNC && !aml_out->is_insert_zero_data) {
         if (eDolbyMS12Lib == adev->dolby_lib_type) {
             audio_one_shot_timer_start(aml_out->timer_id, AML_HWSYNC_STREAM_TIMER_RENDER_DELAY);
             audio_one_shot_timer_start(aml_out->timer_id2, AML_HWSYNC_STREAM_TIMER_RENDER_DELAY2);
-        } else {//none ms12 pipe is shorter than ms12, so adjust the delay time to 60ms.
+        } else {//none ms12 pipe is shorter than ms12, so adjust the delay time to 160ms.
             audio_one_shot_timer_start(aml_out->timer_id, AML_HWSYNC_STREAM_TIMER_NOMS12_RENDER_DELAY);
-            audio_one_shot_timer_start(aml_out->timer_id2, AML_HWSYNC_STREAM_TIMER_NOMS12_RENDER_DELAY);
+            audio_one_shot_timer_start(aml_out->timer_id2, AML_HWSYNC_STREAM_TIMER_NOMS12_PAUSE_RENDER_DELAY);
+
         }
         aml_out->frame_write_sum_updated = true;
     }
