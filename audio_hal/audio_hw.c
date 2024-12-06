@@ -8411,11 +8411,6 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
     //2.Release device to Mix patch
     if (patch->sources[0].type == AUDIO_PORT_TYPE_DEVICE
         && patch->sinks[0].type == AUDIO_PORT_TYPE_MIX) {
-#if 0
-        if (is_same_patch_src(aml_dev, SRC_HDMIIN)) {
-            aml_dev2mix_parser_release(aml_dev);
-        }
-#endif
 
 #ifdef ENABLE_DVB_PATCH
         if (is_same_patch_src(aml_dev, SRC_DTV) &&
@@ -8431,11 +8426,6 @@ static int adev_release_audio_patch(struct audio_hw_device *dev,
         /*for no patch case, we need to restore it*/
         ret = adev_release_patch_restore_resource(aml_dev);
 
-        if (is_dev_patch_running(aml_dev)) {
-            ALOGI("patch src reset to  DTV now line= %d \n", __LINE__);
-            //aml_dev->patch_src = SRC_DTV;
-            set_input_device_avail(aml_dev, AUDIO_DEVICE_IN_TV_TUNER, true);
-        }
         if (!is_dev_patch_exist(aml_dev))  {
             aml_dev->dev2mix_patch = false;
         }

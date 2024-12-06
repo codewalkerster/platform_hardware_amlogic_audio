@@ -454,7 +454,7 @@ int do_input_device_routing(struct aml_audio_device *adev, audio_devices_t in_de
     bool is_routed = in_device & mgr->in_routed_devices;
     if (enable && is_routed) {
         AM_LOGD("Warning! [%s] already routed device:0x%x, do nothing!",(enable? "ADD" : "RM"), in_device);
-        goto routing_done;
+        //goto routing_done;
     }
 
     if (!enable && !is_routed) {
@@ -484,6 +484,11 @@ int do_input_device_routing(struct aml_audio_device *adev, audio_devices_t in_de
     case AUDIO_DEVICE_IN_LINE:
         if (enable) {
             audio_route_apply_path(mgr->ar, "line_in");
+        }
+        break;
+    case AUDIO_DEVICE_IN_TV_TUNER:
+        if (enable) {
+            audio_route_apply_path(mgr->ar, "atv_in");
         }
         break;
     default:
