@@ -3142,7 +3142,6 @@ int dap_pcm_output(void *buffer, void *priv_data, size_t size,aml_ms12_dec_info_
     if (adev->effect_ctrl.dap_enable && is_SBR(adev)) {
         if (adev->is_alsa_device_conflict) {
             ssize_t alsa_ret = aml_audio_close_pcm_output((struct audio_stream_out *)aml_out);
-            ALOGI("-%s() alsa_ret %d is_alsa_device_conflict %d", __FUNCTION__, alsa_ret, adev->is_alsa_device_conflict);
             adev->is_alsa_device_conflict = false;
         }
     }
@@ -3186,7 +3185,6 @@ int stereo_pcm_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_i
     if (!adev->effect_ctrl.dap_enable  && is_SBR(adev)) {
         if (adev->is_alsa_device_conflict) {
             ssize_t alsa_ret = aml_audio_close_pcm_output((struct audio_stream_out *)aml_out);
-            ALOGI("-%s() alsa_ret %d is_alsa_device_conflict %d", __FUNCTION__, alsa_ret, adev->is_alsa_device_conflict);
             adev->is_alsa_device_conflict = false;
         }
     }
