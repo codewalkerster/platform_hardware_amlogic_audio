@@ -23,7 +23,10 @@
 #include "audio_aec.h"
 #endif
 #include "aml_audio_timer.h"
+
+#ifdef SUPPORT_KARAOKE
 #include "karaoke_manager.h"
+#endif
 
 #include "audio_hwsync_wrap.h"
 #include "audio_hw_resource_mgr.h"
@@ -1512,17 +1515,10 @@ static int usecase_change_validate_l_sm(struct aml_stream_out *aml_out, bool is_
             aml_dev->usecase_masks &= ~(1 << aml_out->usecase);
         }
         if (0 == aml_dev->usecase_masks && is_TV(aml_dev)) {
-#ifdef USB_KARAOKE
-            /*Do not standby when usb karaoke working*/
-            struct kara_manager *karaoke = &aml_dev->usb_audio.karaoke;
-            if (karaoke && karaoke->karaoke_on) {
-                return 0;
-            }
-#endif
-#ifdef LINEIN_KARAOKE
-            /*Do not standby when linein karaoke working*/
-            struct kara_manager *linein_kara = &aml_dev->linein_karaoke;
-            if (linein_kara && linein_kara->karaoke_on) {
+#ifdef SUPPORT_KARAOKE
+            /*Do not standby when usb/linein karaoke working*/
+            if (karaoke_get_on(&aml_dev->usb_audio.karaoke) ||
+                karaoke_get_on(&aml_dev->linein_karaoke)) {
                 return 0;
             }
 #endif
@@ -1986,6 +1982,7 @@ void subMixingDump(int s32Fd, const struct aml_audio_device *pstAmlDev)
     mixer_dump(s32Fd, pstAmlDev);
 }
 
+#ifdef SUPPORT_KARAOKE
 int subMixingSetKaraoke(struct aml_audio_device *adev, struct kara_manager *kara)
 {
     struct subMixing *sm = adev->sm;
@@ -1993,6 +1990,7 @@ int subMixingSetKaraoke(struct aml_audio_device *adev, struct kara_manager *kara
 
     return mixer_set_karaoke(audio_mixer, kara);
 }
+#endif
 
 static int subMixingOutMsg(struct aml_audio_device *adev, PORT_MSG msg, void *info, int info_len)
 {

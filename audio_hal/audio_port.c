@@ -33,7 +33,6 @@
 #include "audio_hwsync.h"
 #include "audio_hwsync_wrap.h"
 #include "aml_malloc_debug.h"
-#include "karaoke_manager.h"
 #include "aml_dump_debug.h"
 #include "aml_audio_spdifout.h"
 #include "tv_patch_ctrl.h"
@@ -764,20 +763,6 @@ static int output_port_start(output_port *port)
     }
     port->pcm_handle = pcm;
     port->port_status = ACTIVE;
-#ifdef USB_KARAOKE
-    struct kara_manager *karaoke = port->kara;
-
-    if (karaoke && karaoke->karaoke_on && karaoke->karaoke_enable) {
-        card = alsa_device_get_card_index_by_name("Loopback");
-        port->loopback_handle = pcm_open(card, 0, PCM_OUT, &pcm_cfg);
-        if (!pcm_is_ready(port->loopback_handle)) {
-            ALOGE("%s: cannot open loopback: %s", __func__,
-                    pcm_get_error(port->loopback_handle));
-            pcm_close (port->loopback_handle);
-            port->loopback_handle = NULL;
-        }
-    }
-#endif
     return 0;
 }
 
@@ -793,12 +778,6 @@ static int output_port_standby(output_port *port)
         port->port_status = STOPPED;
         pthread_mutex_unlock(&port->lock);
     }
-#ifdef USB_KARAOKE
-    if (port->loopback_handle) {
-        pcm_close(port->loopback_handle);
-        port->loopback_handle = NULL;
-    }
-#endif
     return 0;
 }
 
@@ -985,25 +964,6 @@ static ssize_t output_port_write_alsa(output_port *port, void *buffer, int bytes
         }
     }
 
-#ifdef USB_KARAOKE
-    struct kara_manager *karaoke = port->kara;
-    if (karaoke) {
-        if (karaoke->karaoke_on && karaoke->karaoke_enable &&
-            karaoke->in.in_profile && profile_is_valid(karaoke->in.in_profile)) {
-            if (!karaoke->karaoke_start && karaoke->open) {
-                struct audioCfg audio_cfg = port->cfg;
-
-                ret = karaoke->open(karaoke, &audio_cfg);
-                if (ret < 0)
-                    ALOGD("%s(), open micphone failed: %d", __func__, ret);
-            } else if (!ret && karaoke->mix) {
-                karaoke->mix(karaoke, buffer, bytes);
-            }
-        } else if (karaoke->karaoke_start && karaoke->close) {
-                karaoke->close(karaoke);
-        }
-    }
-#endif
     if (port->pcm_restart) {
         pcm_stop(port->pcm_handle);
         AM_LOGI("restart pcm device for same src");
@@ -1029,10 +989,6 @@ static ssize_t output_port_write_alsa(output_port *port, void *buffer, int bytes
         if (ret == 0) {
             written += bytes;
             timeout_cnt = 0;
-#ifdef USB_KARAOKE
-            if (port->loopback_handle)
-                pcm_write(port->loopback_handle, (void *)buffer, bytes);
-#endif
         } else {
             const char *err_str = pcm_get_error(port->pcm_handle);
             AM_LOGE("pcm_write failed ret = %d, pcm_get_error(port->pcm):%s", ret, err_str);
@@ -1070,6 +1026,27 @@ static ssize_t output_port_write(output_port *port, void *buffer, int bytes)
     }
     void *sink_buffer = buffer;
     int sink_bytes = bytes;
+
+#ifdef SUPPORT_KARAOKE
+    /*do mix usb mic karaoke*/
+    struct kara_manager *kara = port->kara;
+    if (karaoke_get_on(kara) && !karaoke_get_start(kara)) {
+        //set main config for mixing
+        memcpy(&kara->mixout_config, &port->src_cfg, sizeof(struct audioCfg));
+    }
+    karaoke_check_mix_output(kara, buffer, bytes);
+
+    /*do mix linein mic karaoke*/
+    struct kara_manager *linein_kara = port->linein_kara;
+    if (karaoke_get_on(linein_kara) && !karaoke_get_start(linein_kara)) {
+        //set main config for mixing
+        memcpy(&linein_kara->mixout_config, &port->src_cfg, sizeof(struct audioCfg));
+        /*fix usb mic noise issue when linein mic work after usb*/
+        if (karaoke_get_start(kara))
+            karaoke_close(kara);
+    }
+    karaoke_check_mix_output(linein_kara, buffer, bytes);
+#endif
 
     process_outport_msg(port);
 
@@ -1477,9 +1454,24 @@ void outport_pcm_restart(output_port *port)
     port->pcm_restart = true;
 }
 
+#ifdef SUPPORT_KARAOKE
 int outport_set_karaoke(output_port *port, struct kara_manager *kara)
 {
-    port->kara = kara;
+    if (!port || !kara) {
+        AM_LOGE("port/kara is null pointer");
+        return -EINVAL;
+    }
+    kara_input_type_t kara_input_type = karaoke_get_input_type(kara);
+    AM_LOGI("kara_input_type = %d", kara_input_type);
+    if (KARA_INPUT_TYPE_USB_MIC == kara_input_type) {
+        port->kara = kara;
+    } else if (KARA_INPUT_TYPE_LINEIN_MIC == kara_input_type) {
+        port->linein_kara = kara;
+    } else {
+        //use kara for other input type
+        port->kara = kara;
+    }
     return 0;
 }
+#endif
 

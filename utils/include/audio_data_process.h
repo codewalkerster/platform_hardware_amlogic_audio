@@ -100,6 +100,10 @@ int do_mixing_by_ch_mux(void *data_mixed,
 int do_mixing_2ch(void *data_mixed,
         void *data_in, size_t frames,
         audio_format_t in_format, audio_format_t out_format);
+int do_mixing_specified_channel_cnt(void *data_mixed,
+        void *data_in, size_t frames,
+        audio_format_t in_format, audio_format_t out_format,
+        unsigned int channel_cnt);
 int extend_channel_2_8(void *data_out, void *data_in,
         size_t frames, int ch_cnt_out, int ch_cnt_in);
 int extend_channel_5_8(void *data_out, void *data_in,

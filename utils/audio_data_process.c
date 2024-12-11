@@ -289,6 +289,60 @@ int do_mixing_2ch(void *data_mixed,
     }
     return frames;
 }
+
+/* do mixing with specified channel count and should be same channel count*/
+int do_mixing_specified_channel_cnt(void *data_mixed,
+        void *data_in, size_t frames,
+        audio_format_t in_format, audio_format_t out_format,
+        unsigned int channel_cnt)
+{
+    if (0 == channel_cnt || 0 == frames) {
+        return 0;
+    }
+    int i = 0;
+    if (out_format == AUDIO_FORMAT_PCM_32_BIT) {
+        if (in_format == AUDIO_FORMAT_PCM_16_BIT) {
+            int16_t *in = data_in;
+            int32_t *out = data_mixed;
+            int64_t tmp = 0;
+            for (i = 0; i < frames * channel_cnt; i++) {
+                tmp = (int64_t)*out + (int64_t)((*in++) << 16);
+                *out++ = CLIPINT(tmp);
+            }
+        } else if (in_format == AUDIO_FORMAT_PCM_32_BIT) {
+            int32_t *in = data_in;
+            int32_t *out = data_mixed;
+            int64_t tmp = 0;
+            for (i = 0; i < frames * channel_cnt; i++) {
+                tmp = (int64_t)*out + (int64_t)*in++;
+                *out++ = CLIPINT(tmp);
+            }
+        }
+    } else if (out_format == AUDIO_FORMAT_PCM_16_BIT) {
+        if (in_format == AUDIO_FORMAT_PCM_16_BIT) {
+            int16_t *in = data_in;
+            int16_t *out = data_mixed;
+            int32_t tmp = 0;
+            for (i = 0; i < frames * channel_cnt; i++) {
+                tmp = (int32_t)*out + (int32_t)*in++;
+                *out++ = CLIPSHORT(tmp);
+            }
+        } else if (in_format == AUDIO_FORMAT_PCM_32_BIT) {
+            int32_t *in = data_in;
+            int16_t *out = data_mixed;
+            int32_t tmp = 0;
+            for (i = 0; i < frames * channel_cnt; i++) {
+                tmp = (int32_t)*out + ((*in++) >> 16);
+                *out++ = CLIPSHORT(tmp);
+            }
+        }
+    } else {
+        ALOGE("do_mixing_specified_channel_cnt invalid in_format:%#x out_format:%#x invalid", in_format, out_format);
+        return 0;
+    }
+    return frames;
+}
+
 // 2->8ch, 32bit, in out no overlap
 int extend_channel_2_8(void *data_out, void *data_in,
         size_t frames, int ch_cnt_out, int ch_cnt_in)

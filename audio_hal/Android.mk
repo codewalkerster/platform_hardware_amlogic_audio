@@ -100,7 +100,6 @@ include $(BUILD_PREBUILT)
         aml_audio_ms12_render.c \
         aml_audio_nonms12_render.c \
         karaoke_manager.c \
-        audio_kara.c \
         audio_usb_hal.c \
         aml_config_parser.c \
         aml_config_data.c \
@@ -237,9 +236,11 @@ $(info "---------tv audio mode, compiler configured 8 channels output by default
 LOCAL_CFLAGS += -DTV_AUDIO_OUTPUT
 else
 $(info "---------ott audio mode, compiler configure 2 channels output by default--------")
-#LOCAL_CFLAGS += -DUSB_KARAOKE
+
 endif
     #LOCAL_CFLAGS += -Wall -Wunknown-pragmas
+
+LOCAL_CFLAGS += -DSUPPORT_KARAOKE
 
 #add dolby ms12support
     LOCAL_CFLAGS += -DDOLBY_MS12_ENABLE

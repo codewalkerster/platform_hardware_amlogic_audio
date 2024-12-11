@@ -232,6 +232,8 @@ static int in_standby(struct audio_stream *stream)
 {
     struct stream_in *in = (struct stream_in *)stream;
     struct usb_audio_device *usb_device = in->adev;
+
+#ifdef SUPPORT_KARAOKE
     struct kara_manager *karaoke = &usb_device->karaoke;
 
     if (in->echo_reference) {
@@ -241,11 +243,11 @@ static int in_standby(struct audio_stream *stream)
         put_echo_reference(karaoke, in->echo_reference);
         in->echo_reference = NULL;
     }
-
-    if (karaoke->karaoke_on || karaoke->karaoke_start) {
+    if (karaoke_get_on(karaoke) || karaoke_get_start(karaoke)) {
         ALOGI("%s stop karaoke record!", __func__);
         return 0;
     }
+#endif
 
     stream_lock(&in->lock);
     if (!in->standby) {
@@ -337,6 +339,7 @@ static char * in_get_parameters(const struct audio_stream *stream, const char *k
     return params_str;
 }
 
+#ifdef SUPPORT_KARAOKE
 static int read_from_kara_buffer(struct audio_stream_in *stream, void *buffer, size_t bytes)
 {
     struct stream_in *in = (struct stream_in *)stream;
@@ -344,22 +347,21 @@ static int read_from_kara_buffer(struct audio_stream_in *stream, void *buffer, s
     struct kara_manager *kara = &usb_device->karaoke;
     int rate_req = proxy_get_sample_rate(&in->proxy);
     int channels_req = proxy_get_channel_count(&in->proxy);
-    int frames = bytes / channels_req / 2; // suppose 16bit
-    int ret;
+    enum pcm_format format_proxy = proxy_get_format(&in->proxy);
+    audio_format_t format_req = audio_format_from_pcm_format(format_proxy);
+    int frame_size = channels_req * pcm_format_to_bits(format_proxy) / 8;
+    int frames = bytes / frame_size;
 
     if (!in->echo_reference) {
         in->echo_reference = get_echo_reference(kara,
-                AUDIO_FORMAT_PCM_16_BIT,
-                channels_req, rate_req);
+                format_req, channels_req, rate_req);
     }
 
     if (in->echo_reference) {
         struct echo_reference_buffer b;
         memset(&b, 0, sizeof(b));
-
         b.raw = buffer;
         b.frame_count = frames;
-
         in->echo_reference->read(in->echo_reference, &b);
     } else {
         memset(buffer, 0, bytes);
@@ -367,6 +369,7 @@ static int read_from_kara_buffer(struct audio_stream_in *stream, void *buffer, s
 
     return bytes;
 }
+#endif
 
 /* must be called with hw device and output stream mutexes locked */
 static int start_input_stream(struct stream_in *in)
@@ -386,20 +389,22 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
     struct stream_in * in = (struct stream_in *)stream;
     struct usb_audio_device *usb_device = in->adev;
     struct aml_audio_device *adev = (struct aml_audio_device *)usb_device->adev_primary;
-    struct kara_manager *karaoke = &usb_device->karaoke;
 
-    if (karaoke->karaoke_on || karaoke->karaoke_start) {
+#ifdef SUPPORT_KARAOKE
+    struct kara_manager *karaoke = &usb_device->karaoke;
+    if (karaoke_get_on(karaoke) || karaoke_get_start(karaoke)) {
         if (!in->standby) {
             //device_lock(in->adev);
             proxy_close(&in->proxy);
             //device_unlock(in->adev);
             in->standby = true;
-            karaoke->karaoke_enable = true;
-            ALOGD("karaoke is on, audio record steam do standby!");
+            karaoke_set_enable(karaoke, true);
+            AM_LOGD("karaoke is on, audio record steam do standby!");
         }
 
         return read_from_kara_buffer(stream, buffer, bytes);
     }
+#endif
 
     stream_lock(&in->lock);
     if (in->standby) {
@@ -477,7 +482,6 @@ int adev_open_usb_input_stream(struct usb_audio_device *hw_dev,
     /* Pull out the card/device pair */
     int32_t card, device;
     struct aml_audio_device *adev = (struct aml_audio_device *)hw_dev->adev_primary;
-    struct kara_manager *karaoke = &hw_dev->karaoke;
 
     if (!parse_card_device_params(address, &card, &device)) {
         ALOGW("%s fail - invalid address %s", __func__, address);
@@ -485,12 +489,14 @@ int adev_open_usb_input_stream(struct usb_audio_device *hw_dev,
         return -EINVAL;
     }
 
+#ifdef SUPPORT_KARAOKE
+    struct kara_manager *karaoke = &hw_dev->karaoke;
     /* if karaoke is enable, free hardware for usb hal */
-    if (karaoke->karaoke_enable) {
-        karaoke->karaoke_enable = false;
-        if (karaoke->close)
-            karaoke->close(karaoke);
+    if (karaoke_get_enable(karaoke)) {
+        karaoke_set_enable(karaoke, false);
+        karaoke_close(karaoke);
     }
+#endif
 
     struct stream_in * const in = (struct stream_in *)aml_audio_calloc(1, sizeof(struct stream_in));
     if (in == NULL) {
@@ -575,9 +581,15 @@ int adev_open_usb_input_stream(struct usb_audio_device *hw_dev,
         }
     }
 
-    /* set profile to karaoke*/
-    if (profile_is_valid(&hw_dev->in_profile))
-        karaoke_init(&hw_dev->karaoke, &hw_dev->in_profile);
+#ifdef SUPPORT_KARAOKE
+    /* init karaoke and set profile to karaoke*/
+    if (profile_is_valid(&hw_dev->in_profile)) {
+        /* input and output type are already defined by karaoke_project_init with json config */
+        kara_input_type_t kara_input_type = karaoke_get_input_type(&hw_dev->karaoke);
+        kara_output_type_t kara_output_type = karaoke_get_output_type(&hw_dev->karaoke);
+        karaoke_init(&hw_dev->karaoke, &hw_dev->in_profile, kara_input_type, kara_output_type);
+    }
+#endif
 
     /* Channels */
     bool calc_mask = false;
@@ -660,7 +672,10 @@ int adev_open_usb_input_stream(struct usb_audio_device *hw_dev,
     ++in->adev->inputs_open;
     device_unlock(in->adev);
 
-    karaoke->karaoke_enable = true;
+#ifdef SUPPORT_KARAOKE
+    /* set karaoke_enable true */
+    karaoke_set_enable(karaoke, true);
+#endif
 
     in->adev->stream_in = (struct audio_stream_in *)in; // check when close
 

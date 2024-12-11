@@ -134,14 +134,8 @@
 #endif
 #include <audio_effects/effect_aec.h>
 #include <audio_utils/clock.h>
-
-#include "audio_kara.h"
-
 #include "audio_dummy_streamout.h"
 #include "aml_audio_stream_base.h"
-
-
-#define AUDIO_KARA
 
 //audio content recognize function
 #include "aml_ai_audio.h"
@@ -416,7 +410,17 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
     }
 
     devices &= ~AUDIO_DEVICE_BIT_IN;
-    if ((devices & AUDIO_DEVICE_IN_ALL_USB) || (devices & AUDIO_DEVICE_IN_HDMI_ARC))
+    if (devices & AUDIO_DEVICE_IN_ALL_USB) {
+        /* Usb input parameter should be null and use usb proxy config on adev_open_usb_input_stream*/
+        if (0 == sample_rate && AUDIO_FORMAT_DEFAULT == format && AUDIO_CHANNEL_NONE == channel_count) {
+            return 0;
+        } else {
+            /* Maybe not supported in usb proxy and set parameter to null for using usb proxy*/
+            return -EINVAL;
+        }
+    }
+
+    if (devices & AUDIO_DEVICE_IN_HDMI_ARC)
         return 0;
 
     /* config should be fixed when do not support/use pdm for builtinmic */
@@ -461,7 +465,6 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
             return -EINVAL;
     }
 
-    devices &= ~AUDIO_DEVICE_BIT_IN;
     if ((devices & AUDIO_DEVICE_IN_LINE) ||
         (devices & AUDIO_DEVICE_IN_SPDIF) ||
         (devices & AUDIO_DEVICE_IN_TV_TUNER) ||
@@ -2022,7 +2025,7 @@ static unsigned int select_port_by_device(struct aml_stream_in *in)
             inport = PORT_I2S;
     }
 
-#ifdef USB_KARAOKE
+#ifdef SUPPORT_KARAOKE
     if (in->source == AUDIO_SOURCE_KARAOKE_SPEAKER)
         inport = PORT_LOOPBACK;
 #endif
@@ -2077,12 +2080,16 @@ int start_input_stream(struct aml_stream_in *in)
     port = select_port_by_device(in);
     /* check to update alsa device by port */
     alsa_device = alsa_device_update_pcm_index(port, CAPTURE);
-#ifdef USB_KARAOKE
+
+#ifdef SUPPORT_KARAOKE
+    /* Using Aloop to record karaoke data after mix */
     if (in->source == AUDIO_SOURCE_KARAOKE_SPEAKER) {
         card = alsa_device_get_card_index_by_name("Loopback");
-        if (card < 0)
+        if ((signed int)card < 0) {
+            AM_LOGW("in->source = (%d) can not find Aloop card", in->source);
             return -EINVAL;
-        /* Alsa loop in device id = 1 */
+        }
+        /* Alsa Aloop device 1 for capture */
         alsa_device = 1;
     }
 #endif
@@ -2585,6 +2592,23 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
         return bytes;
     }
 #endif
+
+#ifdef SUPPORT_KARAOKE
+    //AUDIO_SOURCE_MIC and Param "linein_kara_record=1" to record karaoke linein
+    if (in->source == AUDIO_SOURCE_MIC) {
+        struct kara_manager *karaoke = &adev->linein_karaoke;
+        if (karaoke_get_mic_record(karaoke)) {
+            if (karaoke_get_on(karaoke) || karaoke_get_start(karaoke)) {
+                ret = karaoke->read(karaoke, buffer, bytes);
+                if (ret == bytes) {
+                    in->frames_read += in_frames;
+                }
+                goto exit;
+            }
+        }
+    }
+#endif
+
     if (adev->dev2mix_patch) {
         ALOGV("dev2mix patch case ");
     } else {
@@ -3481,10 +3505,9 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         aml_audio_spdifout_close(out->spdifout2_handle);
         out->spdifout2_handle = NULL;
     }
-    if (out->kara) {
-        audio_kara_close(out->kara);
-        out->kara = NULL;
-    }
+#ifdef SUPPORT_KARAOKE
+    karaoke_close(&adev->linein_karaoke);
+#endif
 
     if (out->aml_parser) {
         pthread_mutex_lock(&out->parser_MutexLock);
@@ -4470,41 +4493,13 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         goto exit;
     }
 
-#ifdef USB_KARAOKE
-    ret = str_parms_get_int(parms, "karaoke_switch", &val);
+#ifdef SUPPORT_KARAOKE
+    /* karaoke parameter format "hal_param_karaoke_set=[Name] [Command] [Value]"
+       example: hal_param_karaoke_set=usb switch 1
+    */
+    ret = str_parms_get_str(parms, "hal_param_karaoke_set", value, sizeof(value));
     if (ret >= 0) {
-        bool karaoke_on = !!val;
-        adev->usb_audio.karaoke.karaoke_on = karaoke_on;
-        ALOGI("[%s]Set usb karaoke: %d", __FUNCTION__, karaoke_on);
-        goto exit;
-    }
-    ret = str_parms_get_int(parms, "karaoke_mic_mute", &val);
-    if (ret >= 0) {
-        bool mic_mute = !!val;
-        adev->usb_audio.karaoke.kara_mic_mute = mic_mute;
-        ALOGI("[%s]Set usb mic mute: %d", __FUNCTION__, mic_mute);
-        goto exit;
-    }
-    ret = str_parms_get_str(parms, "karaoke_mic_volume", value, sizeof(value));
-    if (ret >= 0) {
-        float karaoke_mic_volume = 0;
-        sscanf(value,"%f", &karaoke_mic_volume);
-        adev->usb_audio.karaoke.kara_mic_gain = DbToAmpl(karaoke_mic_volume);
-        ALOGI("[%s]Set usb mic volume: %f dB", __func__, karaoke_mic_volume);
-        goto exit;
-    }
-    ret = str_parms_get_int(parms, "karaoke_reverb_enable", &val);
-    if (ret >= 0) {
-        bool reverb_enable = !!val;
-        adev->usb_audio.karaoke.reverb_enable = reverb_enable;
-        ALOGI("[%s]Set usb mic reverb enable: %d", __FUNCTION__, reverb_enable);
-        goto exit;
-    }
-    ret = str_parms_get_int(parms, "karaoke_reverb_mode", &val);
-    if (ret >= 0) {
-        int reverb_mode = val;
-        adev->usb_audio.karaoke.reverb_mode = reverb_mode;
-        ALOGI("[%s]Set usb mic reverb mode: %d", __FUNCTION__, reverb_mode);
+        karaoke_set_parameters(dev, value);
         goto exit;
     }
 #endif
@@ -4565,11 +4560,6 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         }
         goto exit;
     }
-
-
-
-
-    set_param_kara(dev, parms);
 
 exit:
     str_parms_destroy (parms);
@@ -4859,10 +4849,10 @@ static int adev_config_process_bitwidth(struct aml_audio_device *adev)
     if (adev->useAudioMixer && !adev->mixerData) {
         initHalSubMixing(MIXER_LPCM, adev, is_TV(adev));
         subMixingSetSrcGain(adev, aml_audio_get_s_gain_by_src(adev, SRC_OTHER));
-#ifdef USB_KARAOKE
-        subMixingSetKaraoke(adev, &adev->usb_audio.karaoke);
-        pthread_mutex_init(&adev->usb_audio.karaoke.lock, NULL);
-        adev->usb_audio.karaoke.kara_mic_gain = 1.0;
+#ifdef SUPPORT_KARAOKE
+        /* init usb and linein mic karaoke for mixer path */
+        mixer_set_karaoke(adev->mixerData, &adev->usb_audio.karaoke);
+        mixer_set_karaoke(adev->mixerData, &adev->linein_karaoke);
 #endif
     }
 
@@ -5068,15 +5058,62 @@ int adev_open_input_stream(struct audio_hw_device *dev,
             config->format = AUDIO_FORMAT_PCM_16_BIT;
             config->channel_mask = AUDIO_CHANNEL_IN_STEREO;
         } else {
-            ALOGV("  check_input_parameters input config Not Supported, and set to Default config(48000,2,PCM_16_BIT)");
-            config->sample_rate = DEFAULT_OUT_SAMPLING_RATE;
-            config->format = AUDIO_FORMAT_PCM_16_BIT;
-            config->channel_mask = AUDIO_CHANNEL_IN_STEREO;
-            return -EINVAL;
+            devices &= ~AUDIO_DEVICE_BIT_IN;
+            if (devices & AUDIO_DEVICE_IN_ALL_USB) {
+                ALOGD("  check usb input parameter not supported and set to null for using proxy config");
+                config->sample_rate = 0;
+                config->format = AUDIO_FORMAT_DEFAULT;
+                config->channel_mask = AUDIO_CHANNEL_NONE;
+            } else {
+                ALOGV("  check_input_parameters input config Not Supported, and set to Default config(48000,2,PCM_16_BIT)");
+                config->sample_rate = DEFAULT_OUT_SAMPLING_RATE;
+                config->format = AUDIO_FORMAT_PCM_16_BIT;
+                config->channel_mask = AUDIO_CHANNEL_IN_STEREO;
+                return -EINVAL;
+            }
         }
     } else {
         //check successfully, continue execute.
     }
+
+#ifdef SUPPORT_KARAOKE
+    struct kara_manager *karaoke = &adev->linein_karaoke;
+    struct audio_config record_config;
+    memset(&record_config, 0, sizeof(struct audio_config));
+    /* Use ring buffer for recording original linein mic data */
+    /* AUDIO_SOURCE_MIC and setparam "linein_kara_record=1" before start recording */
+    if (AUDIO_SOURCE_MIC == source && karaoke_get_mic_record(karaoke)) {
+        karaoke_get_config_by_record_type(karaoke, KARA_RECORD_TYPE_MIC_ORIGINAL, &record_config);
+        if (config->sample_rate == record_config.sample_rate &&
+            config->format == record_config.format &&
+            config->channel_mask == record_config.channel_mask) {
+            AM_LOGI("Karaoke record source(%d) config check pass", source);
+        } else {
+            AM_LOGI("Karaoke record source(%d) config not supported and set to real config", source);
+            config->sample_rate = record_config.sample_rate ;
+            config->format = record_config.format;
+            config->channel_mask = record_config.channel_mask;
+            return -EINVAL;
+        }
+    }
+
+    /* Use Aloop for recording data after sw mix by customized source */
+    /* set config according to karaoke sw mix */
+    if (AUDIO_SOURCE_KARAOKE_SPEAKER == source) {
+        karaoke_get_config_by_record_type(karaoke, KARA_RECORD_TYPE_MIC_AFTER_SW_MIX, &record_config);
+        if (config->sample_rate == record_config.sample_rate &&
+            config->format == record_config.format &&
+            config->channel_mask == record_config.channel_mask) {
+            AM_LOGI("Karaoke record source(%d) config check pass", source);
+        } else {
+            AM_LOGI("Karaoke record source(%d) config not supported and set to real config", source);
+            config->sample_rate = record_config.sample_rate ;
+            config->format = record_config.format;
+            config->channel_mask = record_config.channel_mask;
+            return -EINVAL;
+        }
+    }
+#endif
 
     pthread_mutex_init(&in->lock, (const pthread_mutexattr_t *)NULL);
     pthread_mutex_init(&in->pre_lock, (const pthread_mutexattr_t *)NULL);
@@ -8366,8 +8403,8 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     if (adev->useAudioMixer) {
         aml_audio_hwsync_open();
         adev->raw_to_pcm_flag = false;
-        profile_init(&adev->usb_audio.in_profile, PCM_IN);
     }
+    profile_init(&adev->usb_audio.in_profile, PCM_IN); //support both submix and ms12
 
     ALOGI("%s(), MS12 is not compatible with SUBMIXER currently, set useAudioMixer %s",
         __func__, adev->useAudioMixer ? "TRUE": "FALSE");
@@ -8398,6 +8435,12 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->debug_flag = aml_audio_get_debug_flag();
     adev->count = 1;
     aml_audio_board_config_init(&adev->board_config);
+
+#ifdef SUPPORT_KARAOKE
+    /* karaoke config init by json and do other init */
+    karaoke_project_init(adev);
+#endif
+
     /*set audio hal process bitwidth*/
     adev_config_process_bitwidth(adev);
 

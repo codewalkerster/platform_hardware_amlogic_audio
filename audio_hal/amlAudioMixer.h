@@ -22,7 +22,9 @@
 #include <semaphore.h>
 #include "aml_ringbuffer.h"
 #include "audio_port.h"
+#ifdef SUPPORT_KARAOKE
 #include "karaoke_manager.h"
+#endif
 #include "aml_audio_timer.h"
 
 #define MIXER_OUT_FRAME_SIZE                (8)
@@ -176,8 +178,10 @@ int mixer_outport_pcm_restart(struct amlAudioMixer *audio_mixer);
 void mixer_dump(int s32Fd, const struct aml_audio_device *pstAmlDev);
 void mixer_using_alsa_device_dump(int s32Fd, const struct aml_audio_device *pstAmlDev);
 bool has_hwsync_stream_running(void *stream);
-/* usb karaoke for hal mixer */
+#ifdef SUPPORT_KARAOKE
+/* pass karaoke for hal mixer */
 int mixer_set_karaoke(struct amlAudioMixer *audio_mixer, struct kara_manager *kara);
+#endif
 
 void mixer_enable_multich_output(struct amlAudioMixer *audio_mixer, bool enable);
 int mixer_get_mc_outport_latency_frames(struct amlAudioMixer *audio_mixer);

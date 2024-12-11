@@ -20,6 +20,9 @@
 #include <aml_alsa_mixer.h>
 
 #include "aml_config_parser.h"
+#ifdef SUPPORT_KARAOKE
+#include "karaoke_manager.h"
+#endif
 
 /* board specific json configs */
 struct audio_board_config {
@@ -122,6 +125,11 @@ struct audio_board_config {
       1: display engineer Mode UI
     */
     int engineer_Mode_Audio_Config;
+
+#ifdef SUPPORT_KARAOKE
+    struct karaoke_config usb_kara_config; /* usb karaoke config */
+    struct karaoke_config linein_kara_config; /* linein karaoke config */
+#endif
 };
 
 int aml_audio_config_parser();

@@ -323,6 +323,16 @@ int aml_send_ms12_scheduler_state_2_ms12(void)
            pthread_mutex_unlock(&ms12->lock);
            return -1;
     } else {
+#ifdef SUPPORT_KARAOKE
+        if (MS12_SCHEDULER_STANDBY == sch_state) {
+            /*Do not standby when usb/linein mic karaoke working*/
+            if (karaoke_get_on(&adev->usb_audio.karaoke)
+                || karaoke_get_on(&adev->linein_karaoke)) {
+                pthread_mutex_unlock(&ms12->lock);
+                return 0;
+            }
+        }
+#endif
         set_dolby_ms12_continuous_state(ms12, ms12->ms12_scheduler_state);
         ALOGD("%s adev:%p, sch_state:%d(%s) ", __func__, adev, sch_state, scheduler_state_2_string[sch_state]);
     }
@@ -352,6 +362,7 @@ int aml_set_ms12_scheduler_state(struct dolby_ms12_desc *ms12)
     bool is_netflix = adev->is_netflix;
     unsigned int remaining_time = 0;
     bool need_schedule = !is_hdmi_connecting || adev->low_power;
+    bool is_karaoke_on = false; /* do not standby when karaoke on*/
 
     if (sch_state == MS12_SCHEDULER_STANDBY) {
         /*If there are other streams present, the ms12 status to running*/
@@ -367,7 +378,13 @@ int aml_set_ms12_scheduler_state(struct dolby_ms12_desc *ms12)
        return 0;
     }
 
-    if ((!is_TV(adev) || need_schedule) && !is_netflix) {
+#ifdef SUPPORT_KARAOKE
+    if (karaoke_get_on(&adev->usb_audio.karaoke) ||
+        karaoke_get_on(&adev->linein_karaoke)) {
+        is_karaoke_on = true;
+    }
+#endif
+    if ((!is_TV(adev) || need_schedule) && !is_netflix && !is_karaoke_on) {
         remaining_time = audio_timer_remaining_time(ms12->ms12_timer_id);
         if (remaining_time > 0) {
             audio_timer_stop(ms12->ms12_timer_id);

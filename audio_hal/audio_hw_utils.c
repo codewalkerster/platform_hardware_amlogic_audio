@@ -33,6 +33,7 @@
 #include <cutils/str_parms.h>
 #include <cutils/properties.h>
 #include <linux/ioctl.h>
+#include <hardware/audio_alsaops.h>
 #include <hardware/hardware.h>
 #include <system/audio.h>
 #include <hardware/audio.h>
@@ -2203,6 +2204,7 @@ int android_dev_convert_to_hal_dev(audio_devices_t android_dev, int *hal_dev_por
         *hal_dev_port = INPORT_BT_SCO_HEADSET_MIC;
         break;
     case AUDIO_DEVICE_IN_USB_DEVICE:
+    case AUDIO_DEVICE_IN_USB_HEADSET:
         *hal_dev_port = INPORT_USB;
         break;
     default:
@@ -2332,6 +2334,7 @@ enum patch_src_assort android_input_dev_convert_to_hal_patch_src(audio_devices_t
         patch_src = SRC_BT_SCO_HEADSET_MIC;
         break;
     case AUDIO_DEVICE_IN_USB_DEVICE:
+    case AUDIO_DEVICE_IN_USB_HEADSET:
         patch_src = SRC_USB;
         break;
     case AUDIO_DEVICE_IN_BUS:
@@ -3656,6 +3659,37 @@ int get_loudness_level(void)//LUFS or LKFS
     return loudness_level;
 }
 
+enum pcm_format aml_pcm_format_from_audio_format(audio_format_t format)
+{
+    switch (format) {
+    case AUDIO_FORMAT_PCM_16_BIT:
+    case AUDIO_FORMAT_PCM_32_BIT:
+    case AUDIO_FORMAT_PCM_8_24_BIT:
+    case AUDIO_FORMAT_PCM_24_BIT_PACKED:
+        return pcm_format_from_audio_format(format);
+    case AUDIO_FORMAT_PCM_8_BIT:
+        return PCM_FORMAT_S8;
+    default:
+        ALOGW("invalid format:%#x, return 16bit format.", format);
+        return PCM_FORMAT_S16_LE;
+    }
+}
+
+audio_format_t aml_audio_format_from_pcm_format(enum pcm_format format)
+{
+    switch (format) {
+    case PCM_FORMAT_S16_LE:
+    case PCM_FORMAT_S24_3LE:
+    case PCM_FORMAT_S24_LE:
+    case PCM_FORMAT_S32_LE:
+        return audio_format_from_pcm_format(format);
+    case PCM_FORMAT_S8:
+        return AUDIO_FORMAT_PCM_8_BIT;
+    default:
+        ALOGW("invalid pcm format %#x", format);
+        return AUDIO_FORMAT_DEFAULT;
+    }
+}
 
 #define VM_MAX_FILEPATH_LEN  136
 #define VM_MAX_RANGE_NUM     8

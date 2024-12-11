@@ -22,7 +22,10 @@
 #include <cutils/list.h>
 #include <alsa_device_profile.h>
 
+#include <audio_data_process.h>
+#ifdef SUPPORT_KARAOKE
 #include "karaoke_manager.h"
+#endif
 
 /* Max number of pcm mixing ports */
 #define NR_INPORTS    (8)
@@ -193,7 +196,10 @@ typedef struct OUTPUT_PORT {
 #ifdef ENABLE_AEC_APP
     struct aec_t *aec;
 #endif
-    struct kara_manager *kara;
+#ifdef SUPPORT_KARAOKE
+    struct kara_manager *kara; //usb kara
+    struct kara_manager *linein_kara; //linein kara
+#endif
     uint32_t alsa_buffer_frames;
     void *spdifout_handle;
     void *audio_mixer;
@@ -267,8 +273,10 @@ void outport_pcm_restart(output_port *port);
 int outport_stop_pcm(output_port *port);
 int outport_set_dummy(output_port *port, bool en);
 
+#ifdef SUPPORT_KARAOKE
 /* set karaoke to audio port */
 int outport_set_karaoke(output_port *port, struct kara_manager *kara);
+#endif
 
 output_port *new_mc_output_port(struct audioCfg *config, size_t buf_frames);
 int free_mc_output_port(output_port *mc_port);

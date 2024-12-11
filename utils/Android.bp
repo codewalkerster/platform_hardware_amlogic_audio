@@ -76,6 +76,7 @@ cc_library_shared {
         "aml_vad_wakeup.cpp",
         "cJSON/cJSON.c",
         "aml_peq.c",
+        "aml_reverb.c",
         "aml_audio_uevent.c",
     ],
 

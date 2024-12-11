@@ -20,7 +20,9 @@
 #include "alsa_device_profile.h"
 #include "alsa_device_proxy.h"
 #include "alsa_logging.h"
+#ifdef SUPPORT_KARAOKE
 #include "karaoke_manager.h"
+#endif
 
  struct usb_audio_device {
      pthread_mutex_t lock; /* see note below on mutex acquisition order */
@@ -33,8 +35,10 @@
      bool mic_muted;
      int32_t inputs_open; /* number of input streams currently open. */
 
+#ifdef SUPPORT_KARAOKE
      /* for karaoke mixer*/
      struct kara_manager karaoke;
+#endif
 
      void *adev_primary;
  };

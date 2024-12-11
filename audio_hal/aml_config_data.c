@@ -161,6 +161,10 @@ void aml_audio_board_config_init(struct audio_board_config *config)
         config->passthrough_Audio_Config = aml_get_jason_int_value("Passthrough_Audio_Config", 0);
         config->engineer_Mode_Audio_Config = aml_get_jason_int_value("Engineer_Mode_Audio_Config", 0);
         /* End: Audio Setting UI/Core relevant configurations */
+#ifdef SUPPORT_KARAOKE
+        /* get project config of karaoke */
+        karaoke_get_project_config((void *)config);
+#endif
     } else {
         ALOGW("%s() Fail!", __func__);
     }

@@ -654,9 +654,6 @@ ssize_t hw_write (struct audio_stream_out *stream
                 if (ret) {
                     ALOGE("%s() open failed", __func__);
                 }
-#ifdef AUDIO_KARA
-                check_switch_audio_kara(stream);
-#endif
             }
         }
         aml_out->stream_status = STREAM_HW_WRITING;
@@ -755,13 +752,6 @@ ssize_t hw_write (struct audio_stream_out *stream
                 }
             }
         }
-#ifdef AUDIO_KARA
-        check_switch_audio_kara(stream);
-        if (aml_out->kara) {
-            // WARNING: buffer is changed, discard 'const' qualifiers
-            ret = audio_kara_mix(aml_out->kara, (void *)buffer, bytes);
-        }
-#endif
         ret = aml_alsa_output_write(stream, (void *) buffer, bytes); // HDMI output HERE
         //ALOGE("!!aml_alsa_output_write"); ///zzz
         if (ret < 0) {

@@ -2446,7 +2446,7 @@ void mixer_using_alsa_device_dump(int s32Fd, const struct aml_audio_device *pstA
     }
 }
 
-
+#ifdef SUPPORT_KARAOKE
 int mixer_set_karaoke(struct amlAudioMixer *audio_mixer, struct kara_manager *kara)
 {
     output_port *out_port = NULL;
@@ -2462,6 +2462,7 @@ int mixer_set_karaoke(struct amlAudioMixer *audio_mixer, struct kara_manager *ka
 
     return 0;
 }
+#endif
 
 int mixer_reset_virtual_buf(void *audio_mixer, bool reset)
 {
@@ -2511,6 +2512,7 @@ int aml_set_submix_scheduler_state(struct amlAudioMixer *audio_mixer, int sch_st
     bool is_arc_connecting = is_HDMI_connected(adev);/*(adev->active_outport == OUTPORT_HDMI_ARC);*/
     bool is_netflix = adev->is_netflix;
     unsigned int remaining_time = 0;
+    bool is_karaoke_on = false; /* do not standby when karaoke on*/
 
     if (sch_state == SUBMIX_SCHEDULER_STANDBY) {
         /*If there are other streams present, the submix status to running*/
@@ -2527,7 +2529,14 @@ int aml_set_submix_scheduler_state(struct amlAudioMixer *audio_mixer, int sch_st
        return 0;
     }
 
-    if (!is_arc_connecting && !is_netflix) {
+#ifdef SUPPORT_KARAOKE
+    if (karaoke_get_on(&adev->usb_audio.karaoke)
+        || karaoke_get_on(&adev->linein_karaoke)) {
+        is_karaoke_on = true;
+    }
+#endif
+
+    if (!is_arc_connecting && !is_netflix && !is_karaoke_on) {
         remaining_time = audio_timer_remaining_time(audio_mixer->submix_timer_id);
         if (remaining_time > 0) {
             audio_timer_stop(audio_mixer->submix_timer_id);

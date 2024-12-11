@@ -156,7 +156,7 @@ static unsigned int DEFAULT_OUT_SAMPLING_RATE = 48000;
 #define SOUND_DMX_MODE_STEREO    1
 #endif
 
-#ifdef USB_KARAOKE
+#ifdef SUPPORT_KARAOKE
 #ifndef AUDIO_SOURCE_KARAOKE_SPEAKER
 #define AUDIO_SOURCE_KARAOKE_SPEAKER 1001
 #endif
@@ -521,6 +521,10 @@ struct aml_audio_device {
     struct volume_ease volume_ease;
     float last_sink_gain;
     struct usb_audio_device usb_audio;
+#ifdef SUPPORT_KARAOKE
+    /* for linein karaoke mixer */
+    struct kara_manager linein_karaoke;
+#endif
     //change variable name from hw_mediasync_id to hw_sync_id for more easy to extension.
     int32_t hw_sync_id;
 
@@ -550,10 +554,6 @@ struct aml_audio_device {
     /* board specific json configs */
     struct audio_board_config board_config;
 
-    unsigned int output_mix_source; // MIX_SRC_LINEIN, USBIN, NIL (default)
-    // customized_usb is valid only when MIX_SRC_LINEIN==USBIN
-    int customized_usb_card; // -1, invalid (default), [0,1,2..] valid
-    int customized_usb_device; // -1, invalid (default), [0,1,2..] valid
     bool is_ui_force_dap_disable; //dapv2.4 debug UI on (dap enable), off (dap disable)
     /* board specific json configs */
     int hdmitx_src; /* HDMITX src select for TDM */
@@ -859,7 +859,6 @@ struct aml_stream_out {
     int64_t jitter_ms;
     int     audio_delay;
     int64_t needs_compensation_timeus;
-    void *kara;
     uint64_t hwsync_parsed_frames_sum_paused;
     uint32_t last_write_start_time_in_ms; // For checking the writing time
     uint32_t last_write_data_in_byte; // For checking the writing time
@@ -1300,5 +1299,8 @@ static inline int32_t CLIP32(int64_t r)
            (r < INT32_MIN) ? INT32_MIN :
            r;
 }
+
+enum pcm_format aml_pcm_format_from_audio_format(audio_format_t format);
+audio_format_t aml_audio_format_from_pcm_format(enum pcm_format format);
 
 #endif
