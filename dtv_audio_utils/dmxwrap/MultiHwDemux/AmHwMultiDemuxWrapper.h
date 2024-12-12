@@ -62,6 +62,7 @@ public:
    int              mDemuxEsDataCacheMaxThreshold;
    ST_Aduserdata     ADuserdata;
    int              adpesmode;
+   mEsDataInfo* Last_AD_EsData;
  private:
    sp<AM_DMX_Device> AmDmxDevice;
    // int mEsDataInfoSize;

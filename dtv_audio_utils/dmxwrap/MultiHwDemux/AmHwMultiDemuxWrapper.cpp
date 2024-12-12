@@ -167,6 +167,24 @@ static void getAudioADEsData(AmHwMultiDemuxWrapper* mDemuxWrapper, int fid, cons
         ALOGV("getADAudioEsData %d mEsData->size %d mEsData->pts %" PRId64 " \n",len,mEsData->size,mEsData->pts);
     }
 
+    if (mEsData->pts > 0 ) {
+        if (!mDemuxWrapper->Last_AD_EsData) {
+            mDemuxWrapper->Last_AD_EsData = mEsData;
+            return;
+        } else {
+            mEsDataInfo* tmp_EsData = NULL;
+            tmp_EsData = mEsData;
+            mEsData = mDemuxWrapper->Last_AD_EsData;
+            mDemuxWrapper->Last_AD_EsData = tmp_EsData;
+        }
+    } else {
+        mDemuxWrapper->Last_AD_EsData->data = (uint8_t*)aml_audio_realloc(mDemuxWrapper->Last_AD_EsData->data, mDemuxWrapper->Last_AD_EsData->size + mEsData->size);
+        memcpy(mDemuxWrapper->Last_AD_EsData->data + mDemuxWrapper->Last_AD_EsData->size, mEsData->data, mEsData->size);
+        mDemuxWrapper->Last_AD_EsData->size += mEsData->size;
+        aml_audio_free(mEsData);
+        return;
+    }
+
     {
         TSPMutex::Autolock l(mDemuxWrapper->mAudioADEsDataQueueLock);
         mDemuxWrapper->queueEsData(mDemuxWrapper->mAudioADEsDataQueue,mEsData);

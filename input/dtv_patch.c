@@ -3574,7 +3574,15 @@ void *audio_dtv_patch_input_threadloop(void *data)
 
                             if (mAdEsData) {
                                 demux_info->ad_package_status = check_ad_package_status(dtv_package->pts, mAdEsData->pts, demux_info);
-                                if (demux_info->ad_package_status == AD_PACK_STATUS_HOLD) {
+                                if (demux_info->ad_package_status == AD_PACK_STATUS_DROP) {
+                                    if (mAdEsData->data) {
+                                        aml_audio_free(mAdEsData->data);
+                                        mAdEsData->data = NULL;
+                                    }
+                                    aml_audio_free(mAdEsData);
+                                    mAdEsData = NULL;
+                                    demux_info->mADEsData = mAdEsData;
+                                } else if (demux_info->ad_package_status == AD_PACK_STATUS_HOLD) {
                                     dtv_package->ad_size = 0;
                                     dtv_package->ad_data = NULL;
                                 } else {
