@@ -1668,21 +1668,23 @@ static int out_pause_new (struct audio_stream_out *stream)
         }
         pthread_mutex_unlock(&ms12->lock);
     } else {
-
         ret = do_output_standby_l(&stream->common);
         if (ret < 0) {
             goto exit;
         }
-        //In the shine-platform, Video can not be paused when playback DTS content in ExoPlayer tunnel mode.
-        //During pause, tsync_pause() function must be set,And you can't set a new PTS for the tsync module before resuming, otherwise the video will keep playing.
-        if (aml_out->hwsync && !aml_out->hwsync->use_mediasync && aml_out->hw_sync_mode && aml_out->tsync_status != TSYNC_STATUS_STOP) {
+
+        if (!aml_dev->useSubMix &&
+            aml_out->hwsync && aml_out->hwsync->use_mediasync && aml_out->hw_sync_mode && aml_out->tsync_status != TSYNC_STATUS_STOP) {
             ALOGI("%s set AUDIO_PAUSE\n",__func__);
             aml_hwsync_wrap_set_pause(aml_out->hwsync);
+            // prepare for the next wait_video_drop function
+            // aml_hwsync_wrap_wait_video_drop will return if it is vmaster mode.
+            aml_out->hwsync->wait_video_done = false;
+            if (aml_out->restore_vmaster) {
+                aml_hwsync_wrap_set_amaster(aml_out->hwsync, false);
+                aml_out->restore_vmaster = false;
+            }
             aml_out->tsync_status = TSYNC_STATUS_PAUSED;
-
-            ALOGI("%s set AUDIO_STOP\n",__func__);
-            aml_hwsync_wrap_set_stop(aml_out->hwsync);
-            aml_out->tsync_status = TSYNC_STATUS_STOP;
         }
     }
 exit:
@@ -1756,8 +1758,13 @@ static int out_resume_new (struct audio_stream_out *stream)
             pthread_mutex_lock(&ms12->lock);
             dolby_ms12_main_resume(stream);
             pthread_mutex_unlock(&ms12->lock);
-       }
+        }
+    } else {
+        if (!aml_dev->useSubMix && aml_out->hwsync && aml_out->hw_sync_mode) {
+            aml_out->hwsync->hwsync_need_resume = true;
+        }
     }
+
     aml_out->write_status = false;
     ALOGI("%s(), stream[%p] write_status set to false", __func__, aml_out);
 
