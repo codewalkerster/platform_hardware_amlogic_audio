@@ -617,7 +617,7 @@ static int mixer_output_write(struct amlAudioMixer *audio_mixer)
                 memcpy(proc_buf, mixed_out_buffer, mixed_out_bytes);
 
                 float volume = aml_audio_get_s_gain_by_src(adev, get_dev_patch_src(adev));
-                if (is_TV(adev)) {
+                if (is_TV(adev) || adev->enable_soundbar_mode) {
                     float sink_gain = adev->sink_gain[is_include_a2dp_out_port(adev->cur_out_devices) ? OUTPORT_A2DP : OUTPORT_USB_HEADSET];
                     volume *= sink_gain;
                 }
