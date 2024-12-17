@@ -275,7 +275,10 @@ int on_meta_data_cbk(void *cookie,
             }
         }
 
-        if (abs(pcr_pts_gap) > (APTS_DISCONTINUE_THRESHOLD_MIN_35MS/90) && pts64 > pcr && pcr != 0) {
+        if (abs(pcr_pts_gap) > (APTS_DISCONTINUE_THRESHOLD_MIN_35MS/90) &&
+            abs(pcr_pts_gap) < APTS_DISCONTINUE_THRESHOLD_MIN_3S &&
+            pts64 > pcr &&
+            pcr != 0) {
             aml_hwsync_wrap_is_amaster(out->hwsync, &amaster_mode);
             if (!amaster_mode) {
                 ALOGE("%s not amaster mode", __func__);
