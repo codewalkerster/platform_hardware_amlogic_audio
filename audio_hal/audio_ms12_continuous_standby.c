@@ -54,10 +54,7 @@ int audio_continuous_standby_open(void **pphandle, void *callback, void *priv_da
         return -1;
     }
 
-    for (int i = 0; i < STANDBY_MAX_REPEAT_FORMAT; i++) {
-        standby_handle->standby_repeat_buf_size[i] = 0;
-    }
-
+    memset(standby_handle, 0, sizeof(audio_continuous_standby_t));
     standby_handle->callback = callback;
     standby_handle->priv_data = priv_data;
     standby_handle->reset_check_cnt = 0;
@@ -71,6 +68,7 @@ int audio_continuous_standby_open(void **pphandle, void *callback, void *priv_da
     for (int i = 0; i < STANDBY_MAX_REPEAT_FORMAT; i++) {
         standby_handle->frame_is_match[i] = false;
         standby_handle->output_port_enable[i] = false;
+        standby_handle->standby_repeat_buf_size[i] = 0;
     }
 
     ALOGD("%s, output_callback %p, priv_data %p", __FUNCTION__, standby_handle->callback, standby_handle->priv_data);
@@ -81,8 +79,8 @@ int audio_continuous_standby_open(void **pphandle, void *callback, void *priv_da
 int audio_continuous_standby_close(void **pphandle) {
     audio_continuous_standby_t *standby_handle = NULL;
 
-    if (*pphandle) {
-        return -1;
+    if (*pphandle == NULL) {
+        return 0;
     }
     standby_handle = (audio_continuous_standby_t *)*pphandle;
 
@@ -120,6 +118,7 @@ int audio_continuous_standby_run(void *phandle, int delay) {
     } else if (standby_handle->output_port_enable[STANDBY_REPEAT_FORMAT_DD] || standby_handle->output_port_enable[STANDBY_REPEAT_FORMAT_DDP]) {
         pcm_repeat_frame = 1536;
     }
+
 
     pcm_size = standby_handle->standby_repeat_info[STANDBY_REPEAT_FORMAT_PCM].output_ch * standby_handle->standby_repeat_info[STANDBY_REPEAT_FORMAT_PCM].output_bitwidth / 8 * pcm_repeat_frame;
     memset(standby_handle->standby_repeat_buf[STANDBY_REPEAT_FORMAT_PCM], 0, pcm_size);
@@ -169,16 +168,28 @@ int audio_continuous_standby_attachframe(void *phandle, void *buf, int size, int
     pthread_mutex_lock(&standby_handle->lock);
 
     if (format == STANDBY_REPEAT_FORMAT_PCM || format == STANDBY_REPEAT_FORMAT_MCH || format == STANDBY_REPEAT_FORMAT_DAP) {
+        if (standby_handle->standby_repeat_buf[format] == NULL) {
+            ALOGE("%s error, format %d PCM malloc fail", __FUNCTION__, format);
+            if (format == STANDBY_REPEAT_FORMAT_PCM) {
+                standby_handle->standby_repeat_buf[format] = aml_audio_calloc(1, 2 * 4 * 1536);
+            } else {
+                standby_handle->standby_repeat_buf[format] = aml_audio_calloc(1, 8 * 4 * 1536);
+            }
+            goto EXIT;
+        }
         standby_handle->frame_is_match[format] = true;
         memcpy(&standby_handle->standby_repeat_info[format], info, sizeof(aml_ms12_dec_info_t));
-        pthread_mutex_unlock(&standby_handle->lock);
-        return 0;
+        goto EXIT;
     }
     if (standby_handle->standby_repeat_buf_size[format] != size) {
         if (standby_handle->standby_repeat_buf[format]) {
-            standby_handle->standby_repeat_buf[format] = aml_audio_realloc(standby_handle->standby_repeat_buf[format], size);
-        } else {
-            standby_handle->standby_repeat_buf[format] = aml_audio_malloc(size);
+            aml_audio_free(standby_handle->standby_repeat_buf[format]);
+            standby_handle->standby_repeat_buf[format] = NULL;
+        }
+        standby_handle->standby_repeat_buf[format] = aml_audio_malloc(size);
+        if (standby_handle->standby_repeat_buf[format] == NULL) {
+            ALOGE("%s error, malloc fail, format %d", __FUNCTION__, format);
+            goto EXIT;
         }
         standby_handle->standby_repeat_buf_size[format] = size;
     }
@@ -192,6 +203,7 @@ int audio_continuous_standby_attachframe(void *phandle, void *buf, int size, int
     }
     memcpy(&standby_handle->standby_repeat_info[format], info, sizeof(aml_ms12_dec_info_t));
 
+EXIT:
     pthread_mutex_unlock(&standby_handle->lock);
     return 0;
 }
@@ -209,36 +221,43 @@ int audio_continuous_standby_check(void *phandle) {
 
     if (!standby_handle->standby_status) {
         ret = 0;
+        goto EXIT;
     }
 
     if (standby_handle->reset_check_cnt) {
         standby_handle->reset_check_cnt--;
         ret = 0;
+        goto EXIT;
     }
 
     if (standby_handle->output_port_enable[STANDBY_REPEAT_FORMAT_PCM] && !standby_handle->frame_is_match[STANDBY_REPEAT_FORMAT_PCM]) {
         ALOGV("%s PCM check fail", __FUNCTION__);
         ret = 0;
+        goto EXIT;
     }
 
     if (standby_handle->output_port_enable[STANDBY_REPEAT_FORMAT_MCH] && !standby_handle->frame_is_match[STANDBY_REPEAT_FORMAT_MCH]) {
         ALOGV("%s MCH check fail", __FUNCTION__);
         ret = 0;
+        goto EXIT;
     }
 
     if (standby_handle->output_port_enable[STANDBY_REPEAT_FORMAT_DAP] && !standby_handle->frame_is_match[STANDBY_REPEAT_FORMAT_DAP]) {
         ALOGV("%s DAP check fail", __FUNCTION__);
         ret = 0;
+        goto EXIT;
     }
 
     if (standby_handle->output_port_enable[STANDBY_REPEAT_FORMAT_DD] && !standby_handle->frame_is_match[STANDBY_REPEAT_FORMAT_DD]) {
         ALOGV("%s DD check fail", __FUNCTION__);
         ret = 0;
+        goto EXIT;
     }
 
     if (standby_handle->output_port_enable[STANDBY_REPEAT_FORMAT_DDP] && !standby_handle->frame_is_match[STANDBY_REPEAT_FORMAT_DDP]) {
         ALOGV("%s DDP check fail", __FUNCTION__);
         ret = 0;
+        goto EXIT;
     }
 
     if (standby_handle->output_port_enable[STANDBY_REPEAT_FORMAT_MAT_UPPER]
@@ -247,6 +266,7 @@ int audio_continuous_standby_check(void *phandle) {
         ALOGV("%s MAT check fail", __FUNCTION__);
         ret = 0;
     }
+EXIT:
     ALOGV("%s ret %d", __FUNCTION__, ret);
     pthread_mutex_unlock(&standby_handle->lock);
     return ret;
