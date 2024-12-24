@@ -5589,6 +5589,7 @@ int out_write_dtv_stream_for_tunerframework(struct audio_stream_out *stream, con
                             Destroy_Dmx_AD_Audio(demux_handle);
                             /*need  clean dmx ad info when main dtv audiopath reset*/
                             dmx_info->ad_pid = -1;
+                            dmx_info->dual_decoder_support = 0;
                         }
                         Close_Dmx_Audio(demux_handle);
 
@@ -5599,11 +5600,6 @@ int out_write_dtv_stream_for_tunerframework(struct audio_stream_out *stream, con
                         Open_Dmx_Audio(&demux_handle,dmx_info->demux_id, dmx_info->security_mem_level);
                         Init_Dmx_Main_Audio(demux_handle, dmx_info->main_fmt, dmx_info->main_pid);
                         Start_Dmx_Main_Audio(demux_handle);
-                        if (dmx_info->dual_decoder_support) {
-                           Init_Dmx_AD_Audio(demux_handle, dmx_info->ad_fmt, dmx_info->ad_pid, 1);
-                           Start_Dmx_AD_Audio(demux_handle);
-                        }
-
                         cmd = (path_id << DVB_DEMUX_ID_BASE | AUDIO_DTV_PATCH_CMD_START);
                         dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_CONTROL, cmd);
                     } else {
