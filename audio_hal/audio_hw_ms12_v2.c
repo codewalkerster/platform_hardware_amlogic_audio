@@ -74,6 +74,9 @@
 #include "tv_patch_ctrl.h"
 #include "audio_hw_resource_mgr.h"
 
+//dolby truehd parser
+#include "aml_audio_truehdparser.h"
+
 #define DDP_MAX_BUFFER_SIZE 2560//dolby ms12 input buffer threshold
 #define CONVERT_ONEDB_TO_GAIN  1.122018f
 #define MS12_MAIN_INPUT_BUF_PCM_NS         (64000000LL)
@@ -118,7 +121,7 @@
 #define DUMP_MS12_INPUT_ASSOCIATE        0x800
 #define DUMP_MS12_INPUT_DEEP_BUF         0x1000
 
-
+#define AML_PARSED_TRUEHD_FILE           "/data/vendor/audiohal/aml_audio_parsed_truehd.raw"
 #define MS12_OUTPUT_SPEAKER_PCM_FILE     "/data/vendor/audiohal/ms12_speaker_pcm.raw"
 #define MS12_OUTPUT_SPDIF_PCM_FILE       "/data/vendor/audiohal/ms12_spdif_pcm.raw"
 #define MS12_OUTPUT_MC_PCM_FILE          "/data/vendor/audiohal/ms12_mc_pcm.raw"
@@ -2418,7 +2421,6 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12, bool set_non_continuous
     ms12->last_focus_is_bypass_ms12 = 0;
     audio_continuous_standby_close(&ms12->continuous_standby_handle);
 
-
     audio_continuous_standby_close(&ms12->continuous_standby_handle);
 
     audio_virtual_buf_close(&ms12->system_virtual_buf_handle);
@@ -2800,24 +2802,90 @@ int ac3_and_eac3_bypass_process(struct audio_stream_out *stream, void *buffer, s
     return 0;
 }
 
+static int dolby_mat_encoder_process(struct dolby_ms12_desc *ms12, void *buffer, size_t bytes, int *nbytes_consumed)
+{
+    int ret = 0;
+    int offset = 0;
+    unsigned char *pbuf = (unsigned char *)buffer;
+    struct bitstream_out_desc *bitstream_out = &ms12->bitstream_out[BITSTREAM_OUTPUT_A];
+
+    while (offset < bytes) {
+        ret = dolby_ms12_mat_encoder_process
+            (ms12->mat_enc_handle
+            , (const unsigned char *)(pbuf + offset)
+            , (bytes - offset)
+            , (const unsigned char *)ms12->mat_enc_out_buffer
+            , &ms12->mat_enc_out_bytes
+            , ms12->matenc_maxoutbufsize
+            , nbytes_consumed
+            );
+        ALOGV("[%s:%d] bytes %zu, offset %d, nbytes_consumed %d, mat_enc_out_bytes %d\n", __func__, __LINE__, bytes, offset, *nbytes_consumed, ms12->mat_enc_out_bytes);
+        if (ret) {
+            ALOGE("[%s:%d] mat_encoder_process error %d \n", __func__, __LINE__, ret);
+            if (get_ms12_dump_enable(DUMP_MS12_OUTPUT_BITSTREAM_MAT_WI_MLP)) {
+                dump_ms12_output_data(buffer, bytes, "/data/vendor/audiohal/mat_enc_error.thd");
+            }
+            /* try to re-init the mat encoder */
+            if (ms12->mat_enc_handle) {
+                dolby_ms12_mat_encoder_cleanup(ms12->mat_enc_handle);
+                ms12->mat_enc_handle = NULL;
+            }
+            break;
+        }
+
+        /* update the offset with the nbytes_consumed */
+        offset += *nbytes_consumed;
+
+        /* when (mat encoder output data(mat_enc_out_bytes) not 0), send them to alsa */
+        if (ms12->mat_enc_out_bytes) {
+            endian16_convert(ms12->mat_enc_out_buffer, ms12->mat_enc_out_bytes);
+            aml_audio_spdifout_process
+                        (bitstream_out->spdifout_handle
+                        , ms12->mat_enc_out_buffer
+                        , ms12->mat_enc_out_bytes);
+            /*
+             * usage to dump the IEC61937 within MAT(TrueHD inside):
+             *        setenforce 0
+             *        mkdir -p /data/vendor/audiohal/
+             *        rm /data/vendor/audiohal/
+             *        chmod 777 /data/vendor/audiohal/
+             *        setprop vendor.media.audiohal.ms12dump 0x20
+             */
+            if (get_ms12_dump_enable(DUMP_MS12_OUTPUT_BITSTREAM_MAT_WI_MLP)) {
+                dump_ms12_output_data(ms12->mat_enc_out_buffer, ms12->mat_enc_out_bytes, MS12_OUTPUT_BITSTREAM_MAT_WI_MLP_FILE);
+            }
+            /* after write the IEC61937 data to hardware, reset it to zero position. */
+            ms12->mat_enc_out_bytes = 0;
+        }
+
+    }
+
+    return ret;
+
+}
+
+
 int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, size_t bytes) {
     int ret = 0;
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = aml_out->dev;
     struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    struct dolby_ms12_dec_desc *ms12_dec = aml_out->ms12_dec_handle;
     struct bitstream_out_desc *bitstream_out = &ms12->bitstream_out[BITSTREAM_OUTPUT_A];
     /*
      *only Dolby TrueHD should use Dolby MAT Encoder w/i MS12.
      */
     bool is_dolby_truehd = (aml_out->hal_internal_format == AUDIO_FORMAT_DOLBY_TRUEHD);
     audio_format_t output_format = AUDIO_FORMAT_IEC61937; //suppose MAT encoder always output IEC61937 format.
-    ALOGV("output_format=0x%x hal_format=0x%#x internal=0x%x", output_format, aml_out->hal_format, aml_out->hal_internal_format);
+    if (ms12->mat_enc_debug_enable) {
+        ALOGI("[%s:%d] output_format=0x%x, hal_format=0x%#x, internal=0x%x\n", __func__, __LINE__, output_format, aml_out->hal_format, aml_out->hal_internal_format);
+    }
     spdif_config_t spdif_config = { 0 };
     audio_format_t hal_internal_format = ms12_get_audio_hal_format(aml_out->hal_internal_format);
 
 
-    aml_out->ms12_dec_handle->is_bypass_ms12 = is_ms12_passthrough(stream);
-    if (aml_out->ms12_dec_handle->is_bypass_ms12
+    ms12_dec->is_bypass_ms12 = is_ms12_passthrough(stream);
+    if (ms12_dec->is_bypass_ms12
         && is_dolby_truehd) {
         /*
          * First of all, initialize the MAT Encoder with the b_lfract_precision(1)/b_chmod_locking(0)/b_iec_header(1).
@@ -2888,7 +2956,7 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
                     pthread_mutex_unlock(&adev->bitstream_lock);
                     return ret;
                 }
-                bitstream_out->is_bypass_ms12 = aml_out->ms12_dec_handle->is_bypass_ms12;
+                bitstream_out->is_bypass_ms12 = ms12_dec->is_bypass_ms12;
             }
             pthread_mutex_unlock(&adev->bitstream_lock);
         }
@@ -2911,68 +2979,46 @@ int dolby_truehd_bypass_process(struct audio_stream_out *stream, void *buffer, s
          * get the IEC61937 format audio data by the mat encoder, and write it to hardware.
          */
         if (ms12->mat_enc_handle && buffer && bytes) {
-            int offset = 0;
-            int nbytes_consumed = 0;
+            int parser_offset = 0;
+            int parser_consumed = 0;
             unsigned char *pbuf = (unsigned char *)buffer;
-            memset(ms12->mat_enc_out_buffer, 0, ms12->matenc_maxoutbufsize);
-            int write_size = 0;
-            while (offset < bytes) {
-                /*if the size is too big, mat encoder will meet error*/
-                if ((bytes - offset) >= 4096) {
-                    write_size = 4096;
-                } else {
-                    write_size = (bytes - offset);
-                }
-                ret = dolby_ms12_mat_encoder_process
-                    (ms12->mat_enc_handle
-                    , (const unsigned char *)(pbuf + offset)
-                    , write_size
-                    , (const unsigned char *)ms12->mat_enc_out_buffer
-                    , &ms12->mat_enc_out_bytes
-                    , ms12->matenc_maxoutbufsize
-                    , &nbytes_consumed
-                    );
-                if (ms12->mat_enc_debug_enable) {
-                    ALOGI("mat_encoder_process error %d bytes %zu offset %d nbytes_consumed %d mat_enc_out_bytes %d\n",
-                        ret, bytes, offset, nbytes_consumed, ms12->mat_enc_out_bytes);
-                }
-
-                if (ret) {
-                    ALOGE("mat_encoder_process error %d bytes %zu offset %d nbytes_consumed %d mat_enc_out_bytes %d\n",
-                        ret, bytes, offset, nbytes_consumed, ms12->mat_enc_out_bytes);
-                    /* try to re-init the mat encoder */
-                    if (ms12->mat_enc_handle) {
-                        dolby_ms12_mat_encoder_cleanup(ms12->mat_enc_handle);
-                        ms12->mat_enc_handle = NULL;
-                    }
+            void *frame_buffer = NULL;
+            int frame_buffer_size = 0;
+            while (parser_offset < bytes) {
+                /*truehd parser: Split the data into individual access units*/
+                ret = aml_truehd_parser_process(
+                    ms12_dec->truehd_parser_handle
+                    , (const unsigned char *)(pbuf + parser_offset)
+                    , (bytes - parser_offset)
+                    , &parser_consumed
+                    , &frame_buffer
+                    , &frame_buffer_size);
+                /*parse fail or not enough data.*/
+                if (ret < 0) {
+                    ALOGE("[%s:%d] parse fail or not enough data! ret = %d", __func__, __LINE__, ret);
                     break;
                 }
-                /* update the offset with the nbytes_consumed */
-                offset += nbytes_consumed;
-
-                /* when (mat encoder output data(mat_enc_out_bytes) not 0), send them to alsa */
-                pthread_mutex_lock(&adev->bitstream_lock);
-                if (ms12->mat_enc_out_bytes) {
-                    endian16_convert(ms12->mat_enc_out_buffer, ms12->mat_enc_out_bytes);
-                    aml_audio_spdifout_process
-                                (bitstream_out->spdifout_handle
-                                , ms12->mat_enc_out_buffer
-                                , ms12->mat_enc_out_bytes);
-                    /*
-                     * usage to dump the IEC61937 within MAT(TrueHD inside):
-                     *        setenforce 0
-                     *        mkdir -p /data/vendor/audiohal/
-                     *        rm /data/vendor/audiohal/
-                     *        chmod 777 /data/vendor/audiohal/
-                     *        setprop vendor.media.audiohal.ms12dump 0x20
-                     */
-                    if (get_ms12_dump_enable(DUMP_MS12_OUTPUT_BITSTREAM_MAT_WI_MLP)) {
-                        dump_ms12_output_data(ms12->mat_enc_out_buffer, ms12->mat_enc_out_bytes, MS12_OUTPUT_BITSTREAM_MAT_WI_MLP_FILE);
-                    }
-                    /* after write the IEC61937 data to hardware, reset it to zero position. */
-                    ms12->mat_enc_out_bytes = 0;
+                if (ms12->mat_enc_debug_enable) {
+                    ALOGI("[%s:%d] bytes %zu, parser_offset %d, parser_consumed %d, mlp access unit length %d\n",
+                       __func__, __LINE__ , bytes, parser_offset, parser_consumed, frame_buffer_size);
                 }
-                pthread_mutex_unlock(&adev->bitstream_lock);
+
+                /* update the parser_offset with the parser_consumed */
+                parser_offset += parser_consumed;
+
+                //Arriving here indicates that frame_buffer already includes one access unit.
+                if (frame_buffer && (frame_buffer_size > 0)) {
+                    if (get_ms12_dump_enable(DUMP_MS12_OUTPUT_BITSTREAM_MAT_WI_MLP)) {
+                        dump_ms12_output_data(frame_buffer, frame_buffer_size, AML_PARSED_TRUEHD_FILE);
+                    }
+                    int nbytes_matenc_consumed = 0;
+                    ret = dolby_mat_encoder_process(ms12, frame_buffer, frame_buffer_size, &nbytes_matenc_consumed);
+
+                    if (ret) {
+                        ALOGE("[%s:%d] mat enc error! ret %d, nbytes_matenc_consumed %d\n", __func__, __LINE__ , ret, nbytes_matenc_consumed);
+                        continue;
+                    }
+                }
 
             }
         }
@@ -4978,6 +5024,7 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
 
     aml_ac3_parser_open(&ms12_dec->ac3_parser_handle);
     aml_ac3_parser_open(&ms12_dec->info_ac3_parser_handle);
+    aml_truehd_parser_open(&ms12_dec->truehd_parser_handle);
     aml_spdif_decoder_open(&ms12_dec->spdif_dec_handle);
     aml_spdif_decoder_open(&ms12_dec->info_spdif_dec_handle);
     aml_ms12_bypass_open(&ms12_dec->ms12_bypass_handle);
@@ -5029,6 +5076,8 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
         speed_info->speed_handle = NULL;
     }
 
+    aml_truehd_parser_close(ms12_dec->truehd_parser_handle);
+    ms12_dec->truehd_parser_handle = NULL;
     aml_ac3_parser_close(ms12_dec->ac3_parser_handle);
     ms12_dec->ac3_parser_handle = NULL;
     aml_spdif_decoder_close(ms12_dec->spdif_dec_handle);

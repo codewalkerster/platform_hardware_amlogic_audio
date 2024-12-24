@@ -355,6 +355,7 @@ struct dolby_ms12_dec_desc {
     void * info_ac3_parser_handle;
     void * spdif_dec_handle;
     void * info_spdif_dec_handle;
+    void * truehd_parser_handle;
     /*ms12 main input information */
     void * ms12_bypass_handle;
     bool is_bypass_ms12;
