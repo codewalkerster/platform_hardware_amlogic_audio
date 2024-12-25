@@ -5062,6 +5062,13 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         }
     }
 
+    if (eDTSXLib == adev->dts_lib_type) {
+        if (strstr (keys, "dtsx_")) {
+            if (aml_dtsx_get_runtime_params(&adev->dts_x, keys, temp_buf) == 0)
+                return strdup(temp_buf);
+        }
+    }
+
     return strdup("");
 }
 

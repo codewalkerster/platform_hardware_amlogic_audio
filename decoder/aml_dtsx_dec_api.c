@@ -2171,6 +2171,26 @@ static int _dtsx_type1_relable_enable(dtsx_dec_t *dtsx_dec, int value)
     return ret;
 }
 
+int aml_dtsx_get_runtime_params(dtsx_dec_t *dtsx_dec, const char *keys, char *keys_values)
+{
+    int ret = 0;
+    int temp_value = 0;
+
+    if (strstr(keys, "dtsx_spk_drc")) {
+        if (_dtsx_config_params.drc_cut_value[DTSX_OUTPUT_SPK] == 0 && _dtsx_config_params.drc_boost_value[DTSX_OUTPUT_SPK] == 0) {
+            temp_value = 0;
+        } else {
+            temp_value = 1;
+        }
+        sprintf(keys_values, "dtsx_spk_drc=%d", temp_value);
+    } else {
+        ret = -1;
+        ALOGE("[%s:%d] DTSX unsupport get runtime params:%s", __func__, __LINE__, keys);
+    }
+
+    return ret;
+}
+
 int aml_dtsx_update_runtime_params(dtsx_dec_t *dtsx_dec, struct str_parms *parms)
 {
     int ret = -1;
@@ -2179,9 +2199,12 @@ int aml_dtsx_update_runtime_params(dtsx_dec_t *dtsx_dec, struct str_parms *parms
     ret = str_parms_get_int(parms, "dtsx_spk_drc", &val);
     if (ret >= 0 ) {
         if (val == 1) {
-            _dtsx_spk_drc_enable(dtsx_dec, true);
+            /* DTSX DRC on/off does not support dynamic settings, so the effect of dynamic switching is achieved by setting boost and cut. */
+            _dtsx_spk_drc_cut_value(dtsx_dec, 100);
+            _dtsx_spk_drc_boost_value(dtsx_dec, 100);
         } else {
-            _dtsx_spk_drc_enable(dtsx_dec, false);
+            _dtsx_spk_drc_cut_value(dtsx_dec, 0);
+            _dtsx_spk_drc_boost_value(dtsx_dec, 0);
         }
         ALOGI("[%s:%d] dtsx_spk_drc:%d", __func__, __LINE__, val);
         return ret;

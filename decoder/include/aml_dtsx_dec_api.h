@@ -172,6 +172,7 @@ int dtsx_get_out_ch_internal(dtsx_dec_t *dtsx_dec);
 */
 int dtsx_set_out_ch_internal(dtsx_dec_t *dtsx_dec, int ch_num);
 int aml_dtsx_update_runtime_params(dtsx_dec_t *dtsx_dec, struct str_parms *parms);
+int aml_dtsx_get_runtime_params(dtsx_dec_t *dtsx_dec, const char *keys, char *keys_values);
 
 extern aml_dec_func_t aml_dtsx_func;
 
