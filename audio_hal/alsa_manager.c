@@ -1277,11 +1277,6 @@ size_t aml_alsa_output_write_new(void *handle, const void *buffer, size_t bytes)
         alsa_write_new_rate_control(alsa_handle);
     }
 #endif
-    if (adev->reset_hdmitx_audio && ((alsa_handle->format == adev->sink_format) || (alsa_handle->format == AUDIO_FORMAT_E_AC3))) {
-        pcm_stop(alsa_handle->pcm);
-        adev->reset_hdmitx_audio = false;
-        ALOGI("%s reset spdif alsa and hdmitx would reconfig audio pipe", __func__);
-    }
 
     if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
         check_audio_level(audio_type, buffer, bytes);

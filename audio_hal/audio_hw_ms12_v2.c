@@ -713,6 +713,21 @@ static void ms12_close_all_spdifout(struct dolby_ms12_desc *ms12) {
     pthread_mutex_unlock(&adev->bitstream_lock);
 }
 
+static void ms12_reset_all_spdifout(struct dolby_ms12_desc *ms12) {
+    int i = 0;
+    struct aml_audio_device *adev = adev_get_handle();
+    pthread_mutex_lock(&adev->bitstream_lock);
+    for (i = 0; i < BITSTREAM_OUTPUT_CNT; i++) {
+        struct bitstream_out_desc * bitstream_out = &ms12->bitstream_out[i];
+        if (bitstream_out->spdifout_handle) {
+            aml_audio_spdifout_reset_hdmitx(bitstream_out->spdifout_handle);
+
+        }
+    }
+    pthread_mutex_unlock(&adev->bitstream_lock);
+}
+
+
 #if 0
 void dynamic_set_dolby_ms12_drc_parameters(struct dolby_ms12_desc *ms12)
 {
@@ -3075,11 +3090,23 @@ static int ms12_output_master(void *buffer, void *priv_data, size_t size, audio_
 
     /*we update the optical format in pcm, because it is always output*/
     /*In netflix llp aaudio, always output pcm. Close spdifout will affect stereo pcm output*/
-    if (ms12->optical_format != adev->optical_format || (ms12->b_encoder_reset && !netflix_llp_mode)) {
-        ALOGI("ms12 optical format change from 0x%x to  0x%x\n",adev->ms12.optical_format,adev->optical_format);
+    if (ms12->optical_format != adev->optical_format ||
+        (ms12->b_encoder_reset && !netflix_llp_mode)) {
+        if (ms12->optical_format != adev->optical_format) {
+            ALOGI("ms12 optical format change from 0x%x to  0x%x\n",adev->ms12.optical_format,adev->optical_format);
+        } else {
+            ALOGI("%s", __func__);
+        }
         ms12->optical_format= adev->optical_format;
         ms12_close_all_spdifout(ms12);
         ms12->b_encoder_reset = false;
+
+    }
+
+    if (adev->reset_hdmitx_audio) {
+        adev->reset_hdmitx_audio = false;
+        ms12_reset_all_spdifout(ms12);
+        ALOGI("%s reset hdmitx", __func__);
     }
 
     if (adev->continuous_audio_mode) {

@@ -810,14 +810,35 @@ int aml_audio_spdifout_close(void *phandle)
 int aml_audio_spdifout_mute(void *phandle, bool b_mute) {
     struct spdifout_handle *spdifout_phandle = (struct spdifout_handle *)phandle;
     if (phandle == NULL) {
-        ALOGE("[%s:%d] invalid param, phandle:%p, spdif_enc_handle:%p", __func__, __LINE__,
-            phandle, spdifout_phandle->spdif_enc_handle);
+        ALOGE("[%s:%d] invalid param, phandle:%p", __func__, __LINE__,
+            phandle);
         return -1;
     }
 
     spdifout_phandle->b_mute = b_mute;
     return 0;
 }
+
+int aml_audio_spdifout_reset_hdmitx(void *phandle) {
+    int ret = 0;
+
+    struct spdifout_handle *spdifout_phandle = (struct spdifout_handle *)phandle;
+    struct aml_audio_device *aml_dev = (struct aml_audio_device *)adev_get_handle();
+    int device_id = -1;
+    void *alsa_handle = NULL;
+    ALOGI("%s enter", __func__);
+    if (phandle == NULL) {
+        ALOGE("[%s:%d] invalid param, phandle:%p", __func__, __LINE__,
+            phandle);
+        return -1;
+    }
+    device_id = spdifout_phandle->device_id;
+    alsa_handle = aml_dev->alsa_handle[device_id];
+    ret = aml_alsa_output_stop_new(alsa_handle);
+
+    return ret;
+}
+
 
 int aml_audio_spdifout_pause(void *phandle) {
     int ret = 0;

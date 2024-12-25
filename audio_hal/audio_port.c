@@ -1309,6 +1309,13 @@ static ssize_t multich_output_port_write(output_port *mc_port, void *buffer, int
     int64_t system_time_diff_ms = 0;
     int calculate_delay_ms = 0;
 
+
+    if (mc_port->pcm_restart) {
+        aml_audio_spdifout_reset_hdmitx(mc_port->spdifout_handle);
+        AM_LOGI("restart mc pcm device");
+        mc_port->pcm_restart = false;
+    }
+
     delay_ms = aml_audio_spdifout_get_delay(mc_port->spdifout_handle);
     if (delay_ms < 0) {
         delay_ms = 0;

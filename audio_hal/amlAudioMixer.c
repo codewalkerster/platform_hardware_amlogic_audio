@@ -2297,6 +2297,7 @@ int mixer_set_padding_size(
 int mixer_outport_pcm_restart(struct amlAudioMixer *audio_mixer)
 {
     output_port *out_port = NULL;
+    output_port *mc_out_port = NULL;
     MIXER_OUTPUT_PORT port_index = mixer_get_cur_outport(audio_mixer, &out_port);
     if (port_index == MIXER_OUTPUT_PORT_INVAL) {
         AM_LOGE("%s :mixer_get_cur_outport is fail", __func__);
@@ -2309,6 +2310,10 @@ int mixer_outport_pcm_restart(struct amlAudioMixer *audio_mixer)
     * Or the sink device will no sound when it just only support pcm.
     **/
     outport_pcm_restart(out_port);
+    mc_out_port = audio_mixer->out_ports[MIXER_OUTPUT_PORT_MULTI_PCM];
+    if (mc_out_port) {
+        outport_pcm_restart(mc_out_port);
+    }
     pthread_mutex_unlock(&audio_mixer->outport_locks[port_index]);
     return 0;
 }

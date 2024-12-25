@@ -292,9 +292,15 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, const void *buffer
 
             if (aml_out->optical_format != adev->optical_format ||
                 adev->sink_format_changed) {
-                ALOGI("optical format change from 0x%x --> 0x%x", aml_out->optical_format, adev->optical_format);
+                if (aml_out->optical_format != adev->optical_format) {
+                    ALOGI("optical format change from 0x%x --> 0x%x", aml_out->optical_format, adev->optical_format);
+                } else {
+                    ALOGI("%s", __func__);
+                }
+
                 aml_out->optical_format = adev->optical_format;
                 adev->sink_format_changed = false;
+
                 if (aml_out->spdifout_handle != NULL) {
                     aml_audio_spdifout_close(aml_out->spdifout_handle);
                     aml_out->spdifout_handle = NULL;
@@ -304,6 +310,18 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, const void *buffer
                     aml_out->spdifout2_handle = NULL;
                 }
 
+            }
+
+            if (adev->reset_hdmitx_audio) {
+                ALOGI("%s reset hdmitx", __func__);
+                adev->reset_hdmitx_audio = false;
+                if (aml_out->spdifout_handle != NULL) {
+                    aml_audio_spdifout_reset_hdmitx(aml_out->spdifout_handle);
+
+                }
+                if (aml_out->spdifout2_handle != NULL) {
+                    aml_audio_spdifout_reset_hdmitx(aml_out->spdifout2_handle);
+                }
             }
 
             // write pcm data
