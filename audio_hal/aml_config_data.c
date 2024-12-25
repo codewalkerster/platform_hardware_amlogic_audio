@@ -123,6 +123,8 @@ void aml_audio_board_config_init(struct audio_board_config *config)
         config->DTS_output_ch = aml_get_jason_int_value("DTS_Output_Channels", 0);
         config->cpux_affinity_support = aml_get_jason_int_value("CPUX_Affinity_Support", -1);
         config->sbr_spk_ott_hbr_same_tdm = aml_get_jason_int_value("SBR_Speaker_OTT_HBR_Same_TDM", 0);
+        /* get config of alsa device id for builtinmic, default -1 for using pdm device */
+        config->builtinmic_alsa_dev_id = aml_get_jason_int_value("Builtinmic_Alsa_Dev_Id", -1);
     }
 }
 

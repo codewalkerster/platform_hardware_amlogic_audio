@@ -464,6 +464,19 @@ static int check_input_parameters(uint32_t sample_rate, audio_format_t format, i
     if ((devices & AUDIO_DEVICE_IN_ALL_USB) || (devices & AUDIO_DEVICE_IN_HDMI_ARC))
         return 0;
 
+    /* config should be fixed when do not support/use pdm for builtinmic */
+    if (devices & AUDIO_DEVICE_IN_BUILTIN_MIC) {
+        struct aml_audio_device *adev = aml_adev_get_handle();
+        if (adev && -1 != adev->board_config.builtinmic_alsa_dev_id) {
+            if (DEFAULT_OUT_SAMPLING_RATE != sample_rate
+                || AUDIO_FORMAT_PCM_16_BIT != format
+                || 2 != channel_count) {
+                ALOGE("%s: fix config when builtinmic device is not pdm", __func__);
+                return -EINVAL;
+            }
+        }
+    }
+
     if (format != AUDIO_FORMAT_PCM_16_BIT && format != AUDIO_FORMAT_PCM_32_BIT) {
         ALOGE("%s: unsupported AUDIO FORMAT (%d)", __func__, format);
         return -EINVAL;

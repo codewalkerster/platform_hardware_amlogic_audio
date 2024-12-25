@@ -42,6 +42,15 @@ struct audio_board_config {
       1: Soundbar, Speaker(8ch-PCM) vs HDMI(MAT), HBR use a same TDM.
     */
     int sbr_spk_ott_hbr_same_tdm;
+
+    /*
+      some models of chips do not support pdm
+      some projects do not use pdm for builtinmic
+      define alsa device id for builtinmic
+      -1: use default id of pdm device (default -1)
+      >= 0: specific alsa device id for builtinmic
+    */
+    int builtinmic_alsa_dev_id;
 };
 
 int aml_audio_config_parser();
