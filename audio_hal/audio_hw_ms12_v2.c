@@ -3066,6 +3066,7 @@ int mat_bypass_process(struct audio_stream_out *stream, void *buffer, size_t byt
     if (ms12_dec->is_bypass_ms12
         && is_mat) {
 
+        pthread_mutex_lock(&adev->bitstream_lock);
         if (bytes != 0 && buffer != NULL) {
             /*
              * if the format/sample-rate are changed, restart the alsa-card.
@@ -3096,6 +3097,7 @@ int mat_bypass_process(struct audio_stream_out *stream, void *buffer, size_t byt
                 ret = aml_audio_spdifout_open(&bitstream_out->spdifout_handle, &spdif_config);
                 if (ret != 0) {
                     ALOGE("%s open spdif out failed\n", __func__);
+                    pthread_mutex_unlock(&adev->bitstream_lock);
                     return ret;
                 }
                 bitstream_out->is_bypass_ms12 = ms12_dec->is_bypass_ms12;
@@ -3106,11 +3108,14 @@ int mat_bypass_process(struct audio_stream_out *stream, void *buffer, size_t byt
         /*
          * control the mute flag to mute/unmute the spdif out.
          */
-        if (ms12->main_volume < FLOAT_ZERO) {
-            aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 1);
-        } else {
-            aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 0);
+        if (bitstream_out->spdifout_handle) {
+            if (ms12->main_volume < FLOAT_ZERO) {
+                aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 1);
+            } else {
+                aml_audio_spdifout_mute(bitstream_out->spdifout_handle, 0);
+            }
         }
+        pthread_mutex_unlock(&adev->bitstream_lock);
         /* send these IEC61937 data to alsa */
         aml_audio_spdifout_process(bitstream_out->spdifout_handle, buffer, bytes);
     }
