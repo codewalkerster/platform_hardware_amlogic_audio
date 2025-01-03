@@ -971,7 +971,6 @@ struct dsp_ffv_in {
     size_t fetched_size; /* record the amount of data obtained by the app from fetch_buffer */
     void* fetch_buffer; /* store keyword data recorded during pending status */
     int sound_trigger_handle; /* the handle returned by sound_trigger_open_for_streaming */
-    uint64_t total_read; /* the total number of frames read on the DSP side */
     struct timespec ts; /* get the timestamp on the arm side */
 };
 #endif

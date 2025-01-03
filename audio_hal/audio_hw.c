@@ -2742,7 +2742,7 @@ static ssize_t in_read_from_hw(struct audio_stream_in *stream, void* buffer, siz
         in->frames_read += in_frames;
 #ifdef LOWPOWER_DSP_FFV
         if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC)
-            in->timestamp_nsec = pcm_get_timestamp_dsp(in->dsp_ffv_in_t->sound_trigger_handle, in->config.rate, 0 /*isOutput*/, in->dsp_ffv_in_t->total_read, in->dsp_ffv_in_t->ts);
+            in->timestamp_nsec = pcm_get_timestamp_dsp(in->dsp_ffv_in_t->sound_trigger_handle, in->config.rate, 0 /*isOutput*/, in->frames_read, in->dsp_ffv_in_t->ts);
 #endif
     }
     bool mic_muted = false;

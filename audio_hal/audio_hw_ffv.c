@@ -98,6 +98,9 @@ ssize_t in_read_from_fetch_buf(struct audio_stream_in *stream, void* buffer, siz
         if (getprop_bool("vendor.media.audiohal.indump")) {
             aml_dump_audio_bitstreams("/data/fetch_buffer.raw", buffer, rd);
         }
+        if (rd >= 0) {
+            in->frames_read += rd / (pcm_format_to_bits(in->config.format) >> 3) * in->config.channels;
+        }
         in->dsp_ffv_in_t->fetched_size += rd;
         in->dsp_ffv_in_t->fetch_size -= rd;
         if (in->dsp_ffv_in_t->fetch_size == 0) {
@@ -121,7 +124,6 @@ int sound_trigger_read(struct aml_stream_in *in, void* buffer, size_t bytes, str
     }
     clock_gettime(CLOCK_MONOTONIC, ts);
     ret = adev->dsp_ffv->sound_trigger_read_samples(in->dsp_ffv_in_t->sound_trigger_handle, buffer, bytes);
-    in->dsp_ffv_in_t->total_read += ret / audio_stream_in_frame_size(&in->stream);
     if (ret <= 0) {
         ALOGE("fail to read ret=%d\n", ret);
     }
@@ -133,7 +135,6 @@ void dsp_ffv_stream_init(struct aml_stream_in *in)
     struct aml_audio_device *adev = in->dev;
 
     in->dsp_ffv_in_t = aml_audio_calloc(1, sizeof(struct dsp_ffv_in));
-    in->dsp_ffv_in_t->total_read = 0;
     in->dsp_ffv_in_t->fetch_buffer = NULL;
     in->dsp_ffv_in_t->sound_trigger_handle = 0;
     if ((in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) && adev->dsp_ffv->signal_thread) {
