@@ -66,8 +66,6 @@ void switch_to_suspend(int sound_trigger_hdl_num);
 
 void set_sound_trigger_cmd(int x);
 int get_sound_trigger_cmd(void);
-void get_vwe_wakeup_event(bool* signal_thread);
-
 void callback_wakeup_event(void);
 
 #endif

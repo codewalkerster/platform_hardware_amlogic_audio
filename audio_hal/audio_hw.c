@@ -8332,6 +8332,11 @@ static int adev_uevent_callback(int uevent_type) {
             /*reset pcm data output*/
             adev->raw_to_pcm_flag = true;
             break;
+        case UEVENT_TYPE_VMODE_GET:
+#ifdef LOWPOWER_DSP_FFV
+            get_vwe_wakeup_event(adev);
+#endif
+            break;
         default:
         break;
     }

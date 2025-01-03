@@ -54,6 +54,7 @@ struct aml_uevent_item {
 
 static struct aml_uevent_item uevent_list[] = {
     { UEVENT_TYPE_VMODE_CHANGE, UEVENT_HDMITX_VMODE_CHANGE },
+    { UEVENT_TYPE_VMODE_GET, UEVENT_WAKEUP_VMODE_GET },
 };
 
 

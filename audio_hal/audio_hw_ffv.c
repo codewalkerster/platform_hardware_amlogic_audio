@@ -74,10 +74,7 @@ int sound_trigger_to_suspend(struct aml_stream_in *in)
     if ((in->dsp_ffv_in_t->sound_trigger_handle > 0) && (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC)) {
         switch_to_suspend(in->dsp_ffv_in_t->sound_trigger_handle);
         adev->dsp_ffv->signal_thread = true;
-        int r = pthread_create(&adev->dsp_ffv->suspend_task, NULL, get_vwe_wakeup_event, &adev->dsp_ffv->signal_thread);
-        if (r != 0) {
-            ALOGE("fail to create suspend task, r=%d\n", r);
-        }
+        set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
     }
     return 0;
 }
@@ -139,7 +136,6 @@ void dsp_ffv_stream_init(struct aml_stream_in *in)
     in->dsp_ffv_in_t->sound_trigger_handle = 0;
     if ((in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) && adev->dsp_ffv->signal_thread) {
         adev->dsp_ffv->signal_thread = false;
-        pthread_join(adev->dsp_ffv->suspend_task, NULL);
     }
 }
 
@@ -203,4 +199,15 @@ void dsp_ffv_dev_deinit(struct aml_audio_device *adev)
     if (adev->dsp_ffv)
         aml_audio_free(adev->dsp_ffv);
 }
+
+void get_vwe_wakeup_event(struct aml_audio_device *adev)
+{
+    if (adev->dsp_ffv->signal_thread) {
+        callback_wakeup_event();
+        set_sound_trigger_cmd(SOUND_TRIGGER_WAKEUP_KEYWORD);
+    } else {
+        set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
+    }
+}
+
 

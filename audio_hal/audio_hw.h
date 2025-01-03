@@ -321,9 +321,8 @@ struct dsp_ffv_dev {
     int                     (*sound_trigger_open_for_streaming)();
     size_t                  (*sound_trigger_read_samples)(int, void*, size_t);
     int                     (*sound_trigger_close_for_streaming)(int);
-    /* if signal_thread is true, suspend_task thread has started.*/
+    /* if signal_thread is true, the system enters the suspended state.*/
     bool signal_thread;
-    pthread_t suspend_task;
     /* parameters of suspend_mode node */
     int suspend_mode_fd;
     int suspend_mode_size;

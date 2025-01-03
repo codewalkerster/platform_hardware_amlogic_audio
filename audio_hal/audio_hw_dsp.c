@@ -352,24 +352,4 @@ void switch_to_suspend(int sound_trigger_hdl_num)
     xAudio_Ipc_Deinit(h);
 }
 
-void get_vwe_wakeup_event(bool* signal_thread)
-{
-    int wakeup_event = SOUND_TRIGGER_DEFAULT;
-    while (1) {
-        wakeup_event = aml_get_vwe_wakeup_event();
-        ALOGI("%s wakeup_event=%d signal_thread=%d", __func__, wakeup_event, *signal_thread);
-        if ((wakeup_event == SOUND_TRIGGER_WAKEUP_KEYWORD) || (*signal_thread == false))
-            break;
-        else if (wakeup_event == -1) {
-            ALOGE("get vwe wakeup event failed");
-            break;
-        }
-        usleep(100000);
-    }
-    if (wakeup_event == SOUND_TRIGGER_WAKEUP_KEYWORD) {
-        callback_wakeup_event();
-    }
-    set_sound_trigger_cmd(wakeup_event);
-}
-
 

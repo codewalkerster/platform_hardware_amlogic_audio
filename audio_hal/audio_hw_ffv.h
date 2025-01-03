@@ -29,6 +29,7 @@ void dsp_ffv_stream_deinit(struct aml_stream_in *in);
 
 void dsp_ffv_dev_init(struct aml_audio_device *adev);
 void dsp_ffv_dev_deinit(struct aml_audio_device *adev);
+void get_vwe_wakeup_event(struct aml_audio_device *adev);
 
 #endif
 #endif

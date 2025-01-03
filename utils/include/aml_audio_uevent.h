@@ -18,9 +18,12 @@
 #define __AML_AUDIO_UEVENT_H__
 
 #define UEVENT_HDMITX_VMODE_CHANGE "hdmitx_vmode_audio="
+#define UEVENT_WAKEUP_VMODE_GET "vad_wakeup="
+
 
 enum {
     UEVENT_TYPE_VMODE_CHANGE = 0,
+    UEVENT_TYPE_VMODE_GET = 1,
 };
 
 typedef int (*uevent_callback_t)(int event_type);
