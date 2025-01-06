@@ -6228,13 +6228,11 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, const void *buf
 
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
         if (ms12->ms12_main_stream_out && ms12->ms12_main_stream_out->stream_status != STREAM_STANDBY) {
-            pthread_mutex_lock(&ms12->ms12_main_stream_out->lock);
             if (ms12->ms12_main_stream_out != aml_out && ms12->ms12_main_stream_out->is_ms12_main_decoder) {
                 ALOGI("%s main stream is not same, release the old one =%p  new =%p ", __func__, ms12->ms12_main_stream_out, aml_out);
                 out_standby_new((struct audio_stream *)ms12->ms12_main_stream_out);
                 close_ms12_output_main_stream((struct audio_stream_out *)ms12->ms12_main_stream_out);
             }
-            pthread_mutex_unlock(&ms12->ms12_main_stream_out->lock);
         }
     }
 
