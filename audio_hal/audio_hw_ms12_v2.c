@@ -1541,6 +1541,7 @@ int get_the_dolby_ms12_prepared(
     set_ms12_scheduler_sleep(ms12, true);
     ms12->scheduler_run_count = 0;
     hdmi_descs = get_arc_hdmi_cap(adev);
+    aml_out->trace_last_write_time_ms = 0;
 
     /* only enable mc output when it supports multi channel */
     // For netflix apk, DDP/MAT and mc-pcm will not exist at the same time.
@@ -3422,6 +3423,14 @@ int stereo_pcm_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_i
         dump_ms12_output_data(buffer, size, MS12_OUTPUT_SPDIF_PCM_FILE);
     }
 
+    if (get_debug_value(AML_DEBUG_AUDIOHAL_DETECT_ZERO_DATA)) {
+        if (ms12_info->data_type == AUDIO_FORMAT_PCM_32_BIT) {
+            aml_check_buffer_zero_data("stereo_pcm", buffer, size, 2, AUDIO_FORMAT_PCM_32_BIT);
+        } else {
+            aml_check_buffer_zero_data("stereo_pcm", buffer, size, 2, AUDIO_FORMAT_PCM_16_BIT);
+        }
+    }
+
     // Soudbar device, 1 DAP Effect is OFF. 2. adev set param kvpairs="hal_param_soundbar_mode=1"
     if (!adev->effect_ctrl.dap_enable  && is_SBR(adev)) {
         if (adev->is_alsa_device_conflict) {
@@ -4829,6 +4838,7 @@ static void *dolby_ms12_threadloop(void *data)
             } else {
                 ALOGD("%s wait ms12 semaphore successful, currently wakedup.\n", __FUNCTION__);
             }
+            aml_out->trace_last_write_time_ms = 0;
         }
     }
     ALOGI("%s remove   ms12 stream %p", __func__, aml_out);

@@ -284,6 +284,7 @@ int aml_audio_ms12_render(struct audio_stream_out *stream, void *abuffer)
              aml_hwsync_wait_video_drop(hw_sync, apts64);
              aml_out->is_waiting_video = false;
              hw_sync->wait_video_done = true;
+             aml_out->trace_last_write_time_ms = 0;
          } else {
              aml_hwsync_wrap_is_amaster(hw_sync, &amaster_mode);
              if (!amaster_mode) {

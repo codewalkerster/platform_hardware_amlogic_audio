@@ -1012,6 +1012,10 @@ static ssize_t output_port_write_alsa(output_port *port, void *buffer, int bytes
         if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
             check_audio_level("alsa_out", buffer, written);
         }
+        if (get_debug_value(AML_DEBUG_AUDIOHAL_DETECT_ZERO_DATA)) {
+            aml_check_buffer_zero_data("alsa_out", buffer, written, port->cfg.channelCnt, port->cfg.format);
+        }
+
         bytes_to_write -= written;
     } while (bytes_to_write > 0);
 

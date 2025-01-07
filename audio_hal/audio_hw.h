@@ -619,6 +619,7 @@ struct aml_audio_device {
     uint32_t streamCount;
     bool reset_hdmitx_audio;
     bool is_dtg_case;//dtg case at the UK
+    void *zero_data_detect_list;
 };
 
 struct meta_data {
@@ -910,6 +911,7 @@ struct aml_stream_out {
     struct ring_buffer *input_cache_rbuffer;
     int input_cache_frames;
     int input_start_threshold;
+    int64_t trace_last_write_time_ms;
 };
 
 #ifdef LOWPOWER_DSP_FFV

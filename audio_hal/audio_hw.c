@@ -1222,6 +1222,7 @@ static int out_pause_new (struct audio_stream_out *stream)
         }
     }
     aml_out->write_count = 0;
+    aml_out->trace_last_write_time_ms = 0;
 
     pthread_mutex_lock (&aml_dev->lock);
     pthread_mutex_lock (&aml_out->lock);
@@ -1435,6 +1436,7 @@ static int out_flush_new (struct audio_stream_out *stream)
     out->input_bytes_size = 0;
     out->last_frames_when_paused = 0;
     out->last_timestamp_valid = false;
+    out->trace_last_write_time_ms = 0;
 
     aml_audio_trace_int("out_flush_new", 1);
     out->write_count = 0;
@@ -5481,6 +5483,7 @@ int out_standby_new(struct audio_stream *stream)
     AM_LOGD("io %d: out:%p streamType:%s", aml_out->io_handle, aml_out, streamType2Str(aml_out->streamType));
 
     aml_audio_trace_int("out_standby_new", 1);
+    aml_out->trace_last_write_time_ms = 0;
     if (aml_out->stream_status == STREAM_STANDBY) {
         ALOGI("already standby, do nothing");
         aml_audio_trace_int("out_standby_new", 0);
@@ -5990,6 +5993,19 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
     /*for ms12 continuous mode, we need update status here, instead of in hw_write*/
     if (aml_out->stream_status == STREAM_STANDBY && continuous_mode(adev)) {
         aml_out->stream_status = STREAM_HW_WRITING;
+    }
+
+    if (get_debug_value(AML_DEBUG_AUDIOHAL_DETECT_ZERO_DATA)) {
+        int max_diff_ms = property_get_int32(AML_STREAM_WRITE_MAX_TIME_MS_PROP, 0);
+        int64_t curr_time_ms = aml_gettime()/1000;
+        int64_t diff_time_ms = curr_time_ms - aml_out->trace_last_write_time_ms;
+
+        if (aml_out->trace_last_write_time_ms > 0 && max_diff_ms > 0 && (diff_time_ms >= max_diff_ms)) {
+            aml_audio_trace_int("main_write_gap", diff_time_ms);
+            ALOGI("%s : atrace name(value) : %s %" PRId64 "", __func__, "main_write_gap", diff_time_ms);
+            property_set(AML_TRACE_STREAM_ZERO_PROP, "1");
+        }
+        aml_out->trace_last_write_time_ms = curr_time_ms;
     }
 
     /* here to check if the audio HDMI ARC format updated. */
@@ -7803,6 +7819,7 @@ static int adev_close(hw_device_t *device)
     pthread_mutex_destroy(&adev->streamList_MutexLock);
 
     destroy_async_write_thread();
+    aml_deinit_zero_detect_list(&adev->zero_data_detect_list);
 
     g_adev = NULL;
 
@@ -8518,6 +8535,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
 
     create_async_write_thread();
     adev->mmap_audio_manager = mmap_audio_new_manager(eDolbyMS12Lib == adev->dolby_lib_type);
+    aml_init_zero_detect_list(&adev->zero_data_detect_list);
 
     //adev_open_sys_resource_mgr(adev);
     aml_audio_uevent_open(adev_uevent_callback);

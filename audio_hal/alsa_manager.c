@@ -1165,6 +1165,18 @@ size_t aml_alsa_output_write_new(void *handle, const void *buffer, size_t bytes)
         snprintf(file_name, 128, "%s.%s", ALSA_OUTPUT_SPDIF_FILE, audio_type);
     }
 
+    if (get_debug_value(AML_DEBUG_AUDIOHAL_DETECT_ZERO_DATA)
+        && eDolbyDcvLib == adev->dolby_lib_type
+        && audio_is_linear_pcm(alsa_handle->format)) {
+        int channels = alsa_handle->config.channels;
+        audio_format_t format = AUDIO_FORMAT_PCM_16_BIT;
+
+        if (alsa_handle->config.format == PCM_FORMAT_S32_LE) {
+            format = AUDIO_FORMAT_PCM_32_BIT;
+        }
+        aml_check_buffer_zero_data("spdif_pcm_out", buffer, bytes, channels, format);
+    }
+
     if (get_debug_value(AML_DUMP_AUDIOHAL_OUT)) {
         aml_dump_audio_bitstreams(file_name, buffer, bytes);
     }

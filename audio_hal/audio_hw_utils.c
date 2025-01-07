@@ -2936,7 +2936,15 @@ int aml_audio_trace_int(char *name, int value)
     int debug_level = get_debug_value(AML_DEBUG_AUDIOHAL_TRACE);
 
     if (debug_level > 0) {
-        ATRACE_INT(name, value);
+        if (CC_UNLIKELY(atrace_is_tag_enabled(ATRACE_TAG))) {
+            // Atrace Tag
+            ATRACE_INT(name, value);
+        } else {
+            // Ftrace Tag
+            // When atrace is not enabled, audio tag still can show up.
+            void atrace_int_body(const char*, int32_t);
+            atrace_int_body(name, value);
+        }
     } else {
         // do nothing.
     }
@@ -4253,3 +4261,242 @@ bool is_locale_at_United_Kingdom_device()
     }
 }
 
+typedef struct _aml_zero_detect_item {
+    struct listnode list_node;
+    char name[64];
+    int64_t last_write_time_us;
+    int64_t curr_write_frames;
+    int64_t last_nonzero_frames;
+} aml_zero_detect_item;
+
+typedef struct _aml_zero_detect_list {
+    struct listnode  list_head;
+    pthread_mutex_t  lock;
+    int item_number;
+
+    int max_zero_ms;
+    int zero_percent;
+    int max_interval_ms;
+    int64_t check_prop_time_us;
+} aml_zero_detect_list;
+
+
+void aml_init_zero_detect_list(void **pp_list)
+{
+    aml_zero_detect_list *p_new_list = NULL;
+    if (pp_list == NULL) {
+        return;
+    }
+
+    p_new_list = (aml_zero_detect_list *)aml_audio_calloc(1, sizeof(aml_zero_detect_list));
+    if (p_new_list == NULL) {
+        ALOGE("%s  calloc a new buffer item failed !", __FUNCTION__);
+        return;
+    }
+
+    list_init(&p_new_list->list_head);
+    if (pthread_mutex_init (&p_new_list->lock, NULL) != 0) {
+        ALOGE("%s  pthread_mutex_init fail, errno:%s", __func__, strerror(errno));
+        aml_audio_free(p_new_list);
+        return;
+    }
+    p_new_list->max_zero_ms = -1;
+    p_new_list->zero_percent = -1;
+    p_new_list->max_interval_ms = -1;
+    *pp_list = p_new_list;
+}
+
+void aml_deinit_zero_detect_list(void **pp_list)
+{
+    aml_zero_detect_list *p_list = NULL;
+    struct listnode *node = NULL, *tmp_node = NULL;
+    if (pp_list == NULL || *pp_list == NULL) {
+        return;
+    }
+    p_list = *pp_list;
+
+    pthread_mutex_lock(&p_list->lock);
+    list_for_each_safe(node, tmp_node, &p_list->list_head) {
+        list_remove(node);
+        aml_audio_free(node);
+    }
+    pthread_mutex_unlock(&p_list->lock);
+    aml_audio_free(p_list);
+    *pp_list = NULL;
+}
+
+aml_zero_detect_item* aml_find_zero_detect_item(aml_zero_detect_list *p_list, const char *name)
+{
+    struct listnode *node = NULL, *tmp_node = NULL;
+    if (p_list == NULL) {
+        return NULL;
+    }
+
+    pthread_mutex_lock(&p_list->lock);
+    list_for_each_safe(node, tmp_node, &p_list->list_head) {
+        aml_zero_detect_item *detect_item = (aml_zero_detect_item *)node;
+        if (strcmp(detect_item->name, name) == 0) {
+            pthread_mutex_unlock(&p_list->lock);
+            return detect_item;
+        }
+    }
+    if (p_list->item_number > 600) {
+        AM_LOGE("Too many zero detect item(%d), alloc new item fail !", p_list->item_number);
+        return NULL;
+    }
+    pthread_mutex_unlock(&p_list->lock);
+
+    // insert a buffer item and initialized it
+    int max_len = 0;
+    aml_zero_detect_item *new_item = (aml_zero_detect_item *)aml_audio_calloc(1, sizeof(aml_zero_detect_item));
+    if (new_item == NULL) {
+        ALOGE("%s  calloc a new buffer item failed !", __FUNCTION__);
+        return NULL;
+    }
+    max_len = sizeof(new_item->name) - 1;
+    memcpy(new_item->name, name, strlen(name) > max_len ? max_len : strlen(name));
+
+    list_init(&new_item->list_node);
+    pthread_mutex_lock(&p_list->lock);
+    list_add_tail(&p_list->list_head, &new_item->list_node);
+    p_list->item_number++;
+    pthread_mutex_unlock(&p_list->lock);
+    return new_item;
+}
+
+void aml_check_buffer_zero_data(const char *name, const void *buffer, size_t bytes, int data_ch, audio_format_t format)
+{
+    int i = 0;
+    int buf_data = 0;
+    int num_frame = 0;
+    const uint8_t *p_u8_data = NULL;
+    int silence = 0;
+    int silence_cnt = 0;
+    int max = 0;
+    int min = 0;
+    int max_pos = 0;
+    int64_t curr_write_us = 0;
+    char ch_buf[128];
+    int frames_bytes = audio_bytes_per_frame(data_ch, format);
+    aml_zero_detect_item *p_item = NULL;
+    struct aml_audio_device *adev = (struct aml_audio_device *)adev_get_handle();
+    aml_zero_detect_list *p_list = adev->zero_data_detect_list;
+
+    // currently only check channel 0
+    const int channel_select = 0;
+
+    if (!audio_is_linear_pcm(format)) {
+        ALOGE("%s : not support format %d", __func__, format);
+        return;
+    }
+    if (name == NULL || buffer == NULL || bytes <= 0 || data_ch <= 0 || frames_bytes <= 0) {
+        ALOGE("%s : invalid parameters !", __func__);
+        return;
+    }
+    num_frame = bytes/frames_bytes;
+
+    for (i = 0; i < num_frame; i++) {
+        p_u8_data = (const uint8_t *)buffer + (frames_bytes * i + channel_select);
+
+        switch (format) {
+            case AUDIO_FORMAT_PCM_16_BIT :
+                buf_data = *((const int16_t *)p_u8_data);
+                break;
+            case AUDIO_FORMAT_PCM_32_BIT :
+                buf_data = ((*((const int *)p_u8_data)) >> 16);
+                break;
+            case AUDIO_FORMAT_PCM_FLOAT :
+                buf_data = clamp16_from_float(*((const float *)p_u8_data));
+                break;
+            case AUDIO_FORMAT_PCM_8_BIT :
+                // (int16_t)(*--src - 0x80) << 8;
+                buf_data = (int16_t)(*p_u8_data - 0x80) << 8;
+                break;
+
+            case AUDIO_FORMAT_PCM_24_BIT_PACKED :
+                #if HAVE_BIG_ENDIAN
+                    buf_data = p_u8_data[1] | (p_u8_data[0] << 8);
+                #else
+                    buf_data = p_u8_data[1] | (p_u8_data[2] << 8);
+                #endif
+                break;
+            case AUDIO_FORMAT_PCM_8_24_BIT :
+                // *dst++ = clamp16(*src++ >> 8);
+                buf_data = clamp16((*((const int *)p_u8_data)) >> 8);
+                break;
+            default:
+                break;
+        }
+
+        if (max < buf_data) {
+            max = buf_data;
+            max_pos = i;
+        }
+        if (min > buf_data) {
+            min = buf_data;
+        }
+        if (buf_data == 0) {
+             silence_cnt ++;
+        }
+    }
+    if (max < 10) {
+        silence = 1;
+    }
+    ALOGI("%-10s data detect min=%4d max=%4d silence=%d silence_cnt=%4d frames=%4d", name, min, max, silence, silence_cnt, num_frame);
+
+    p_item = aml_find_zero_detect_item(p_list, name);
+    if (p_item == NULL) {
+        return;
+    }
+    curr_write_us = aml_gettime();
+
+    if (llabs(curr_write_us - p_list->check_prop_time_us) >= 1000) {
+        p_list->max_zero_ms = aml_getprop_int(AML_DETECT_MAX_ZERO_MS_PROP);
+        p_list->zero_percent = aml_getprop_int(AML_DETECT_ZERO_PERCENT_PROP);
+        p_list->max_interval_ms = aml_getprop_int(AML_DETECT_MAX_INTERVAL_MS_PROP);
+        p_list->check_prop_time_us = curr_write_us;
+    }
+
+    int max_zero_ms = 500;
+    int zero_percent = 99;
+    int max_interval_ms = 500;
+    if (p_list->max_zero_ms > 0) {
+        max_zero_ms = p_list->max_zero_ms;
+    }
+    if (p_list->zero_percent > 0 && p_list->zero_percent <= 100) {
+        zero_percent = p_list->zero_percent;
+    }
+    if (p_list->max_interval_ms > 0) {
+        max_interval_ms = p_list->max_interval_ms;
+    }
+
+    if (curr_write_us - p_item->last_write_time_us < max_interval_ms * 1000) {  // is writing
+
+        if (silence_cnt < num_frame * zero_percent / 100) {
+            int64_t diff_frames = p_item->curr_write_frames - p_item->last_nonzero_frames;
+
+            if (diff_frames && p_item->last_nonzero_frames && (diff_frames <= 48 * max_zero_ms)) {
+                memset(ch_buf, 0, sizeof(ch_buf));
+                snprintf(ch_buf, sizeof(ch_buf)-1, "%s_stream_zero", name);
+                ALOGI("%s Stream_zero_detected %" PRId64 " ms", ch_buf, diff_frames/48);
+                aml_audio_trace_int(ch_buf, diff_frames/48);
+
+                // For systrace shell script debug, should clear it manually.
+                memset(ch_buf, 0, sizeof(ch_buf));
+                sprintf(ch_buf, "%" PRId64 "", diff_frames/48);
+                property_set(AML_TRACE_STREAM_ZERO_PROP, ch_buf);
+            }
+            p_item->last_nonzero_frames = p_item->curr_write_frames + num_frame;
+        }
+        p_item->curr_write_frames += num_frame;
+    } else {
+        if (p_item->curr_write_frames != 0) {
+            memset(ch_buf, 0, sizeof(ch_buf));
+            snprintf(ch_buf, sizeof(ch_buf)-1, "%s_stream_zero", name);
+            aml_audio_trace_int(ch_buf, 0);
+        }
+        p_item->last_nonzero_frames = 0;
+        p_item->curr_write_frames = 0;
+    }
+    p_item->last_write_time_us = curr_write_us;
+}

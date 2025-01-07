@@ -27,6 +27,7 @@
 #include "aml_audio_timer.h"
 #include "audio_virtual_buf.h"
 #include "aml_malloc_debug.h"
+#include "audio_hw_utils.h"
 
 #define MAX_NAME_LENGTH  128
 
@@ -122,6 +123,7 @@ int audio_virtual_buf_process(void *phandle, uint64_t frame_ns)
     uint64_t ease_time_ns = 0;
     audio_virtual_buf_t *virtual_handle = NULL;
     float t;
+    char vname[32];
 
 
     if (phandle == NULL) {
@@ -215,11 +217,17 @@ int audio_virtual_buf_process(void *phandle, uint64_t frame_ns)
     virtual_handle->buf_read_ns = read_ns;
     virtual_handle->buf_write_ns = write_ns;
 
+    memset(vname, 0, sizeof(vname));
+    snprintf(vname, sizeof(vname)-1, "%s_vsleep", virtual_handle->buf_name);
+
     if (sleep_ns / 1000 >= 100) {
+        aml_audio_trace_int(vname, sleep_ns / 1000);
         aml_audio_sleep(sleep_ns / 1000);
     } else {
+        aml_audio_trace_int(vname, 100);
         aml_audio_sleep(100);
     }
+    aml_audio_trace_int(vname, 0);
 
     return 0;
 }

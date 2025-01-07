@@ -1124,6 +1124,9 @@ static int mmap_audio_process_client_data(aml_mmap_audio_client_st *pstMmapClien
     unsigned int             u32BurstSizeByte = frames * pstParam->u32FrameSize;
     unsigned char            *pu8TempBufferAddr = NULL;
     struct timespec          timestamp;
+    char                     aaudio_name[64];
+    int64_t                  last_time_ns = pstParam->time_nanoseconds;
+
 
     if (!mmap_audio_client_is_active(pstMmapClient)) {
         pstMmapClient->u32BytesAvail = 0;
@@ -1145,6 +1148,7 @@ static int mmap_audio_process_client_data(aml_mmap_audio_client_st *pstMmapClien
        clock_gettime(CLOCK_MONOTONIC, &timestamp);
        pstParam->time_nanoseconds = (long long)timestamp.tv_sec * NSEC_PER_SEC + (long long)timestamp.tv_nsec;
        pstMmapClient->status = MMAP_START_DONE;
+       last_time_ns = 0;
     }
 
     unsigned int u32RemainSizeByte =  (pstParam->u32BufferSize + pu8StartAddr) - pu8CurReadAddr;
@@ -1168,11 +1172,26 @@ static int mmap_audio_process_client_data(aml_mmap_audio_client_st *pstMmapClien
     pstParam->time_nanoseconds = (long long)timestamp.tv_sec * NSEC_PER_SEC + (long long)timestamp.tv_nsec;
 
     if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
-        char aaudio_name[64];
         memset(aaudio_name, 0, sizeof(aaudio_name));
         snprintf(aaudio_name, sizeof(aaudio_name)-1, "aaudio_in_%d", pstMmapClient->s32AllocId);
         check_audio_level(aaudio_name, pu8TempBufferAddr, u32BurstSizeByte);
     }
+
+    if (get_debug_value(AML_DEBUG_AUDIOHAL_DETECT_ZERO_DATA)) {
+        int64_t diff_time_ms = (pstParam->time_nanoseconds - last_time_ns)/NSEC_PER_MSEC;
+        memset(aaudio_name, 0, sizeof(aaudio_name));
+        snprintf(aaudio_name, sizeof(aaudio_name)-1, "aaudio_%d", pstMmapClient->s32AllocId);
+        aml_check_buffer_zero_data(aaudio_name, pu8TempBufferAddr, u32BurstSizeByte, out->hal_ch, out->hal_format);
+
+        if (last_time_ns > 0 && (diff_time_ms >= MMAP_WRITE_PERIOD_TIME_MS*2)) {
+            memset(aaudio_name, 0, sizeof(aaudio_name));
+            snprintf(aaudio_name, sizeof(aaudio_name)-1, "aaudio_%d_gap", pstMmapClient->s32AllocId);
+            aml_audio_trace_int(aaudio_name, diff_time_ms);
+            ALOGI("%s : atrace name(value) : %s %" PRId64 "", __func__, aaudio_name, diff_time_ms);
+            property_set(AML_TRACE_STREAM_ZERO_PROP, "1");
+        }
+    }
+
     if (get_debug_value(AML_DUMP_AUDIOHAL_MMAP)) {
         char filepath[64];
         memset(filepath, 0, sizeof(filepath));

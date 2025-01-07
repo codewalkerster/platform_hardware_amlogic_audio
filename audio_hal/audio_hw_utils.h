@@ -361,4 +361,16 @@ void aml_lock_lib_address(void);
 void aml_unlock_lib_address(void);
 bool is_locale_at_United_Kingdom_device();
 
+
+#define  AML_TRACE_STREAM_ZERO_PROP         "vendor.media.audiohal.stream_zero"
+#define  AML_DETECT_MAX_ZERO_MS_PROP        "vendor.media.audiohal.detect.max_zero_ms"
+#define  AML_DETECT_ZERO_PERCENT_PROP       "vendor.media.audiohal.detect.zero_percent"
+#define  AML_DETECT_MAX_INTERVAL_MS_PROP    "vendor.media.audiohal.detect.max_interval_ms"
+
+#define  AML_STREAM_WRITE_MAX_TIME_MS_PROP  "vendor.media.audiohal.stream.write.max_time_ms"
+
+void aml_init_zero_detect_list(void **pp_list);
+void aml_deinit_zero_detect_list(void **pp_list);
+void aml_check_buffer_zero_data(const char *name, const void *buffer, size_t bytes, int data_ch, audio_format_t format);
+
 #endif

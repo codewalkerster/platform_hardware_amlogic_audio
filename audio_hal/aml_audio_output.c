@@ -51,6 +51,7 @@
 #include "dtv_patch.h"
 #include "audio_hw_resource_mgr.h"
 #include "aml_stream_manager.h"
+#include <cutils/properties.h>
 
 static int a2dp_or_usb_sound_output(struct audio_stream_out *stream,
                                 const void *buffer, /* pcm buffer address */
@@ -954,6 +955,23 @@ ssize_t hw_write (struct audio_stream_out *stream
             ALOGI("%s() total_frame %"PRIu64" latency_frames %d last_frames_position %"PRIu64" total write %"PRIu64" total writes frames %"PRIu64" diff latency %"PRIu64" ms\n",
                   __FUNCTION__, total_frame, latency_frames, aml_out->last_frames_position, aml_out->input_bytes_size, write_frames, (write_frames - aml_out->last_frames_position) / 48);
         }
+    }
+
+    if (get_debug_value(AML_DEBUG_AUDIOHAL_DETECT_ZERO_DATA)) {
+        int max_diff_ms = 48;
+        int64_t curr_time_ms = aml_gettime()/1000;
+        int64_t diff_time_ms = curr_time_ms - aml_out->trace_last_write_time_ms;
+
+        if (eDolbyMS12Lib == adev->dolby_lib_type) {
+            max_diff_ms = adev->ms12.alsa_limit_frame / 48;
+            max_diff_ms *= 1.2;
+        }
+        if (aml_out->trace_last_write_time_ms > 0 && (diff_time_ms >= max_diff_ms)) {
+            aml_audio_trace_int("hw_write_gap", diff_time_ms);
+            ALOGI("%s : atrace name(value) : %s %" PRId64 "", __func__, "hw_write_gap", diff_time_ms);
+            property_set(AML_TRACE_STREAM_ZERO_PROP, "1");
+        }
+        aml_out->trace_last_write_time_ms = curr_time_ms;
     }
     return ret;
 }

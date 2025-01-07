@@ -38,6 +38,7 @@ typedef enum AML_DUMP_DEBUG_INFO {
     AML_DEBUG_AUDIOHAL_EDID,
     AML_DEBUG_AUDIOHAL_SPEED,
     AML_DEBUG_AUDIOHAL_VOLUME_SHAPER,
+    AML_DEBUG_AUDIOHAL_DETECT_ZERO_DATA,
 
     /*dump enum items*/
     AML_DUMP_AUDIOHAL_IN,
@@ -104,6 +105,8 @@ void DoDumpData(const void *data_buf, int size, int aud_src_type);
 #define AML_DEBUG_AUDIOHAL_EDID_PROPERTY            "vendor.media.audiohal.edid"
 #define AML_DEBUG_AUDIOHAL_SPEED_PROPERTY           "vendor.media.audiohal.speed"
 #define AML_DEBUG_AUDIOHAL_VOLUME_SHAPER_PROPERTY   "vendor.media.audiohal.volume_shaper"
+#define AML_DEBUG_AUDIOHAL_DETECT_ZERO_DATA_PROPERTY  "vendor.media.audiohal.detect_zero_data"
+
 /*define dump enum string*/
 #define AML_DUMP_AUDIOHAL_IN_PROPERTY               "vendor.media.audiohal.in.dump"
 #define AML_DUMP_AUDIOHAL_OUT_PROPERTY              "vendor.media.audiohal.out.dump"
