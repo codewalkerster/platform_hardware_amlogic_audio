@@ -341,14 +341,14 @@ int get_sound_trigger_cmd(void)
 
 void switch_to_suspend(int sound_trigger_hdl_num)
 {
-    vad_awe_wakeup_dsp param = {1, 0, 1, 0};
+    vad_awe_wakeup_dsp param = {1, 1, 1, 0};
     void* hdl = open_config->dsp_pcm_handles[sound_trigger_hdl_num];
     struct tAmlPcmCtx* pcm_hdl = (struct tAmlPcmCtx*)hdl;
     param.hdl = pcm_hdl->pcm_srv_hdl;
     int h = xAudio_Ipc_init();
     if (h < 0)
         return;
-    xAIPC(h, MBX_CMD_VAD_AWE_WAKEUP, &param, sizeof(param));
+    xAIPC_SEND(h, MBX_CMD_VAD_AWE_WAKEUP, &param, sizeof(param));
     xAudio_Ipc_Deinit(h);
 }
 
