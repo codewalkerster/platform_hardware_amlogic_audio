@@ -549,9 +549,12 @@ int do_output_device_routing(struct aml_audio_device *adev, audio_devices_t out_
     // case AUDIO_DEVICE_OUT_HDMI:
     case AUDIO_DEVICE_OUT_AUX_DIGITAL:
         if (enable) {
-            audio_route_apply_path(mgr->ar, "hdmi");
             /*when unmute hdmi, need reset alsa raw output*/
-            adev->reset_hdmitx_audio = true;
+            /*if hdmi-out is mute, do unmute action*/
+            if (aml_mixer_ctrl_get_int(&adev->alsa_mixer, AML_MIXER_ID_HDMI_OUT_AUDIO_MUTE)) {
+                audio_route_apply_path(mgr->ar, "hdmi");
+                adev->reset_hdmitx_audio = true;
+            }
         } else {
             audio_route_apply_path(mgr->ar, "hdmi_off");
         }

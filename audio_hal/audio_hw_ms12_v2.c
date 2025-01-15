@@ -4833,7 +4833,7 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
         if (adev->sink_format == AUDIO_FORMAT_PCM_16_BIT &&
             b_encoder_enable != 0) {
             /*only enable the pcm output*/
-            output_config = MS12_OUTPUT_MASK_STEREO;
+            output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
             b_reset = 1;
         }
     } else {
@@ -4844,7 +4844,7 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
             }
         } else if (adev->sink_capability == AUDIO_FORMAT_E_AC3 || adev->sink_capability == AUDIO_FORMAT_DOLBY_TRUEHD) {
             /*for sink only support truehd, it can't support MAT, so need to convert DDP*/
-            output_config = MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO;
+            output_config = MS12_OUTPUT_MASK_DDP | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
             if (!current_ddp_encoder_enable) {
                 b_reset = 1;
             }
@@ -4856,12 +4856,12 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
                 }
             }
         } else if (adev->sink_capability == AUDIO_FORMAT_AC3) {
-            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO;
+            output_config = MS12_OUTPUT_MASK_DD | MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
             if (!current_dd_encoder_enable || current_ddp_encoder_enable) {
                 b_reset = 1;
             }
         } else if (adev->sink_capability == AUDIO_FORMAT_PCM_16_BIT) {
-            output_config = MS12_OUTPUT_MASK_STEREO;
+            output_config = MS12_OUTPUT_MASK_STEREO | MS12_OUTPUT_MASK_SPEAKER;
             if (current_ddp_encoder_enable || current_mat_encoder_enable) {
                 b_reset = 1;
             }

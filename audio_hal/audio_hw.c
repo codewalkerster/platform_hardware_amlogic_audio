@@ -4060,6 +4060,15 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
                 }
                 set_output_device_avail(adev, device, true);
                 clear_arc_cached_edid(adev);
+                /* switch to hdmi out to avoid missing first word for voice assistant, once connecting hdmi */
+                /* a2dp/usb have higher output priority than hdmi-out, not routing to hdmi-out.
+                 * as switching hdmi_format would send hdmi-out disconnect/connect, which run to here.
+                 */
+                if ((adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) || (adev->out_device & AUDIO_DEVICE_OUT_ALL_USB)) {
+                    //do nothing.
+                } else if (device & AUDIO_DEVICE_OUT_HDMI) {
+                    aml_audio_output_routing(adev, AUDIO_DEVICE_OUT_HDMI);
+                }
             } else if (device & AUDIO_DEVICE_OUT_ALL_A2DP) {
                 a2dp_out_open(adev);
                 adev->out_device |= device;
@@ -4134,7 +4143,15 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             continuous_audio_mode = adev->continuous_audio_mode_backup;
             pthread_cond_broadcast(&adev->wake_cond);
             ALOGI("%s : %s pthread_cond_broadcast", __func__, kvpairs);
+
+             /* switch to hdmi out, once system resume */
+             //aml_audio_output_routing(adev, AUDIO_DEVICE_OUT_HDMI);
         } else {
+            /*if a2dp is connected, don't unmute speaker*/
+            //if (!(adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP))
+                /* switch routing to speaker when system suspend */
+            //    aml_audio_output_routing(adev, AUDIO_DEVICE_OUT_SPEAKER);
+
             /* mute speaker when suspend */
             set_output_device_mute(adev, AUDIO_DEVICE_OUT_SPEAKER, true, true/*use fade*/);
             //need time to fadeout
