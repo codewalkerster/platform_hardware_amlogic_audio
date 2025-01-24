@@ -237,17 +237,21 @@ void sm_timer_callback_handler(union sigval sigv)
     bool is_hwsync_lpcm = false;
 
     AM_LOGD("func:%s sigv:%d ~~~~~~~~~~", __func__, sigv.sival_int);
+    pthread_mutex_lock(&adev->stream_release_lock);
     for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
         out = adev->active_outputs[i];
-        if (out && audio_is_linear_pcm(out->hal_internal_format)
+        if (out && !out->is_closing && audio_is_linear_pcm(out->hal_internal_format)
             && (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC)) {
             is_hwsync_lpcm = true;
+            out->is_callback_pending = true;
             break;
         }
     }
+    pthread_mutex_unlock(&adev->stream_release_lock);
 
     if (out && is_hwsync_lpcm) {
         out->frame_write_sum_updated = false;
+        out->is_callback_pending = false;
     }
 
     return ;
@@ -260,14 +264,17 @@ void am_timer_pause_callback(union sigval sigv)
     bool is_hwsync_lpcm = false;
 
     AM_LOGD("sigv:%d ~~~~~~~~~~", sigv.sival_int);
+    pthread_mutex_lock(&adev->stream_release_lock);
     for (int i = 0 ; i < STREAM_USECASE_MAX; i++) {
         out = adev->active_outputs[i];
-        if (out && audio_is_linear_pcm(out->hal_internal_format)
+        if (out && !out->is_closing && audio_is_linear_pcm(out->hal_internal_format)
             && (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC)) {
             is_hwsync_lpcm = true;
+            out->is_callback_pending = true;
             break;
         }
     }
+    pthread_mutex_unlock(&adev->stream_release_lock);
 
     if (adev && out && is_hwsync_lpcm) {
         //cts tunnel underrun case failed, depend on pause/resume invoked from AudioFlinger.
@@ -281,6 +288,7 @@ void am_timer_pause_callback(union sigval sigv)
 
         if (!out->is_insert_zero_data && !out->is_waiting_video)
             out_pause_subMixingPCM((struct audio_stream_out *)out);
+        out->is_callback_pending = false;
     }
     return ;
 }
