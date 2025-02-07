@@ -108,7 +108,7 @@
 #include "tv_private_object.h"
 #include "hdmirx_utils.h"
 
-#define ENABLE_NANO_NEW_PATH 0
+#define ENABLE_NANO_NEW_PATH 1
 #if ENABLE_NANO_NEW_PATH
 #include "jb_nano.h"
 #endif
