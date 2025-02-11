@@ -37,6 +37,8 @@
 #include "aml_mmap_audio.h"
 #include "aml_volume_utils.h"
 #include "aml_malloc_debug.h"
+#include "dolby_lib_api.h"
+#include "audio_hw_ms12_common.h"
 
 #define MMAP_SAMPLE_RATE_HZ             (48000)
 #define MMAP_BUFFER_BURSTS_NUM          (4)
@@ -319,11 +321,11 @@ static int outMmapGetPosition(const struct audio_stream_out *stream,
 }
 #endif
 
-static enum aml_mmap_audio_status_t mmap_audio_get_client_status(void *pstMananger, int client_id);
-static void mmap_audio_set_buffer_ready(void *pstMananger, int client_id, bool buffer_ready);
+static enum aml_mmap_audio_status_t mmap_audio_get_client_status(void *pstManager, int client_id);
+static void mmap_audio_set_buffer_ready(void *pstManager, int client_id, bool buffer_ready);
 
 static void *outMmapThread(void *pArg) {
-    aml_mmap_audio_manager_st   *pstMananger = (aml_mmap_audio_manager_st *)pArg;
+    aml_mmap_audio_manager_st   *pstManager = (aml_mmap_audio_manager_st *)pArg;
     struct aml_audio_device     *adev = (struct aml_audio_device *)adev_get_handle();
     struct audio_virtual_buf    *pstVirtualBuffer = NULL;
     unsigned char               *pu8TempBufferAddr = NULL;
@@ -340,17 +342,17 @@ static void *outMmapThread(void *pArg) {
     int                         ret = 0;
 
     R_CHECK_POINTER_LEGAL(NULL, adev, "adev")
-    R_CHECK_POINTER_LEGAL(NULL, pstMananger, "pstMananger")
-    pstThread = &pstMananger->stThreadParam;
+    R_CHECK_POINTER_LEGAL(NULL, pstManager, "pstManager")
+    pstThread = &pstManager->stThreadParam;
     ms12 = &adev->ms12;
-    u64BufferFrameNs = pstMananger->u64WritePeriodTimeNano * pstMananger->s32BufferBurstNum;
+    u64BufferFrameNs = pstManager->u64WritePeriodTimeNano * pstManager->s32BufferBurstNum;
 
     prctl(PR_SET_NAME, (unsigned long)"outMmapThread");
     aml_set_thread_sched_priority("outMmapThread", pstThread->threadId, AUDIO_FIFO_THREAD_DEFAULT_PRIORITY);
     aml_audio_set_cpu_affinity(true);
 
     while (false == pstThread->bExitThread) {
-        if (mmap_audio_has_active_client(pstMananger)) {
+        if (mmap_audio_has_active_client(pstManager)) {
             if (true == pstThread->bStopPlay) {
                 if (pstVirtualBuffer) {
                     audio_virtual_buf_reset(pstVirtualBuffer);
@@ -365,9 +367,9 @@ static void *outMmapThread(void *pArg) {
             }
 
             // data process
-            mmap_audio_process_data(pstMananger, pstMananger->s32WriteSizeFrame);
+            mmap_audio_process_data(pstManager, pstManager->s32WriteSizeFrame);
 
-            if (mmap_audio_prepare_merge(pstMananger, &stNewCfg, adev->is_netflix) != 0) {
+            if (mmap_audio_prepare_merge(pstManager, &stNewCfg, adev->is_netflix) != 0) {
                 AM_LOGE("mmap_audio_prepare_merge fail");
                 continue;
             }
@@ -378,17 +380,17 @@ static void *outMmapThread(void *pArg) {
                 bConfigUpdate = true;
             }
 
-            uxReqBufBytes = pstMananger->s32WriteSizeFrame * stNewCfg.frame_size;
+            uxReqBufBytes = pstManager->s32WriteSizeFrame * stNewCfg.frame_size;
             ret = aml_audio_check_and_realloc((void **)&pu8TempBufferAddr, &uxTempBufferLen, uxReqBufBytes);
             if ((ret != 0) || (pu8TempBufferAddr == NULL)) {
                 AM_LOGE("allocate aaudio_buf(%zu bytes) failed", uxReqBufBytes);
                 continue;
             }
-            s32ProcessBytes = mmap_audio_merge_data(pstMananger, &stCurrCfg, pu8TempBufferAddr, uxTempBufferLen);
+            s32ProcessBytes = mmap_audio_merge_data(pstManager, &stCurrCfg, pu8TempBufferAddr, uxTempBufferLen);
 
             // data writing, only support ms12
             // for non-dolby, mmap audio is read by submix directly.
-            if (s32ProcessBytes > 0 && pstMananger->bMs12) {
+            if (s32ProcessBytes > 0 && pstManager->bMs12) {
                 size_t used_bytes = 0;
                 dolby_ms12_multi_app_process(ms12, \
                     pu8TempBufferAddr, s32ProcessBytes, &used_bytes, &stCurrCfg, bConfigUpdate);
@@ -399,7 +401,7 @@ static void *outMmapThread(void *pArg) {
             }
 
             // virtual buffer sleep
-            audio_virtual_buf_process((void *)pstVirtualBuffer, pstMananger->u64WritePeriodTimeNano);
+            audio_virtual_buf_process((void *)pstVirtualBuffer, pstManager->u64WritePeriodTimeNano);
         } else {
             struct timespec tv;
             clock_gettime(CLOCK_MONOTONIC, &tv);
@@ -409,6 +411,7 @@ static void *outMmapThread(void *pArg) {
             pstThread->bStopPlay = true;
             memset(&stCurrCfg, 0, sizeof(stCurrCfg));
             pthread_mutex_lock(&pstThread->mutex);
+            /* coverity[dead_wait] */
             pthread_cond_timedwait(&pstThread->cond, &pstThread->mutex, &tv);
             pthread_mutex_unlock(&pstThread->mutex);
         }
@@ -419,7 +422,7 @@ static void *outMmapThread(void *pArg) {
     }
     aml_audio_free(pu8TempBufferAddr);
     pu8TempBufferAddr = NULL;
-    AM_LOGI(" exit threadloop, pstMananger:%p", pstMananger);
+    AM_LOGI(" exit threadloop, pstManager:%p", pstManager);
     return NULL;
 }
 
@@ -429,17 +432,33 @@ static int outMmapStart(const struct audio_stream_out *stream)
     AM_LOGI("stream:%p", stream);
     struct aml_stream_out    *out = (struct aml_stream_out *) stream;
     aml_mmap_audio_param_st  *pstParam = (aml_mmap_audio_param_st *)out->pstMmapAudioParam;
-    aml_mmap_audio_manager_st *pstMmapMananger = out->mmap_audio_manager;
-    aml_mmap_thread_param_st *pstThread = &pstMmapMananger->stThreadParam;
+    aml_mmap_audio_manager_st *pstMmapManager = out->mmap_audio_manager;
+    aml_mmap_thread_param_st *pstThread = &pstMmapManager->stThreadParam;
+    struct aml_audio_device *adev = out->dev;
+    struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    struct amlAudioMixer *audio_mixer = adev->mixerData;
 
     pstParam->u32FramePosition = 0;
     pstParam->s64BufferEmptyNs = 0;
-    if (mmap_audio_start_client(pstMmapMananger, out->mmap_audio_client_id) != 0) {
+    if (mmap_audio_start_client(pstMmapManager, out->mmap_audio_client_id) != 0) {
         AM_LOGE("mmap_audio_start_client failed(client_id %d)", out->mmap_audio_client_id);
         return -ENOSYS;
     }
 
-    if (pstMmapMananger->bUseThread) {
+    // wake up ms12 and submix, may be too late
+    if (eDolbyMS12Lib == adev->dolby_lib_type) {
+        if (ms12->ms12_scheduler_state != MS12_SCHEDULER_RUNNING) {
+            ALOGI("%s : send RUNNING msg to ms12", __func__);
+            aml_audiohal_sch_state_2_ms12(ms12, MS12_SCHEDULER_RUNNING);
+        }
+    } else if (adev->useAudioMixer) {
+        if (audio_mixer->submix_scheduler_state != SUBMIX_SCHEDULER_RUNNING) {
+            ALOGI("%s : send RUNNING msg to submix", __func__);
+            aml_audiohal_sch_state_2_submix(audio_mixer, SUBMIX_SCHEDULER_RUNNING);
+        }
+    }
+
+    if (pstMmapManager->bUseThread) {
         pthread_mutex_lock(&pstThread->mutex);
         pthread_cond_signal(&pstThread->cond);
         pthread_mutex_unlock(&pstThread->mutex);
@@ -491,18 +510,18 @@ static int outMmapCreateBuffer(const struct audio_stream_out *stream,
     AM_LOGI("stream:%p, min_size_frames:%d", stream, min_size_frames);
     struct aml_stream_out       *out = (struct aml_stream_out *) stream;
     aml_mmap_audio_param_st     *pstParam = (aml_mmap_audio_param_st *)out->pstMmapAudioParam;
-    aml_mmap_audio_manager_st   *pstMmapMananger = out->mmap_audio_manager;
+    aml_mmap_audio_manager_st   *pstMmapManager = out->mmap_audio_manager;
     int ret = 0;
     int write_size_frame = 0;
     int buffer_burst_num = 0;
     R_CHECK_POINTER_LEGAL(-ENOSYS, pstParam, "");
     R_CHECK_PARAM_LEGAL(-EINVAL, min_size_frames, -1, INT_MAX - 1, "");
 
-    mmap_audio_get_burst_info(pstMmapMananger, &write_size_frame, &buffer_burst_num);
-    mmap_audio_set_buffer_ready(pstMmapMananger, out->mmap_audio_client_id, true);
+    mmap_audio_get_burst_info(pstMmapManager, &write_size_frame, &buffer_burst_num);
+    mmap_audio_set_buffer_ready(pstMmapManager, out->mmap_audio_client_id, true);
 
     info->shared_memory_address = pstParam->pu8MmapAddr;
-    if (pstMmapMananger->bSupportDmaBuffer) {
+    if (pstMmapManager->bSupportDmaBuffer) {
         info->shared_memory_fd = pstParam->s32DmaFd;
     } else {
         info->shared_memory_fd = pstParam->s32IonShareFd;
@@ -683,20 +702,24 @@ int outMmapInit(struct aml_stream_out *out)
     int                         buffer_burst_num = 0;
     aml_mmap_audio_param_st     *pstParam = NULL;
     struct aml_audio_device     *adev = (struct aml_audio_device *)adev_get_handle();
-    aml_mmap_audio_manager_st   *pstMmapMananger = NULL;
+    aml_mmap_audio_manager_st   *pstMmapManager = NULL;
 
     if (adev == NULL) {
         AM_LOGE("adev is NULL");
         return -1;
     }
-    pstMmapMananger = adev->mmap_audio_manager;
+    pstMmapManager = adev->mmap_audio_manager;
+    if (pstMmapManager == NULL) {
+        AM_LOGE("pstMmapManager is NULL");
+        return -1;
+    }
 
     out->stream.start = outMmapStart;
     out->stream.stop = outMmapStop;
     out->stream.create_mmap_buffer = outMmapCreateBuffer;
     out->stream.get_mmap_position = outMmapGetPosition;
 
-    mmap_audio_get_burst_info(pstMmapMananger, &write_size_frame, &buffer_burst_num);
+    mmap_audio_get_burst_info(pstMmapManager, &write_size_frame, &buffer_burst_num);
 
     if (out->pstMmapAudioParam) {
        AM_LOGW("already init, can't again init");
@@ -710,7 +733,7 @@ int outMmapInit(struct aml_stream_out *out)
     pstParam->u32BufferSize = buffer_burst_num * write_size_frame *pstParam->u32FrameSize;
 
     out->mmap_audio_client_id = -1;
-    if (!pstMmapMananger->bSupportDmaBuffer) {
+    if (!pstMmapManager->bSupportDmaBuffer) {
         pstParam->s32IonFd = ion_open();
         if (pstParam->s32IonFd < 0) {
            AM_LOGE("ion_open fail! s32IonFd:%d", pstParam->s32IonFd);
@@ -725,13 +748,13 @@ int outMmapInit(struct aml_stream_out *out)
         ret = dma_buffer_allocate(pstParam);
     }
     if (ret != 0) {
-        AM_LOGE("allocate %s buffer failed !", pstMmapMananger->bSupportDmaBuffer ? "DMA" : "ION");
+        AM_LOGE("allocate %s buffer failed !", pstMmapManager->bSupportDmaBuffer ? "DMA" : "ION");
         return -1;
     }
 
     pstParam->is_first_fetch_position = true;
 
-    if (mmap_audio_register_client(pstMmapMananger, out) < 0) {
+    if (mmap_audio_register_client(pstMmapManager, out) < 0) {
         AM_LOGE("mmap_audio_register_client fail !");
         return -1;
     }
@@ -742,13 +765,14 @@ int outMmapDeInit(struct aml_stream_out *out)
 {
     AM_LOGI("stream:%p", out);
     aml_mmap_audio_param_st     *pstParam = (aml_mmap_audio_param_st *)out->pstMmapAudioParam;
-    aml_mmap_audio_manager_st   *pstMmapMananger = out->mmap_audio_manager;
-    R_CHECK_POINTER_LEGAL(0, pstParam, "uninitialized, can't deinit");
+    aml_mmap_audio_manager_st   *pstMmapManager = out->mmap_audio_manager;
+    R_CHECK_POINTER_LEGAL(-1, pstParam, "uninitialized, can't deinit");
+    R_CHECK_POINTER_LEGAL(-1, pstMmapManager, "");
 
-    mmap_audio_unregister_client(pstMmapMananger, out->mmap_audio_client_id);
+    mmap_audio_unregister_client(pstMmapManager, out->mmap_audio_client_id);
     munmap(pstParam->pu8MmapAddr, pstParam->u32BufferSize);
 
-    if (pstMmapMananger->bSupportDmaBuffer) {
+    if (pstMmapManager->bSupportDmaBuffer) {
         close(pstParam->s32DmaFd);
         if (pstParam->pstBufferAllocator) {
             FreeDmabufHeapBufferAllocator(pstParam->pstBufferAllocator);
@@ -775,24 +799,24 @@ void* mmap_audio_new_manager(bool is_ms12)
     int kernel_version_major = 4;
     int kernel_version_minor = 9;
     char buf[PROPERTY_VALUE_MAX];
-    aml_mmap_audio_manager_st *pstMananger = NULL;
+    aml_mmap_audio_manager_st *pstManager = NULL;
 
-    pstMananger = (aml_mmap_audio_manager_st *)aml_audio_calloc(1, sizeof(aml_mmap_audio_manager_st));
-    if (pstMananger == NULL) {
+    pstManager = (aml_mmap_audio_manager_st *)aml_audio_calloc(1, sizeof(aml_mmap_audio_manager_st));
+    if (pstManager == NULL) {
         AM_LOGE("calloc aml_mmap_audio_manager_st failed !");
         return NULL;
     }
-    pthread_mutex_init(&pstMananger->mutex, NULL);
-    pstMananger->bMs12 = is_ms12;
-    pstMananger->s32WriteSizeFrame = MMAP_WRITE_SIZE_FRAME;
-    pstMananger->s32BufferBurstNum = MMAP_BUFFER_BURSTS_NUM;
-    pstMananger->u64WritePeriodTimeNano = MMAP_WRITE_PERIOD_TIME_NANO;
+    pthread_mutex_init(&pstManager->mutex, NULL);
+    pstManager->bMs12 = is_ms12;
+    pstManager->s32WriteSizeFrame = MMAP_WRITE_SIZE_FRAME;
+    pstManager->s32BufferBurstNum = MMAP_BUFFER_BURSTS_NUM;
+    pstManager->u64WritePeriodTimeNano = MMAP_WRITE_PERIOD_TIME_NANO;
 
     if (is_ms12) {
-        pstMananger->bUseThread = true;
+        pstManager->bUseThread = true;
         AM_LOGI("use thread to move data");
     } else {
-        pstMananger->bUseThread = false;
+        pstManager->bUseThread = false;
     }
 
     if (uname(&info) || sscanf(info.release, "%d.%d", &kernel_version_major, &kernel_version_minor) <= 0) {
@@ -801,14 +825,14 @@ void* mmap_audio_new_manager(bool is_ms12)
 
     if (kernel_version_major >= 5 || kernel_version_minor >= 15) {
         AM_LOGI("kernel %d.%d use DMA buffer", kernel_version_major, kernel_version_minor);
-        pstMananger->bSupportDmaBuffer = true;
+        pstManager->bSupportDmaBuffer = true;
     } else {
         AM_LOGI("kernel %d.%d use ION buffer", kernel_version_major, kernel_version_minor);
-        pstMananger->bSupportDmaBuffer = false;
+        pstManager->bSupportDmaBuffer = false;
     }
 
-    if (pstMananger->bUseThread) {
-        aml_mmap_thread_param_st *pstThread = &pstMananger->stThreadParam;
+    if (pstManager->bUseThread) {
+        aml_mmap_thread_param_st *pstThread = &pstManager->stThreadParam;
         if (pstThread->threadId != 0) {
             AM_LOGW("mmap thread already exist, recreate thread");
             pstThread->bExitThread = true;
@@ -827,24 +851,24 @@ void* mmap_audio_new_manager(bool is_ms12)
         pstThread->bExitThread = false;
         pstThread->bStopPlay = true;
         pstThread->status = MMAP_INIT;
-        ret = pthread_create(&pstThread->threadId, NULL, &outMmapThread, pstMananger);
+        ret = pthread_create(&pstThread->threadId, NULL, &outMmapThread, pstManager);
         if (ret != 0) {
             AM_LOGE("create mmap thread failed !");
-            pstMananger->bUseThread = false;
+            pstManager->bUseThread = false;
         }
     }
-    return pstMananger;
+    return pstManager;
 }
 
-void mmap_audio_free_manager(void *pstMananger)
+void mmap_audio_free_manager(void *pstManager)
 {
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
-    if (pstMmapMananger == NULL) {
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
+    if (pstMmapManager == NULL) {
         return;
     }
 
-    if (pstMmapMananger->bUseThread) {
-        aml_mmap_thread_param_st *pstThread = &pstMmapMananger->stThreadParam;
+    if (pstMmapManager->bUseThread) {
+        aml_mmap_thread_param_st *pstThread = &pstMmapManager->stThreadParam;
         pstThread->bExitThread = true;
         pthread_mutex_lock(&pstThread->mutex);
         pthread_cond_signal(&pstThread->cond);
@@ -852,32 +876,32 @@ void mmap_audio_free_manager(void *pstMananger)
         if (pstThread->threadId != 0) {
            pthread_join(pstThread->threadId, NULL);
         }
-        pstMmapMananger->bUseThread = false;
+        pstMmapManager->bUseThread = false;
     }
-    deinit_aml_pcm_mixer(&pstMmapMananger->stMultichMixer);
-    aml_audio_free(pstMananger);
+    deinit_aml_pcm_mixer(&pstMmapManager->stMultichMixer);
+    aml_audio_free(pstManager);
 }
 
-int mmap_audio_get_burst_info(void *pstMananger, int32_t *ps32WriteSizeFrame, int32_t *ps32BufferBurstNum)
+int mmap_audio_get_burst_info(void *pstManager, int32_t *ps32WriteSizeFrame, int32_t *ps32BufferBurstNum)
 {
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
-    if (pstMmapMananger == NULL) {
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
+    if (pstMmapManager == NULL) {
         return -1;
     }
 
-    *ps32WriteSizeFrame = pstMmapMananger->s32WriteSizeFrame;
-    *ps32BufferBurstNum = pstMmapMananger->s32BufferBurstNum;
+    *ps32WriteSizeFrame = pstMmapManager->s32WriteSizeFrame;
+    *ps32BufferBurstNum = pstMmapManager->s32BufferBurstNum;
     return 0;
 }
 
-int mmap_audio_register_client(void *pstMananger, struct aml_stream_out *aml_out)
+int mmap_audio_register_client(void *pstManager, struct aml_stream_out *aml_out)
 {
     int index = 0;
     int alloc_id = 0;
     struct audioCfg audio_cfg;
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
-    if (pstMananger == NULL || aml_out == NULL) {
+    if (pstManager == NULL || aml_out == NULL) {
         return -1;
     }
     if (!(aml_out->flags & AUDIO_OUTPUT_FLAG_MMAP_NOIRQ)) {
@@ -892,22 +916,22 @@ int mmap_audio_register_client(void *pstMananger, struct aml_stream_out *aml_out
     audio_cfg.format = aml_out->hal_format;
     audio_cfg.frame_size = aml_out->hal_frame_size;
 
-    pthread_mutex_lock(&pstMmapMananger->mutex);
+    pthread_mutex_lock(&pstMmapManager->mutex);
     for (index = 0; index < AML_MMAP_AUDIO_CLIENT_MAX_NUM; index++) {
-        if (pstMmapMananger->pstClientList[index] == NULL) {
+        if (pstMmapManager->pstClientList[index] == NULL) {
             break;
         }
     }
     if (index >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
         AM_LOGE("no available client id !");
-        pthread_mutex_unlock(&pstMmapMananger->mutex);
+        pthread_mutex_unlock(&pstMmapManager->mutex);
         return -1;
     }
 
     pstMmapClient = (aml_mmap_audio_client_st *)aml_audio_calloc(1, sizeof(aml_mmap_audio_client_st));
     if (pstMmapClient == NULL) {
         AM_LOGE("calloc aml_mmap_audio_client_st failed !");
-        pthread_mutex_unlock(&pstMmapMananger->mutex);
+        pthread_mutex_unlock(&pstMmapManager->mutex);
         return -1;
     }
     pstMmapClient->s32AllocId = index;
@@ -919,31 +943,31 @@ int mmap_audio_register_client(void *pstMananger, struct aml_stream_out *aml_out
     memcpy(&pstMmapClient->stCfg, &audio_cfg, sizeof(audio_cfg));
     pstMmapClient->status = MMAP_INIT;
     pstMmapClient->bBufferReady = false;
-    pstMmapMananger->pstClientList[index] = pstMmapClient;
-    aml_out->mmap_audio_manager = pstMmapMananger;
+    pstMmapManager->pstClientList[index] = pstMmapClient;
+    aml_out->mmap_audio_manager = pstMmapManager;
     aml_out->mmap_audio_client_id = index;
     pthread_mutex_init(&pstMmapClient->statusMutex, NULL);
-    pthread_mutex_unlock(&pstMmapMananger->mutex);
+    pthread_mutex_unlock(&pstMmapManager->mutex);
     AM_LOGI("OK ! stream %p, client id %d",  aml_out, index);
 
     return index;
 }
 
 
-void mmap_audio_unregister_client(void *pstMananger, int client_id)
+void mmap_audio_unregister_client(void *pstManager, int client_id)
 {
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
-    if (pstMananger == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
-        AM_LOGE("invalid param : pstMananger %p, client_id %d", pstMananger, client_id);
+    if (pstManager == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
+        AM_LOGE("invalid param : pstManager %p, client_id %d", pstManager, client_id);
         return;
     }
 
-    pthread_mutex_lock(&pstMmapMananger->mutex);
-    pstMmapClient = pstMmapMananger->pstClientList[client_id];
+    pthread_mutex_lock(&pstMmapManager->mutex);
+    pstMmapClient = pstMmapManager->pstClientList[client_id];
     if (pstMmapClient == NULL) {
         AM_LOGE("client_id %d has been release !", client_id);
-        pthread_mutex_unlock(&pstMmapMananger->mutex);
+        pthread_mutex_unlock(&pstMmapManager->mutex);
         return;
     }
     if (pstMmapClient->pu8TempBuf) {
@@ -954,22 +978,22 @@ void mmap_audio_unregister_client(void *pstMananger, int client_id)
     pthread_mutex_destroy(&pstMmapClient->statusMutex);
     AM_LOGI("OK ! stream %p, client id %d",  pstMmapClient->stStream, client_id);
     aml_audio_free(pstMmapClient);
-    pstMmapMananger->pstClientList[client_id] = NULL;
-    pthread_mutex_unlock(&pstMmapMananger->mutex);
+    pstMmapManager->pstClientList[client_id] = NULL;
+    pthread_mutex_unlock(&pstMmapManager->mutex);
 }
 
 
-int mmap_audio_start_client(void *pstMananger, int client_id)
+int mmap_audio_start_client(void *pstManager, int client_id)
 {
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
 
-    if (pstMananger == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
-        AM_LOGE("invalid param : pstMananger %p, client_id %d", pstMananger, client_id);
+    if (pstManager == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
+        AM_LOGE("invalid param : pstManager %p, client_id %d", pstManager, client_id);
         return -1;
     }
 
-    pstMmapClient = pstMmapMananger->pstClientList[client_id];
+    pstMmapClient = pstMmapManager->pstClientList[client_id];
     if (pstMmapClient == NULL) {
         AM_LOGW("no mmap client");
         return -ENODATA;
@@ -989,42 +1013,52 @@ int mmap_audio_start_client(void *pstMananger, int client_id)
     return 0;
 }
 
-int mmap_audio_stop_client(void *pstMananger, int client_id)
+int mmap_audio_stop_client(void *pstManager, int client_id)
 {
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
 
-    if (pstMmapMananger == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
-        AM_LOGE("invalid param : pstMananger %p, client_id %d", pstMmapMananger, client_id);
+    if (pstMmapManager == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
+        AM_LOGE("invalid param : pstManager %p, client_id %d", pstMmapManager, client_id);
         return -1;
     }
-    pstMmapClient = pstMmapMananger->pstClientList[client_id];
-    if (pstMmapClient == NULL || pstMmapClient->status != MMAP_START_DONE) {
-        AM_LOGW("not start done or mmap not init");
+    pstMmapClient = pstMmapManager->pstClientList[client_id];
+    if (pstMmapClient == NULL) {
+        AM_LOGW("no mmap client");
         return -ENODATA;
     }
     pthread_mutex_lock(&pstMmapClient->statusMutex);
+    if (pstMmapClient->status != MMAP_START_DONE) {
+        AM_LOGW("not start done mmap status is %d !",pstMmapClient->status);
+        pthread_mutex_unlock(&pstMmapClient->statusMutex);
+        return -ENODATA;
+    }
     pstMmapClient->status = MMAP_STOP;
     pthread_mutex_unlock(&pstMmapClient->statusMutex);
     AM_LOGI("stream %p, client id %d, stop",  pstMmapClient->stStream, client_id);
     return 0;
 }
 
-int mmap_audio_stop_client_complete(void *pstMananger, int client_id)
+int mmap_audio_stop_client_complete(void *pstManager, int client_id)
 {
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
 
-    if (pstMmapMananger == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
-        AM_LOGE("invalid param : pstMananger %p, client_id %d", pstMmapMananger, client_id);
+    if (pstMmapManager == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
+        AM_LOGE("invalid param : pstManager %p, client_id %d", pstMmapManager, client_id);
         return -1;
     }
-    pstMmapClient = pstMmapMananger->pstClientList[client_id];
-    if (pstMmapClient == NULL || pstMmapClient->status != MMAP_STOP) {
-        AM_LOGW("not in stop status");
+    pstMmapClient = pstMmapManager->pstClientList[client_id];
+    if (pstMmapClient == NULL) {
+        AM_LOGW("no mmap client");
         return -ENODATA;
     }
     pthread_mutex_lock(&pstMmapClient->statusMutex);
+    if (pstMmapClient->status != MMAP_STOP) {
+        AM_LOGW("not in stop status mmap status is %d !",pstMmapClient->status);
+        pthread_mutex_unlock(&pstMmapClient->statusMutex);
+        return -ENODATA;
+    }
     pstMmapClient->status = MMAP_STOP_DONE;
     pthread_mutex_unlock(&pstMmapClient->statusMutex);
     AM_LOGI("stream %p, client id %d, stop_done",  pstMmapClient->stStream, client_id);
@@ -1044,33 +1078,33 @@ static bool inline mmap_audio_client_is_active(aml_mmap_audio_client_st *pstMmap
     return (status == MMAP_START || status == MMAP_START_DONE || status == MMAP_STOP);
 }
 
-static enum aml_mmap_audio_status_t mmap_audio_get_client_status(void *pstMananger, int client_id)
+static enum aml_mmap_audio_status_t mmap_audio_get_client_status(void *pstManager, int client_id)
 {
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
     enum aml_mmap_audio_status_t status = MMAP_INVALID;
 
-    if (pstMananger == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
-        AM_LOGE("invalid param : pstMananger %p, client_id %d", pstMananger, client_id);
+    if (pstManager == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
+        AM_LOGE("invalid param : pstManager %p, client_id %d", pstManager, client_id);
         return status;
     }
-    pstMmapClient = pstMmapMananger->pstClientList[client_id];
+    pstMmapClient = pstMmapManager->pstClientList[client_id];
     if (pstMmapClient != NULL) {
         status = pstMmapClient->status;
     }
     return status;
 }
 
-static void mmap_audio_set_buffer_ready(void *pstMananger, int client_id, bool buffer_ready)
+static void mmap_audio_set_buffer_ready(void *pstManager, int client_id, bool buffer_ready)
 {
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
 
-    if (pstMananger == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
-        AM_LOGE("invalid param : pstMananger %p, client_id %d", pstMananger, client_id);
+    if (pstManager == NULL || client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
+        AM_LOGE("invalid param : pstManager %p, client_id %d", pstManager, client_id);
         return;
     }
-    pstMmapClient = pstMmapMananger->pstClientList[client_id];
+    pstMmapClient = pstMmapManager->pstClientList[client_id];
     if (pstMmapClient != NULL) {
         pstMmapClient->bBufferReady = buffer_ready;
     }
@@ -1175,25 +1209,25 @@ static int mmap_audio_process_client_data(aml_mmap_audio_client_st *pstMmapClien
 }
 
 
-int mmap_audio_process_data(void *pstMananger, int frames)
+int mmap_audio_process_data(void *pstManager, int frames)
 {
     int client_id = 0;
     int ret_frames = 0;
     int process_frames = 0;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
-    if (pstMmapMananger == NULL) {
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
+    if (pstMmapManager == NULL) {
         return -1;
     }
 
-    pstMmapMananger->u32ProcessFrames = 0;
+    pstMmapManager->u32ProcessFrames = 0;
     for (client_id = 0; client_id < AML_MMAP_AUDIO_CLIENT_MAX_NUM; client_id++) {
-        pstMmapClient = pstMmapMananger->pstClientList[client_id];
+        pstMmapClient = pstMmapManager->pstClientList[client_id];
         if (pstMmapClient && pstMmapClient->stStream) {
             process_frames = mmap_audio_process_client_data(pstMmapClient, frames);
             if (process_frames > 0) {
                 ret_frames = process_frames;
-                pstMmapMananger->u32ProcessFrames = process_frames;
+                pstMmapManager->u32ProcessFrames = process_frames;
             }
         }
     }
@@ -1201,7 +1235,7 @@ int mmap_audio_process_data(void *pstMananger, int frames)
 }
 
 
-int mmap_audio_prepare_merge(void *pstMananger, struct audioCfg *pstMergeCfg, bool is_netflix)
+int mmap_audio_prepare_merge(void *pstManager, struct audioCfg *pstMergeCfg, bool is_netflix)
 {
     int client_id = 0;
     bool is_empty = true;
@@ -1211,14 +1245,14 @@ int mmap_audio_prepare_merge(void *pstMananger, struct audioCfg *pstMergeCfg, bo
     audio_channel_mask_t in_max_ch_mask = AUDIO_CHANNEL_OUT_MONO;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
     aml_pcm_mixing_st         *pstMultichMixer = NULL;
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
 
-    if (pstMmapMananger == NULL || pstMergeCfg == NULL) {
+    if (pstMmapManager == NULL || pstMergeCfg == NULL) {
         return -1;
     }
 
     for (client_id = 0; client_id < AML_MMAP_AUDIO_CLIENT_MAX_NUM; client_id++) {
-        pstMmapClient = pstMmapMananger->pstClientList[client_id];
+        pstMmapClient = pstMmapManager->pstClientList[client_id];
         if (pstMmapClient == NULL) {
             continue;
         }
@@ -1253,7 +1287,7 @@ int mmap_audio_prepare_merge(void *pstMananger, struct audioCfg *pstMergeCfg, bo
 }
 
 
-int mmap_audio_merge_data(void *pstMananger, const struct audioCfg *pstMergeCfg, uint8_t *pu8DataBuf, uint32_t u32DataBytes)
+int mmap_audio_merge_data(void *pstManager, const struct audioCfg *pstMergeCfg, uint8_t *pu8DataBuf, uint32_t u32DataBytes)
 {
     int ret = 0;
     int client_id = 0;
@@ -1263,22 +1297,22 @@ int mmap_audio_merge_data(void *pstMananger, const struct audioCfg *pstMergeCfg,
     uint32_t u32ProcessFrames = 0;
     aml_mmap_audio_client_st  *pstMmapClient = NULL;
     aml_pcm_mixing_st         *pstMultichMixer = NULL;
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
 
-    if (pstMmapMananger == NULL
-        || pstMmapMananger->u32ProcessFrames == 0
+    if (pstMmapManager == NULL
+        || pstMmapManager->u32ProcessFrames == 0
         || pstMergeCfg->frame_size == 0
         || pu8DataBuf == NULL
         || u32DataBytes == 0) {
         return -1;
     }
-    if (pstMmapMananger->u32ProcessFrames != pstMmapMananger->s32WriteSizeFrame) {
+    if (pstMmapManager->u32ProcessFrames != pstMmapManager->s32WriteSizeFrame) {
         AM_LOGW("MMAP writeSizeFrame(%d) != processFrames(%d), maybe abnormal !",
-            pstMmapMananger->s32WriteSizeFrame, pstMmapMananger->u32ProcessFrames);
+            pstMmapManager->s32WriteSizeFrame, pstMmapManager->u32ProcessFrames);
     }
 
-    u32ProcessFrames = pstMmapMananger->u32ProcessFrames;
-    pstMultichMixer = &pstMmapMananger->stMultichMixer;
+    u32ProcessFrames = pstMmapManager->u32ProcessFrames;
+    pstMultichMixer = &pstMmapManager->stMultichMixer;
     if (memcmp(&pstMultichMixer->cfg, pstMergeCfg, sizeof(*pstMergeCfg))
         || pstMultichMixer->mixed_frames < u32ProcessFrames) {
         AM_LOGI("multichMixer config change, re-init");
@@ -1291,7 +1325,7 @@ int mmap_audio_merge_data(void *pstMananger, const struct audioCfg *pstMergeCfg,
     memset(pstMultichMixer->mixed_buf, 0, pstMultichMixer->mixed_buf_size);
 
     for (client_id = 0; client_id < AML_MMAP_AUDIO_CLIENT_MAX_NUM; client_id++) {
-        pstMmapClient = pstMmapMananger->pstClientList[client_id];
+        pstMmapClient = pstMmapManager->pstClientList[client_id];
         if (pstMmapClient && pstMmapClient->u32FramesAvail) {
 
             do_mixing_multi_ch(pstMultichMixer, pstMmapClient->pu8TempBuf, \
@@ -1300,7 +1334,7 @@ int mmap_audio_merge_data(void *pstMananger, const struct audioCfg *pstMergeCfg,
             pstMmapClient->u32BytesAvail = 0;
         }
     }
-    pstMmapMananger->u32ProcessFrames = 0;
+    pstMmapManager->u32ProcessFrames = 0;
     mixed_data_ptr = pstMultichMixer->mixed_buf;
     mixed_data_size = u32ProcessFrames * pstMergeCfg->frame_size;
 
@@ -1315,19 +1349,19 @@ int mmap_audio_merge_data(void *pstMananger, const struct audioCfg *pstMergeCfg,
 }
 
 
-bool mmap_audio_has_active_client(void *pstMananger)
+bool mmap_audio_has_active_client(void *pstManager)
 {
     int client_id = 0;
     int ret_frames = 0;
     int process_frames = 0;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
-    if (pstMmapMananger == NULL) {
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
+    if (pstMmapManager == NULL) {
         return false;
     }
 
     for (client_id = 0; client_id < AML_MMAP_AUDIO_CLIENT_MAX_NUM; client_id++) {
-        pstMmapClient = pstMmapMananger->pstClientList[client_id];
+        pstMmapClient = pstMmapManager->pstClientList[client_id];
         if (pstMmapClient && pstMmapClient->stStream) {
             if (mmap_audio_client_is_active(pstMmapClient)) {
                 return true;
@@ -1344,22 +1378,22 @@ int mmap_audio_max_client_num()
 }
 
 
-int mmap_audio_read_client_data(void *pstMananger, int client_id, uint8_t *pu8DataBuf, uint32_t u32BufBytes)
+int mmap_audio_read_client_data(void *pstManager, int client_id, uint8_t *pu8DataBuf, uint32_t u32BufBytes)
 {
     int ret = 0;
     uint32_t u32CopyBytes = 0;
     aml_mmap_audio_client_st *pstMmapClient = NULL;
-    aml_mmap_audio_manager_st *pstMmapMananger = pstMananger;
+    aml_mmap_audio_manager_st *pstMmapManager = pstManager;
     uint32_t u32ProcessFrames = 0;
 
-    if (pstMmapMananger == NULL) {
+    if (pstMmapManager == NULL) {
         return -1;
     }
     if (client_id < 0 || client_id >= AML_MMAP_AUDIO_CLIENT_MAX_NUM) {
         AM_LOGE("invalid client_id %d", client_id);
         return -1;
     }
-    pstMmapClient = pstMmapMananger->pstClientList[client_id];
+    pstMmapClient = pstMmapManager->pstClientList[client_id];
     if (pstMmapClient == NULL || pstMmapClient->u32BytesAvail == 0) {
         return 0;
     }

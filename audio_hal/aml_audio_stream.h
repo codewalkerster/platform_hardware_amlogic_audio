@@ -506,7 +506,8 @@ int aml_audio_earc_get_latency(struct aml_audio_device *adev);
 int set_device_control(struct audio_hw_device *dev, struct str_parms *parms);
 audio_channel_mask_t aml_map_ch_to_mask(int ch);
 audio_channel_mask_t aml_map_ca_to_mask(int ca);
-void aml_netflix_volume_correction(struct aml_stream_out *aml_out);
 void aml_stream_clear_speed_aux_info(struct aml_stream_out *aml_out);
+
+ssize_t mixer_aux_buffer_write_wrap(struct audio_stream_out *stream, void *abuffer);
 
 #endif /* _AML_AUDIO_STREAM_H_ */

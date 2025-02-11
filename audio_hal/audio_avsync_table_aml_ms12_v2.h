@@ -307,7 +307,7 @@
 /* NETFLIX tuning part*/
 /******************************************************************************************************/
 // right offset. 10-->30->25->10
-#define  AVSYNC_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY       (10)
+#define  AVSYNC_MS12_NETFLIX_NONTUNNEL_PCM_LATENCY       (2)
 // right offset. 20-->40
 #define  AVSYNC_MS12_NETFLIX_NONTUNNEL_DDP_LATENCY       (40)
 // left offset. -18-->-29
@@ -376,7 +376,7 @@
 
 /*below DDP tuning is for NonMS12*/
 //  0 --> -3 -> 20
-#define  AVSYNC_NONMS12_NETFLIX_HDMI_OUT_PCM_LATENCY                 (40)
+#define  AVSYNC_NONMS12_NETFLIX_HDMI_OUT_PCM_LATENCY                 (30)
 #define  AVSYNC_NONMS12_NETFLIX_HDMI_OUT_DD_LATENCY                  (-95)
 // -25 -> -40
 #define  AVSYNC_NONMS12_NETFLIX_HDMI_OUT_DDP_LATENCY                 (60)

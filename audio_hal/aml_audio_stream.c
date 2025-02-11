@@ -1695,45 +1695,6 @@ exit:
     return ret;
 }
 
-void aml_netflix_volume_correction(struct aml_stream_out *aml_out)
-{
-    int tune_frames = 0;
-    int estimate_frames = 0;
-    struct aml_audio_device *adev = aml_out->dev;
-
-#if ANDROID_PLATFORM_SDK_VERSION > 33
-    /*
-     * Android U volumeshaper will refer to aml_out->last_frames_position,
-     * add some patch to make volume easing curve better.
-    */
-    if (!adev->is_netflix || (eDolbyMS12Lib != adev->dolby_lib_type) || aml_out->nts_volume_correction != false) {
-        return;
-    }
-
-    tune_frames = aml_audio_get_ms12_nontunel_tune_latency((const struct audio_stream_out *)aml_out);
-    if (audio_get_main_format(aml_out->hal_format) == AUDIO_FORMAT_E_AC3) {
-        if (tune_frames >= 96 * 48) {        // 96 ms
-            estimate_frames = 64 * 48 - 1;
-        } else if (tune_frames >= 64 * 48) { // 64 ms
-            estimate_frames = 32 * 48 - 1;
-        }
-    } else if (audio_is_linear_pcm(aml_out->hal_format)) {
-        if (tune_frames >= 2048 * 3) {        // 128 ms
-            estimate_frames = 2048 * 2 - 1;
-        } else if (tune_frames >= 2048 * 2) { // 84 ms
-            estimate_frames = 2048 - 1;
-        }
-    }
-
-    if (adev->ms12.last_ms12_pcm_out_position > estimate_frames) {
-        set_ms12_main_volume(&adev->ms12, aml_out->volume_l);
-        aml_out->nts_volume_correction = true;
-        ALOGI("%s volume %f, last_ms12_pcm_out_position %" PRIu64 ", tune_frames %d, estimate_frames %d",
-            __func__, aml_out->volume_l, adev->ms12.last_ms12_pcm_out_position, tune_frames, estimate_frames);
-    }
-#endif
-}
-
 void aml_stream_clear_speed_aux_info(struct aml_stream_out *aml_out)
 {
     aml_stream_speed_info_t *speed_info = NULL;
@@ -1750,4 +1711,57 @@ void aml_stream_clear_speed_aux_info(struct aml_stream_out *aml_out)
     gap_ease->target_frames = 0;
     gap_ease->current_frames = 0;
     gap_ease->start = false;
+}
+
+ssize_t mixer_aux_buffer_write_wrap(struct audio_stream_out *stream, void *abuffer)
+{
+    struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
+    aml_audio_buffer_t *audioBuffer = (aml_audio_buffer_t *)abuffer;
+    void *buffer = audioBuffer->pData;
+    const size_t bytes = audioBuffer->size;
+    int rbuffer_size = aml_out->input_start_threshold * aml_out->hal_frame_size;
+    int in_frames = bytes / aml_out->hal_frame_size;
+
+    if (aml_out->standby && (aml_out->input_cache_frames + in_frames < aml_out->input_start_threshold)) {
+        if (aml_out->input_cache_rbuffer == NULL) {
+            aml_out->input_cache_rbuffer = (struct ring_buffer *)aml_audio_calloc(1, sizeof(struct ring_buffer));
+            if (aml_out->input_cache_rbuffer != NULL) {
+                if (ring_buffer_init(aml_out->input_cache_rbuffer, rbuffer_size) != 0) {
+                    aml_audio_free(aml_out->input_cache_rbuffer);
+                    aml_out->input_cache_rbuffer == NULL;
+                    ALOGE("%s : ring_buffer_init fail !", __func__);
+                }
+            }
+        }
+        if (aml_out->input_cache_rbuffer != NULL) {
+            ring_buffer_write(aml_out->input_cache_rbuffer, buffer, bytes, UNCOVER_WRITE);
+            aml_out->input_cache_frames += in_frames;
+            ALOGI("%s in_frames %d, input_cache_frames %d", __func__, in_frames, aml_out->input_cache_frames);
+            //aml_audio_sleep(in_frames/2 * 1000 / 48);
+            return bytes;
+        }
+    }
+
+    if (aml_out->input_cache_frames > 0) {
+        int cache_bytes  = aml_out->input_cache_frames * aml_out->hal_frame_size;
+        int temp_bufsize = cache_bytes + bytes;
+        void *temp_buffer = aml_audio_calloc(1, temp_bufsize);
+        aml_audio_buffer_t abuffer_temp;
+
+        if (temp_buffer != NULL) {
+            ring_buffer_read(aml_out->input_cache_rbuffer, temp_buffer, cache_bytes);
+            memcpy((uint8_t *)temp_buffer + cache_bytes, buffer, bytes);
+
+            memset(&abuffer_temp, 0, sizeof(abuffer_temp));
+            abuffer_temp.pData = temp_buffer;
+            abuffer_temp.size = temp_bufsize;
+            mixer_aux_buffer_write(stream, &abuffer_temp);
+            aml_audio_free(temp_buffer);
+            temp_buffer = NULL;
+        }
+        aml_out->input_cache_frames = 0;
+    } else {
+        return mixer_aux_buffer_write(stream, abuffer);
+    }
+    return bytes;
 }

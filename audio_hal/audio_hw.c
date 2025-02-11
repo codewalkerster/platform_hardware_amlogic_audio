@@ -670,14 +670,23 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
                 return size;
 
             } else {
+                /* Framework sonic position jitter is related with hal buffer size. Hal buffer is smaller, position jitter is less */
+                if (out->is_normal_pcm && (out->hal_ch == 2)) {
+                    return DEFAULT_PLAYBACK_PERIOD_SIZE * audio_stream_out_frame_size ( (struct audio_stream_out *) stream);
+                }
                 /* roll back the change for SWPL-15974 to pass the gts failure SWPL-20926*/
                 return DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT* audio_stream_out_frame_size ( (struct audio_stream_out *) stream);
             }
         }
-        if (out->config.rate == 96000)
+
+        if (out->config.rate == 96000) {
             size = DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
-        else
+        } else if (audio_is_linear_pcm(out->hal_internal_format) && out->is_normal_pcm && (out->hal_ch == 2) && !(out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC)) {
+            /* Framework sonic position jitter is related with hal buffer size. Hal buffer is smaller, position jitter is less */
+            size = DEFAULT_PLAYBACK_PERIOD_SIZE;
+        } else {
             size = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
+        }
     }
 
     if (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC && audio_is_linear_pcm(out->hal_internal_format)) {
@@ -3485,6 +3494,11 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         speed_info->local_buf_size = 0;
         speed_info->local_buf_used_bytes = 0;
     }
+    if (out->input_cache_rbuffer != NULL) {
+        ring_buffer_release(out->input_cache_rbuffer);
+        aml_audio_free(out->input_cache_rbuffer);
+        out->input_cache_rbuffer = NULL;
+    }
 
     if (out->resample_outbuf) {
         aml_audio_free(out->resample_outbuf);
@@ -6178,8 +6192,6 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
 
 exit:
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
-
-        //aml_netflix_volume_correction(aml_out);
         if (continuous_mode(adev) && aml_out->ms12_dec_handle) {
             aml_out->timestamp = aml_out->ms12_dec_handle->timestamp;
             aml_out->lasttimestamp = aml_out->ms12_dec_handle->timestamp;
@@ -6528,6 +6540,10 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
         uint64_t minum_sleep_time_us = 5000;
         leave_ns = aml_audio_get_systime_ns();
         cost_time_us = (leave_ns - enter_ns)/1000;
+        // For deep buffer size : 512 frames
+        if (minum_sleep_time_us > frame_us/3) {
+            minum_sleep_time_us = frame_us/3;
+        }
         /*it costs less than 10ms*/
         //ALOGI("cost us=%lld frame/2=%lld", cost_time_us, frame_us/2);
         if ( cost_time_us < minum_sleep_time_us) {
@@ -6692,7 +6708,7 @@ int _get_stream_write_func(struct aml_stream_out *aml_out)
      }
 
     if (aml_out->is_normal_pcm) {
-        aml_out->write = mixer_aux_buffer_write;
+        aml_out->write = mixer_aux_buffer_write_wrap;
     } else {
         aml_out->write = mixer_main_buffer_write;
     }
@@ -7122,6 +7138,12 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
     aml_out->card = adev->card;
     aml_out->hwsync_parsed_frames_sum = 0;
     aml_out->streamTypeIndex = 0;
+
+    if (audio_is_linear_pcm(aml_out->hal_format) && aml_out->is_normal_pcm
+        && (aml_out->hal_ch == 2) && !(flags & AUDIO_OUTPUT_FLAG_MMAP_NOIRQ)) {
+        aml_out->input_cache_frames = 0;
+        aml_out->input_start_threshold = DEFAULT_PLAYBACK_PERIOD_SIZE * (PLAYBACK_PERIOD_COUNT - 1);
+    }
 
     if (adev->useAudioMixer) {
         // In V1.1, android out lpcm stream and hwsync pcm stream goes to aml mixer,

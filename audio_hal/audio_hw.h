@@ -902,6 +902,9 @@ struct aml_stream_out {
     bool first_volume_set;
     bool is_decoder_muted;
     int decoder_mute_duration;
+    struct ring_buffer *input_cache_rbuffer;
+    int input_cache_frames;
+    int input_start_threshold;
 };
 
 #ifdef LOWPOWER_DSP_FFV
@@ -1248,7 +1251,7 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
                                 const char *address);
 void adev_close_output_stream_new(struct audio_hw_device *dev, struct audio_stream_out *stream);
 
-
+ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer);
 
 /* 'bytes' are the number of bytes written to audio FIFO, for which 'timestamp' is valid.
  * 'available' is the number of frames available to read (for input) or yet to be played

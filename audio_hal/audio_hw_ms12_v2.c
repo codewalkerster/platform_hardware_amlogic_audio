@@ -82,12 +82,9 @@
 #define MS12_MAIN_INPUT_BUF_NS_UPTHRESHOLD (160000000LL)
 #define MS12_MAIN_INPUT_BUF_NS_UPTHRESHOLD_AC4 (256000000LL)
 
-/*if we choose 96ms, it will cause audio flinger underrun,
-  if we choose 64ms, it will cause ms12 underrun,
-  so we choose 84ms now
-*/
-#define MS12_SYS_INPUT_BUF_NS  (84000000LL)
-#define MS12_DEEP_BUF_INPUT_BUF_NS  (84000000LL)
+
+#define MS12_SYS_INPUT_BUF_NS  (64000000LL)
+#define MS12_DEEP_BUF_INPUT_BUF_NS  (64000000LL)  // 512 * 6 frames
 
 #define NANO_SECOND_PER_SECOND 1000000000LL
 #define NANO_SECOND_PER_MILLISECOND 1000000LL
@@ -99,7 +96,7 @@
 
 #define MS12_MAIN_BUF_INCREASE_TIME_MS (1000)
 #define MS12_SYS_BUF_INCREASE_TIME_MS (1000)
-#define MS12_DEEP_BUF_INCREASE_TIME_MS (1000)
+#define MS12_DEEP_BUF_INCREASE_TIME_MS (500)
 
 
 #define MS12_PCM_FRAME_SIZE         (6144)
@@ -2044,7 +2041,7 @@ int dolby_ms12_system_process(
             if (input_ns == 0) {
                 input_ns = (uint64_t)(bytes) * NANO_SECOND_PER_SECOND / aml_out->hal_frame_size / mixer_default_samplerate;
             }
-            audio_virtual_buf_open(&ms12->system_virtual_buf_handle, "ms12 system input", input_ns/2, MS12_SYS_INPUT_BUF_NS, 0, MS12_SYS_BUF_INCREASE_TIME_MS);
+            audio_virtual_buf_open(&ms12->system_virtual_buf_handle, "ms12 system input", input_ns*0.8, MS12_SYS_INPUT_BUF_NS, 0, MS12_SYS_BUF_INCREASE_TIME_MS);
         }
         audio_virtual_buf_process(ms12->system_virtual_buf_handle, input_ns);
     }
@@ -2089,7 +2086,7 @@ int dolby_ms12_deep_buffer_process(
                 ms12->dolby_ms12_ptr
                 , buffer
                 , bytes
-                , AUDIO_FORMAT_PCM_16_BIT
+                , aml_out->hal_format
                 , aml_out->hal_ch
                 , mixer_default_samplerate);
         if (dolby_ms12_input_bytes > 0) {
@@ -2114,7 +2111,7 @@ int dolby_ms12_deep_buffer_process(
             if (input_ns == 0) {
                 input_ns = (uint64_t)(bytes) * NANO_SECOND_PER_SECOND / aml_out->hal_frame_size / mixer_default_samplerate;
             }
-            audio_virtual_buf_open(&ms12->deep_buf_virtual_buf_handle, "ms12 deep buf input", input_ns/2, MS12_DEEP_BUF_INPUT_BUF_NS, 0, MS12_DEEP_BUF_INCREASE_TIME_MS);
+            audio_virtual_buf_open(&ms12->deep_buf_virtual_buf_handle, "ms12 deep buf input", input_ns*0.8, MS12_DEEP_BUF_INPUT_BUF_NS, 0, MS12_DEEP_BUF_INCREASE_TIME_MS);
         }
         audio_virtual_buf_process(ms12->deep_buf_virtual_buf_handle, input_ns);
     }
