@@ -6506,7 +6506,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
         aml_out->lasttimestamp.tv_nsec = aml_out->timestamp.tv_nsec;
     }
 
-    if (eDolbyMS12Lib == adev->dolby_lib_type) {
+    if (eDolbyMS12Lib == adev->dolby_lib_type && !adev->switching_dolby_lib) {
         /*
            mixer_aux_buffer_write is called when the hw write is called another thread,for example
            main write thread or ms12 thread. aux audio is coming from the audioflinger mixed thread.
@@ -6515,10 +6515,20 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
            */
         alsa_latency_frame = adev->ms12.latency_frame;
         int system_latency = 0;
+#ifndef AUDIO_HAL_DISABLE_MS12
+        pthread_mutex_lock(&ms12->lock);
         if (is_deep_buf) {
             system_latency = dolby_ms12_get_deep_buffer_avail_frames(NULL);
         } else {
             system_latency = dolby_ms12_get_system_buffer_avail(NULL) / frame_size;
+        }
+        pthread_mutex_unlock(&ms12->lock);
+#endif
+        if (system_latency < 0) {
+            if (adev->debug_flag) {
+                AM_LOGD("system_latency %d invalid, use 0", system_latency);
+            }
+            system_latency = 0;
         }
 
         if (adev->compensate_video_enable) {
