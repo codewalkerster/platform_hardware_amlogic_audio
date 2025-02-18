@@ -3848,7 +3848,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         pthread_mutex_unlock(&adev->ms12.lock);
         if (adev->effect_ctrl.effect_mode == EFFECT_MODE_DAP &&
             is_dts_format(out->hal_internal_format)) {
-            if (adev->ms12.dolby_ms12_enable) {
+            if (adev->ms12.dap_only_enable) {
                 aml_dap_close(&adev->ms12);
             }
         }
