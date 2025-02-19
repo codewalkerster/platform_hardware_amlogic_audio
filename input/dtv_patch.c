@@ -948,7 +948,7 @@ void update_dtv_audio_instance_format_info(struct aml_dtv_audio_instance *instan
 
     if (bypass_aml_dec) {
 #ifndef AUDIO_HAL_DISABLE_MS12
-        get_ms12_codec_format_info(&aml_dev->ms12,&codec_format);
+        get_ms12_codec_format_info((struct audio_stream_out *)aml_out, &codec_format);
         instance->in_format = codec_format.encoding_format;
         instance->in_chanmask = codec_format.channel_mask;
         instance->input_sample_rate = codec_format.sampe_rate;

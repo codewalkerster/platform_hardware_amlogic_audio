@@ -135,6 +135,14 @@ typedef struct Aml_MS12_ProcessInfo_s {
     int as32Acmod[2];
 } Aml_MS12_ProcessInfo_t;
 
+typedef struct Aml_MS12_DecInfo_s {
+    int s32SampleRate;
+    int s32ChannelAcmod;
+    int s32LfePresent;
+    int s32AacProfile;
+    int reserved[4];
+} Aml_MS12_DecInfo_t;
+
 typedef struct AML_MS12_CodecInfo_s
 {
     unsigned int u32AudioFormat;

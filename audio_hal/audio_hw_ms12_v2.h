@@ -488,7 +488,8 @@ int aml_dap_process(
 
 
 int dolby_ms12_get_latency(struct dolby_ms12_desc *ms12, audio_format_t output_format);
-int get_ms12_codec_format_info(struct dolby_ms12_desc *ms12,struct codec_format_info *codec_format);
+int get_ms12_codec_format_info(struct audio_stream_out *stream, struct codec_format_info *codec_format);
+int get_ms12_main_dec_info(struct audio_stream_out *stream, Aml_MS12_DecInfo_t *dec_info);
 int set_ms12_fadein_max_detect_time_ms(int time_ms);
 
 #endif //end of _AUDIO_HW_MS12_H_

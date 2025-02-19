@@ -950,39 +950,67 @@ int get_ms12_mat_dec_delay() {
     return dolby_ms12_get_mat_dec_latency();
 }
 
-int get_ms12_codec_format_info(struct dolby_ms12_desc *ms12,struct codec_format_info *codec_format)
+int get_ms12_codec_format_info(struct audio_stream_out *stream, struct codec_format_info *codec_format)
 {
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = aml_out->dev;
+    struct dolby_ms12_desc *ms12 = &(adev->ms12);
 
-    struct aml_audio_device *adev = (struct aml_audio_device *)adev_get_handle();
     if (!ms12 || !codec_format) {
         ALOGE("-%s() pointer error ms12 %p codec_format %p", __FUNCTION__, ms12, codec_format);
         return -EINVAL;
     }
-    codec_format->encoding_format = ms12->input_config_format;
-    codec_format->channel_mask = ms12->config_channel_mask;
-    codec_format->sampe_rate = ms12->config_sample_rate;
+    codec_format->encoding_format = aml_out->hal_internal_format;
+    codec_format->channel_mask = aml_out->hal_channel_mask;
+    codec_format->sampe_rate = aml_out->hal_rate;
     bool is_aac_format = ((codec_format->encoding_format == AUDIO_FORMAT_AAC) || \
                             (codec_format->encoding_format == AUDIO_FORMAT_AAC_LATM) || \
                             (codec_format->encoding_format == AUDIO_FORMAT_HE_AAC_V1) || \
                             (codec_format->encoding_format == AUDIO_FORMAT_HE_AAC_V2));
     if (is_aac_format) {
-         int aac_profile = dolby_ms12_get_aac_profile();
-         if (adev->debug_flag)
-             ALOGI("aac_profile %d",aac_profile);
-         if (aac_profile == AAC_PROFILE_LC) {
-            codec_format->encoding_format = AUDIO_FORMAT_AAC_LC;
-         } else if (aac_profile == AAC_PROFILE_HEAAC_V1) {
-            codec_format->encoding_format = AUDIO_FORMAT_AAC_HE_V1;
-         } else if (aac_profile == AAC_PROFILE_HEAAC_V2) {
-            codec_format->encoding_format = AUDIO_FORMAT_AAC_HE_V2;
-         }
+        //int aac_profile = dolby_ms12_get_aac_profile();
+        Aml_MS12_DecInfo_t dec_info;
+        memset(&dec_info, 0x00, sizeof(dec_info));
+        if (0 != get_ms12_main_dec_info(stream, &dec_info)) {
+            ALOGE("get_ms12_main_dec_info fail");
+        } else {
+            int aac_profile = dec_info.s32AacProfile;
+            if (adev->debug_flag)
+                ALOGI("aac_profile %d",aac_profile);
+            if (aac_profile == AAC_PROFILE_LC) {
+                codec_format->encoding_format = AUDIO_FORMAT_AAC_LC;
+            } else if (aac_profile == AAC_PROFILE_HEAAC_V1) {
+                codec_format->encoding_format = AUDIO_FORMAT_AAC_HE_V1;
+            } else if (aac_profile == AAC_PROFILE_HEAAC_V2) {
+                codec_format->encoding_format = AUDIO_FORMAT_AAC_HE_V2;
+            }
+        }
     }
     if (adev->debug_flag)
         ALOGD("encoding_format %0x channel_mask %0x codec_format->sampe_rate %d",
         codec_format->encoding_format, codec_format->channel_mask, codec_format->sampe_rate);
     return 0;
 }
-static void ms12_close_all_spdifout(struct dolby_ms12_desc *ms12) {
+
+int get_ms12_main_dec_info(struct audio_stream_out *stream, Aml_MS12_DecInfo_t *dec_info)
+{
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = aml_out->dev;
+    struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    int ret = -1;
+    if (aml_out && aml_out->ms12_dec_handle && dec_info) {
+        ret = aml_ms12_decoder_getparameter(ms12, aml_out->ms12_dec_handle, MS12_CODEC_PARAMETER_DEC_INFO, dec_info, sizeof(Aml_MS12_DecInfo_t));
+        if (adev->debug_flag) {
+            ALOGI("stream:%p ms12_dec_handle:%p ret:%d sr:%d acmod:%d lfe:%d aac_profile:%d", stream, aml_out->ms12_dec_handle, ret, dec_info->s32SampleRate,
+                dec_info->s32ChannelAcmod, dec_info->s32LfePresent, dec_info->s32AacProfile);
+        }
+    } else {
+        ALOGE("Invalid parameter: stream:%p dec_info:%p", stream, dec_info);
+    }
+    return ret;
+}
+
+void ms12_close_all_spdifout(struct dolby_ms12_desc *ms12) {
     int i = 0;
     struct aml_audio_device *adev = adev_get_handle();
     pthread_mutex_lock(&adev->bitstream_lock);
