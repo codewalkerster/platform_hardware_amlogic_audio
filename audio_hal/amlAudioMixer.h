@@ -56,6 +56,11 @@ typedef enum SUBMIX_SCHEDULER_STATE {
     SUBMIX_SCHEDULER_MAX,
 } submix_scheduler_state_t;
 
+enum MIXER_TYPE {
+    MIXER_LPCM = 1,
+    MIXER_MS12 = 2,
+};
+
 //simple mixer support: 2 in , 1 out
 struct amlAudioMixer {
     input_port *in_ports[NR_INPORTS];
@@ -105,6 +110,7 @@ struct amlAudioMixer {
     int last_scheduler_state;
     sem_t submix_standby_sem;
     uint32_t submix_timer_id;
+    int64_t inports_read_time_us;
 };
 
 enum aml_sub_mixer_type {
@@ -133,7 +139,7 @@ int init_mixer_input_port(struct amlAudioMixer *audio_mixer,
         void *notify_data,
         int (*on_input_avail_cbk)(void *data),
         void *input_avail_data,
-        meta_data_cbk_t on_meta_data_cbk,
+        /*meta_data_cbk_t*/void * on_meta_data_cbk,
         void *meta_data,
         float volume);
 
@@ -169,15 +175,15 @@ int mixer_set_continuous_output(struct amlAudioMixer *audio_mixer, bool continuo
 int mixer_outport_pcm_restart(struct amlAudioMixer *audio_mixer);
 void mixer_dump(int s32Fd, const struct aml_audio_device *pstAmlDev);
 void mixer_using_alsa_device_dump(int s32Fd, const struct aml_audio_device *pstAmlDev);
-bool has_hwsync_stream_running(struct audio_stream_out *stream);
+bool has_hwsync_stream_running(void *stream);
 /* usb karaoke for hal mixer */
 int mixer_set_karaoke(struct amlAudioMixer *audio_mixer, struct kara_manager *kara);
 
 void mixer_enable_multich_output(struct amlAudioMixer *audio_mixer, bool enable);
 int mixer_get_mc_outport_latency_frames(struct amlAudioMixer *audio_mixer);
 int mixer_reset_virtual_buf(void *audio_mixer, bool reset);
-int mixer_get_inport_start_threshold(struct aml_stream_out *out, struct amlAudioMixer *audio_mixer);
 
+int mixer_get_inport_start_threshold(void *out, struct amlAudioMixer *audio_mixer);
 input_port *mixer_get_inport(struct amlAudioMixer *audio_mixer, uint32_t *pMasks);
 int aml_audiohal_sch_state_2_submix(struct amlAudioMixer *audio_mixer, int sch_state);
 int aml_set_submix_scheduler_state(struct amlAudioMixer *audio_mixer, int sch_state);
@@ -185,6 +191,27 @@ void set_submix_continuous_state(struct amlAudioMixer *audio_mixer, int state);
 int aml_send_submix_standby_state_2_submix(void);
 void submix_timer_callback_handler(union sigval sigv);
 
+
+int on_notify_cbk(void *data);
+int on_input_avail_cbk(void *data);
+
+int aml_do_hwsync_action(void *stream, void *abuffer);
+ssize_t out_write_pcm_to_AudioMixer(void *stream, const void *buffer, size_t bytes, void *abuffer);
+
+int initHalSubMixing(enum MIXER_TYPE type,
+        struct aml_audio_device *adev,
+        bool isTV);
+int deleteHalSubMixing(struct aml_audio_device *adev);
+
+struct pcm *getSubMixingPCMdev(struct amlAudioMixer *amixer);
+int subMixingOutputRestart(struct aml_audio_device *adev);
+int subMixingSetSinkGain(struct aml_audio_device *adev, void *sink_gain);
+int subMixingSetEQData(struct aml_audio_device *adev, void *eq_data);
+int subMixingSetSrcGain(struct aml_audio_device *adev, float gain);
+int subMixingSetAudioPostprocess(struct aml_audio_device *adev, void **postprocess);
+int subMixingEnableMultiChOutput(struct aml_audio_device *adev, bool enable);
+
+void audio_mixer_post_sleep(void *aml_out);
 
 __END_DECLS
 

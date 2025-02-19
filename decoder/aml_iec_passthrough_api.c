@@ -157,7 +157,13 @@ static int iec_passthrough_release(aml_dec_t * aml_dec)
         if (aml_dec->raw_in_data.buf) {
             aml_audio_free(aml_dec->raw_in_data.buf);
         }
-        aml_audio_free(iec_dec);
+
+        if (aml_dec->decFunc) {
+            aml_audio_free(aml_dec->decFunc);
+            aml_dec->decFunc = NULL;
+        }
+        aml_audio_free(aml_dec);
+        aml_dec = NULL;
     }
     ALOGI("%s success", __func__);
     return 0;
@@ -248,6 +254,25 @@ int iec_passthrough_config(aml_dec_t * aml_dec __unused, aml_dec_config_type_t c
     int ret = 0;
     ALOGV("iec_passthrough_config \n");
     return ret;
+}
+
+aml_dec_func_t *get_iec_dec_func_handle(void)
+{
+    aml_dec_func_t *amlDcvFunc = NULL;
+
+    amlDcvFunc = (struct aml_dec_func *)aml_audio_calloc(1, sizeof(struct aml_dec_func));
+    if (amlDcvFunc) {
+        amlDcvFunc->f_init       = iec_passthrough_init;
+        amlDcvFunc->f_release    = iec_passthrough_release;
+        amlDcvFunc->f_process    = iec_passthrough_process;
+        amlDcvFunc->f_config     = iec_passthrough_config;
+        amlDcvFunc->f_info       = iec_passthrough_getinfo;
+    } else {
+        AM_LOGE(" calloc amlDcvFunc:%p failed", amlDcvFunc);
+        amlDcvFunc = NULL;
+    }
+
+    return amlDcvFunc;
 }
 
 aml_dec_func_t aml_iec_func = {

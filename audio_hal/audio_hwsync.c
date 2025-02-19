@@ -41,7 +41,7 @@
 #include "audio_hw_ms12.h"
 #include "audio_mediasync_wrap.h"
 #include "audio_hwsync_wrap.h"
-#include "dtv_patch_hal_avsync.h"
+#include "audio_tsync_wrap.h"
 
 static int aml_audio_get_hwsync_flag()
 {
@@ -49,6 +49,83 @@ static int aml_audio_get_hwsync_flag()
     debug_flag = get_debug_value(AML_DEBUG_AUDIOHAL_HW_SYNC);
     return debug_flag;
 }
+
+void aml_mediasync_init(void *pSyncHandle)
+{
+    media_sync_info_t *pMediaSyncTable = (media_sync_info_t *)pSyncHandle;
+    int index = 0;
+    for (index = 0; index < HW_SYNC_MAX; ++index) {
+        pMediaSyncTable[index].handle = NULL;
+        pMediaSyncTable[index].id = -1;
+    }
+}
+
+void aml_add_mediasync_info(void *pSyncHandle, void *pItem, int32_t id)
+{
+    media_sync_info_t *pMediaSyncTable = (media_sync_info_t *)pSyncHandle;
+    int index = 0;
+    for (index = 0; index < HW_SYNC_MAX; ++index) {
+        if (pMediaSyncTable[index].handle == NULL) {
+            pMediaSyncTable[index].handle = pItem;
+            pMediaSyncTable[index].id = id;
+            pMediaSyncTable[index].ref_count = 0;
+            break;
+        }
+    }
+    if (index >= HW_SYNC_MAX) {
+        AM_LOGW("no enough space to store mediasync info in MediaSyncTable");
+    }
+}
+
+// should be used with adev->mediasync_lock
+// return the media sync item ref_count
+int aml_remove_mediasync_info(void *pSyncHandle, void *pItem)
+{
+    media_sync_info_t *pMediaSyncTable = (media_sync_info_t *)pSyncHandle;
+    int index = 0;
+    int ref_count = 0;
+    for (index = 0; index < HW_SYNC_MAX; ++index) {
+        if (pMediaSyncTable[index].handle == pItem) {
+            pMediaSyncTable[index].ref_count--;
+            ref_count = pMediaSyncTable[index].ref_count;
+            if (ref_count <= 0) {
+                pMediaSyncTable[index].handle = NULL;
+                pMediaSyncTable[index].id = -1;
+            }
+            break;
+        }
+    }
+    return ref_count;
+}
+
+// should be used with adev->mediasync_lock
+void aml_add_mediasync_ref_count(void *pSyncHandle, int32_t id)
+{
+    media_sync_info_t *pMediaSyncTable = (media_sync_info_t *)pSyncHandle;
+    int index = 0;
+    for (index = 0; index < HW_SYNC_MAX; ++index) {
+        if (pMediaSyncTable[index].id == id) {
+            pMediaSyncTable[index].ref_count++;
+            break;
+        }
+    }
+}
+
+void *aml_lookup_mediasync_handle(void *pSyncHandle, int32_t id)
+{
+    media_sync_info_t *pMediaSyncTable = (media_sync_info_t *)pSyncHandle;
+    int index = 0;
+    void *pHandle = NULL;
+    for (index = 0; index < HW_SYNC_MAX; ++index) {
+        if (pMediaSyncTable[index].id == id) {
+            pHandle = pMediaSyncTable[index].handle;
+            break;
+        }
+    }
+
+    return pHandle;
+}
+
 
 void aml_audio_hwsync_init(audio_hwsync_t *p_hwsync, struct aml_stream_out  *out)
 {
@@ -64,6 +141,7 @@ void aml_audio_hwsync_init(audio_hwsync_t *p_hwsync, struct aml_stream_out  *out
     p_hwsync->bvariable_frame_size = 0;
     p_hwsync->version_num = 0;
     p_hwsync->wait_video_done = false;
+    p_hwsync->play_rate = 0.0f;
 
     memset(p_hwsync->pts_tab, 0, sizeof(apts_tab_t)*HWSYNC_APTS_NUM);
     pthread_mutex_init(&p_hwsync->lock, NULL);
@@ -108,7 +186,7 @@ int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
             remain--;
             if (p_hwsync->hw_sync_header_cnt == HW_SYNC_VERSION_SIZE ) {
                 if (!hwsync_header_valid(&p_hwsync->hw_sync_header[0])) {
-                    ALOGE("!!!!!!hwsync header out of sync! Resync.should not happen????");
+                    ALOGV("!!!!!!hwsync header out of sync! Resync.should not happen????");
                     p_hwsync->hw_sync_state = HW_SYNC_STATE_HEADER;
                     memmove(p_hwsync->hw_sync_header, p_hwsync->hw_sync_header + 1, HW_SYNC_VERSION_SIZE - 1);
                     p_hwsync->hw_sync_header_cnt--;
@@ -211,7 +289,8 @@ int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
                     if (time_diff >= (TIME_DIFF_THRESHOLD * USEC_PER_SEC) ||
                         p_hwsync->pts_gap > 100 ||
                         pts <= p_hwsync->last_apts_from_header) {
-                        ALOGI("[hwsync:%p]tunnel time_diff[%"PRIu64"]us frame_body_size[%d]bytes pts_info[%"PRIu64" - %"PRIu64"]ms pts_gap[%"PRIu64"]ms", p_hwsync, time_diff, p_hwsync->hw_sync_frame_size, pts / 90, p_hwsync->last_apts_from_header / 90, p_hwsync->pts_gap);
+                        if (debug_enable)
+                            ALOGI("[hwsync:%p]tunnel time_diff[%"PRIu64"]us frame_body_size[%d]bytes pts_info[%"PRIu64" - %"PRIu64"]ms pts_gap[%"PRIu64"]ms", p_hwsync, time_diff, p_hwsync->hw_sync_frame_size, pts / 90, p_hwsync->last_apts_from_header / 90, p_hwsync->pts_gap);
                         p_hwsync->last_hwsync_timestamp = current_timestamp;
                     }
                 }
@@ -261,7 +340,7 @@ int aml_audio_hwsync_find_frame(audio_hwsync_t *p_hwsync,
                          ALOGV("hw_sync_encapsulation_mode %d ",p_hwsync->hw_sync_encapsulation_mode);
                          p_hwsync->hw_sync_payload_unit_cnt = p_hwsync->hw_sync_payload_unit_size - HW_AVSYNC_PAYLOAD_HEADER_SIZE;
                          if (p_hwsync->hw_sync_encapsulation_mode >  AUDIO_ENCAPSULATION_MODE_HANDLE) {
-                             ALOGE("!!!!!!hwsync header out of sync! Resync.should not happen????");
+                             ALOGV("!!!!!!hwsync header out of sync! Resync.should not happen????");
                              p_hwsync->hw_sync_state = HW_SYNC_STATE_HEADER;
                              continue;
                          } else {
@@ -459,21 +538,6 @@ int aml_audio_hwsync_set_first_pts(audio_hwsync_t *p_hwsync, uint64_t pts)
     p_hwsync->first_apts_flag = true;
     p_hwsync->first_apts = pts;
 
-    /* this wait lead to media vol case fail. TV-41815 */
-#if 0 // here close this delay for tsync.
-    if (!p_hwsync->use_mediasync) {
-        while (delay_count < 10) {
-            vframe_ready_cnt = get_sysfs_int("/sys/class/video/vframe_ready_cnt");
-            ALOGV("/sys/class/video/vframe_ready_cnt is %d", vframe_ready_cnt);
-            if (vframe_ready_cnt < 2) {
-                usleep(10000);
-                delay_count++;
-                continue;
-            }
-            break;
-        }
-    }
-#endif
     if (aml_hwsync_wrap_set_start_pts64(p_hwsync, pts) < 0)
         return -EINVAL;
     p_hwsync->aout->tsync_status = TSYNC_STATUS_RUNNING;
@@ -497,6 +561,7 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
     struct aml_audio_device *adev = NULL;
     int latency_frames = 0;
     struct audio_stream_out *stream = NULL;
+    struct dolby_ms12_dec_desc *ms12_dec = NULL;
     int latency_pts = 0;
 
     // add protection to avoid NULL pointer.
@@ -511,6 +576,7 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
     int alsa_bitstream_delay_frames = 0;
     int ms12_pipeline_delay_frames = 0;
     bool amaster_mode = true;
+    aml_stream_speed_info_t *speed_info = NULL;
 
     ALOGV("%s,================", __func__);
 
@@ -519,6 +585,7 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
         return 0;
     } else {
         adev = p_hwsync->aout->dev;
+        ms12_dec = out->ms12_dec_handle;
         if (adev == NULL) {
             ALOGE("%s,adev == NULL", __func__);
             return 0;
@@ -550,10 +617,12 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
         latency_frames = (int32_t)out_get_latency_frames(stream);
     }
     latency_pts = latency_frames / 48 * 90;
+    speed_info = &out->speed_info;
 
     if (p_hwsync->use_mediasync) {
         uint64_t apts64 = 0;
         if (p_hwsync->first_apts_flag == false && (apts >= abs(latency_pts) || latency_pts <= 0)) {
+
             ALOGI("%s apts =%" PRIx64 "", __func__, apts);
             ALOGI("%s alsa pcm delay =%d bitstream delay =%d pipeline =%d", __func__, alsa_pcm_delay_frames, alsa_bitstream_delay_frames, ms12_pipeline_delay_frames);
             ALOGI("%s apts = 0x%" PRIx64 " (%" PRIu64 " ms) latency=0x%x (%d ms)", __func__, apts, apts / 90, latency_pts, latency_pts/90);
@@ -566,16 +635,13 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
             aml_audio_hwsync_set_first_pts(out->hwsync, apts64);
             /*the wait function sometime causes too much time which causes audio break*/
             //aml_hwsync_wait_video_drop(out->hwsync, apts32);
-            // aml_hwsync_wrap_reset_pcrscr may not update pcr because of threshold
-            if (aml_hwsync_wrap_force_reset_pcrscr(out->hwsync, apts64) != 0) {
-                aml_hwsync_wrap_reset_pcrscr(out->hwsync, apts64);
-            }
+            aml_hwsync_wrap_reset_pcrscr_speed(out->hwsync, apts64, speed_info->speed, true);
         } else  if (p_hwsync->first_apts_flag) {
-            if (apts >= abs(latency_pts)) {
+            if (apts >= abs(latency_pts) || latency_pts <= 0) {
                 //apts -= latency_pts;
                 apts64 = apts - latency_pts;
             } else {
-                ALOGE("wrong PTS =0x%" PRIx64 " delay pts=0x%x",apts, latency_pts);
+                ALOGE("wrong PTS =0x%" PRIx64 " delay pts=%d",apts, latency_pts);
                 return 0;
             }
             /*if the pts is zero, to avoid video pcr not set issue, we just set it as 1ms*/
@@ -588,8 +654,8 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
             pcr_pts_gap = ((int)(apts64 - pcr)) / 90;
             gap = pcr_pts_gap * 90;
             /*resume from pause status, we can sync it exactly*/
-            if (adev->ms12.need_resync) {
-                adev->ms12.need_resync = 0;
+            if (ms12_dec && ms12_dec->need_resync) {
+                ms12_dec->need_resync = false;
                 aml_audio_hwsync_set_first_pts(out->hwsync, apts64);
                 ALOGI("%s resync pcr_pts_gap %d ms\n", __func__, pcr_pts_gap);
             }
@@ -598,7 +664,29 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
                 // ms12 continuous mode, stream just resume and not ready for write
                 //ALOGI("%s : continuous mode, waiting stream[%p] write_status to be true", __func__, out);
             } else {
-                aml_hwsync_wrap_reset_pcrscr(out->hwsync, apts64);
+                float speed_select = speed_info->speed;
+                bool force_update = false;
+                aml_audio_speed_post_delay_t *p_post_delay = &speed_info->post_delay;
+
+                if (speed_info->hwsync_force_update) {
+                    if (p_post_delay->transitioning) {
+                        speed_select = p_post_delay->last_speed;
+                    } else if (is_float_equal(p_post_delay->next_speed, speed_info->speed)) {
+                        if (out->hwsync->last_output_pts && out->hwsync->last_output_pts != ULLONG_MAX) {
+                            // Make sure : different speed has different apts value.
+                            uint64_t mini_apts64 = out->hwsync->last_output_pts + 90;
+                            if (apts64 < mini_apts64) {
+                                AM_LOGI("apts64 change %" PRIu64 " to %" PRIu64 "", apts64, mini_apts64);
+                                apts64 = mini_apts64;
+                            }
+                        }
+                        force_update = true;
+                        speed_info->hwsync_force_update = false;
+                        pcr = apts64;
+                        pcr_pts_gap = gap = 0;
+                    }
+                }
+                aml_hwsync_wrap_reset_pcrscr_speed(out->hwsync, apts64, speed_select, force_update);
             }
 
             {
@@ -640,7 +728,6 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
                 *p_adjust_ms = pcr_pts_gap;
                 out->is_insert_zero_data = true;
             } else {
-                aml_hwsync_wrap_reset_pcrscr(out->hwsync, apts64);
                 out->is_insert_zero_data = false;
             }
 
@@ -653,81 +740,8 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
                 latency_frames);
         }
     } else {
-
-        ALOGE("%s,================first_apts_flag:%d, apts:%" PRIu64 ", latency_pts:%d\n", __func__, p_hwsync->first_apts_flag, apts, latency_pts);
-        if (p_hwsync->first_apts_flag == false && ((latency_pts < 0) || (apts >= latency_pts))) {
-            ALOGI("%s apts = 0x%" PRIx64 " (%" PRIu64 " ms) latency=0x%x (%d ms)", __FUNCTION__, apts, apts / 90, latency_pts, latency_pts/90);
-            ALOGI("%s aml_audio_hwsync_set_first_pts = 0x%" PRIx64 " (%" PRIx64 " ms)", __FUNCTION__, apts - latency_pts, (apts - latency_pts)/90);
-            if (p_hwsync->use_mediasync) {
-                ALOGI("%s =============== can drop============", __FUNCTION__);
-                if (p_hwsync->wait_video_done == false) {
-                    out->is_waiting_video = true;
-                    aml_hwsync_wait_video_start(p_hwsync);
-                    aml_hwsync_wait_video_drop(p_hwsync, apts - latency_pts);
-                    out->is_waiting_video = false;
-                    p_hwsync->wait_video_done == true;
-                } else {
-                    aml_hwsync_wrap_is_amaster(out->hwsync, &amaster_mode);
-                    if (!amaster_mode) {
-                        mediasync_wrap_setSyncMode(out->hwsync->mediasync, MEDIA_SYNC_AMASTER);
-                    }
-                }
-            }
-            aml_audio_hwsync_set_first_pts(p_hwsync, apts - latency_pts);
-        } else  if (p_hwsync->first_apts_flag) {
-            if (apts >= latency_pts) {
-                apts -= latency_pts;
-            } else {
-                ALOGE("wrong PTS =0x%" PRIx64 " delay pts=0x%x",apts, latency_pts);
-                return 0;
-            }
-            ret = aml_hwsync_get_tsync_pcr(p_hwsync, &pcr);
-
-            if (ret == 0) {
-                gap = get_pts_gap(pcr, apts);
-                gap_ms = gap / 90;
-                if (debug_enable || gap_ms > 80) {
-                    ALOGI("%s pcr 0x%" PRIx64 ",apts 0x%" PRIx64 ",gap 0x%x,gap duration %d ms", __func__, pcr, apts, gap, gap_ms);
-                }
-
-                if (adev->ms12_out && adev->ms12_out->standby) {
-                    ALOGW("%s  ms12_out stream is standby, not do adjust for hwsync",__func__);
-                    return ret;
-                }
-
-                /*resume from pause status, we can sync it exactly*/
-                if (adev->ms12.need_resync) {
-                    adev->ms12.need_resync = 0;
-                    if (apts > pcr && (pcr != 0)) {
-                        *p_adjust_ms = gap_ms;
-                        ALOGE("%s resync p_adjust_ms %d\n", __func__, *p_adjust_ms);
-                    }
-                }
-                if (gap > APTS_DISCONTINUE_THRESHOLD_MIN && gap < APTS_DISCONTINUE_THRESHOLD_MAX) {
-                    if (apts > pcr) {
-                        /*during video stop, pcr has been reset by video
-                        we need ignore such pcr value*/
-                        if (pcr != 0) {
-                            *p_adjust_ms = gap_ms;
-                            ALOGE("%s *p_adjust_ms %d\n", __func__, *p_adjust_ms);
-                        } else {
-                            ALOGE("pcr has been reset\n");
-                        }
-                    } else {
-                        ALOGI("tsync -> reset pcrscr 0x%" PRIx64 " -> 0x%" PRIx64 ", %s big,diff %"PRIx64" ms",
-                            pcr, apts, apts > pcr ? "apts" : "pcr", get_pts_gap(apts, pcr) / 90);
-                        int ret_val = aml_hwsync_wrap_reset_pcrscr(p_hwsync, apts);
-                        if (ret_val == -1) {
-                            ALOGE("unable to open file %s,err: %s", TSYNC_APTS, strerror(errno));
-                        }
-                    }
-                } else if (gap > APTS_DISCONTINUE_THRESHOLD_MAX) {
-                    *p_adjust_ms = 0;
-                    ALOGE("%s apts exceed the adjust range,need check apts 0x%" PRIx64 ",pcr 0x%" PRIx64 "",
-                        __func__, apts, pcr);
-                }
-            }
-        }
+        //do nothing
+        //it don't have tsync mode after u-amloigc branch.
     }
     return ret;
 }
@@ -923,3 +937,167 @@ int aml_audio_hwsync_close(void)
     aml_hwsync_wrap_set_tsync_close(adev->tsync_fd);
     return 0;
 }
+
+/*
+** parsed_size is counsed data size of inBuffer
+** outBuffer is payload data
+** outBytes is the payload size, it should be a frame size or 0.
+** outPts is the pts of this frame.
+** return cost bytes for this parser
+*/
+int aml_audio_hwsync_data_parser(audio_hwsync_t *pHwsync,
+        const void *inBuffer, const size_t inbytes, size_t parsedSize, void **outBuffer, size_t *outBytes, uint64_t *outPts)
+{
+    //struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
+    struct aml_stream_out *aml_out = pHwsync->aout;
+    struct aml_audio_device *adev = aml_out->dev;
+    size_t total_bytes = inbytes;
+    const void *buffer = inBuffer;
+    size_t bytes_cost = 0;
+    uint64_t apts64 = 0;
+    bool amaster_mode = true;
+    size_t hwsync_cost_bytes = 0;
+    audio_hwsync_t *hw_sync = aml_out->hwsync;
+    int ret = -1;
+
+
+    bytes_cost = parsedSize;
+    /* handle HWSYNC audio data*/
+    uint64_t  cur_pts = ULLONG_MAX;//defined in limits.h
+    int outsize = 0;
+
+    AM_LOGV("+++ before aml_audio_hwsync_find_frame bytes %zu\n", total_bytes - bytes_cost);
+    hwsync_cost_bytes = aml_audio_hwsync_find_frame(aml_out->hwsync, (char *)buffer + bytes_cost, total_bytes - bytes_cost, &cur_pts, &outsize);
+    if (cur_pts > ULLONG_MAX) {
+        ALOGE("APTS exceed the max 64bit value");
+    }
+    /*in xts test, the last frame size and pts are both 0, so we assume it is end of stream*/
+    if (aml_out->hwsync->last_apts_from_header == 0 && aml_out->hwsync->hw_sync_body_cnt == 0) {
+        aml_out->hwsync->end_of_hwsync_frame = true;
+    } else {
+        aml_out->hwsync->end_of_hwsync_frame = false;
+    }
+    ALOGV("after aml_audio_hwsync_find_frame bytes remain %zu,cost %zu,outsize %d,pts %"PRIx64"\n",
+           total_bytes - bytes_cost - hwsync_cost_bytes, hwsync_cost_bytes, outsize, cur_pts);
+    //TODO,skip 3 frames after flush, to tmp fix seek pts discontinue issue.need dig more
+    // to find out why seek print pts frame is remained after flush.WTF.
+    if (aml_out->skip_frame > 0) {
+        aml_out->skip_frame--;
+        ALOGI ("skip pts@%"PRIx64",cur frame size %d,cost size %zu\n", cur_pts, outsize, hwsync_cost_bytes);
+        return hwsync_cost_bytes;
+    }
+
+    if (outsize > 0) {
+        *outPts = cur_pts;
+        *outBuffer = hw_sync->hw_sync_body_buf;
+        *outBytes = outsize;
+    } else {
+        *outPts = 0;
+        *outBuffer = NULL;
+        *outBytes = outsize;
+    }
+    AM_LOGV("---  outsize:%d  outBuffer:%p outBytes:%zu outPts:%"PRIu64" ", outsize, *outBuffer, *outBytes, *outPts);
+    return hwsync_cost_bytes;
+}
+
+static int aml_hwsync_data_process(void *pHwsync, const void *inABuffer, void *outABuffer, void *parser_callback)
+{
+    aml_audio_buffer_t *audioBuffer = (aml_audio_buffer_t *)inABuffer;
+    const void *inBuffer = audioBuffer->pData;
+    size_t inBytes = audioBuffer->size;
+    aml_audio_buffer_t *outAudioBuffer = (aml_audio_buffer_t *)outABuffer;
+    struct aml_stream_out *aml_out = ((audio_hwsync_t *)pHwsync)->aout;
+    int ret = 0;
+    void *outBuffer = NULL;
+    size_t outBytes = 0;
+    uint64_t outPts = 0;
+    int retValue = 0;
+    int consumed_bytes = 0, parsed_size = 0;
+
+hwsync_rewrite:
+    consumed_bytes = aml_audio_hwsync_data_parser(pHwsync, inBuffer, inBytes, parsed_size, &outBuffer, &outBytes, &outPts);
+    parsed_size += consumed_bytes;
+
+    //AM_LOGI("  inBytes:%zu  parsed_size:%d  consumed_bytes:%d  outBuffer:%p outBytes:%zu outPts:%"PRIu64" ",
+    //    inBytes, parsed_size, consumed_bytes, outBuffer, outBytes, outPts);
+    if (parser_callback && outBytes && outBuffer) {
+        aml_parser_data_callback_t *pCallback = (aml_parser_data_callback_t *)parser_callback;
+        Func_Write_CallBack __callback = pCallback->callback;
+        outAudioBuffer->pData = outBuffer;
+        outAudioBuffer->size = outBytes;
+        outAudioBuffer->apts = outPts;
+        outAudioBuffer->isAptsValid = true;
+        memcpy(&outAudioBuffer->bufFormat, &audioBuffer->bufFormat, sizeof(buffer_data_format_t));
+
+        retValue = (*__callback)(pCallback->common.pAmlParser, outAudioBuffer, pHwsync);
+    }
+
+
+    if (consumed_bytes > 0 &&  inBytes > parsed_size) {//need to keep parser
+
+        /* We need to wait for Google to fix the issue:
+         * Issue: After pause, there will be residual sound in AF, which will cause NTS fail.
+         * Now we need to judge whether the current format is DTS */
+        // this dts decoding more frames logic should be put to decoder module.
+        if (false && is_dts_format(aml_out->hal_internal_format)) {
+            // For some low bitrate streams, we need to decode more frames to avoid underrun.
+            // (DTSHD_PERIOD_SIZE) is the value after tuning.
+            if (parsed_size < DTSHD_PERIOD_SIZE) {
+                goto hwsync_rewrite;
+            } else {
+                return parsed_size;
+            }
+        } else {
+            goto hwsync_rewrite;
+        }
+    } else {//input data was parsed completely.
+        ret = parsed_size;
+    }
+
+    return ret;
+}
+
+static int aml_get_hwsync_parser_instance(void **pphandle)
+{
+    *pphandle;
+    struct aml_stream_out *pAmlStream = (struct aml_stream_out *)*pphandle;
+    AM_LOGI("hw_sync:%p", pAmlStream->hwsync);
+
+    *pphandle = (void *)pAmlStream->hwsync;
+    return 0;
+}
+
+static void *aml_hwsync_parser_close(void *phandle)
+{
+    phandle;
+    //aml_audio_hwsync_close();
+    //aml_audio_hwsync_create();
+    return NULL;
+}
+
+static void *aml_hwsync_parser_flush(void *phandle)
+{
+    phandle;
+    AM_LOGI(" phandle:%p ", phandle);
+    return NULL;
+}
+
+aml_parser_func_t *get_hwsync_parser_func_handle(void)
+{
+    aml_parser_func_t *amlParserFunc = NULL;
+
+    amlParserFunc = (struct aml_parser_func *)aml_audio_calloc(1, sizeof(struct aml_parser_func));
+    if (amlParserFunc) {
+        amlParserFunc->f_init       = aml_get_hwsync_parser_instance;
+        amlParserFunc->f_deinit     = aml_hwsync_parser_close;
+        amlParserFunc->f_process    = aml_hwsync_data_process;
+        amlParserFunc->f_flush      = aml_hwsync_parser_flush;
+    } else {
+        AM_LOGE(" calloc amlParserFunc:%p failed", amlParserFunc);
+        amlParserFunc = NULL;
+    }
+
+    return amlParserFunc;
+}
+
+

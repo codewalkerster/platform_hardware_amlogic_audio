@@ -17,7 +17,7 @@
 #include "aml_audio_ms12.h"
 #include "dolby_lib_api.h"
 #include "alsa_device_parser.h"
-#include "audio_bt_hal.h"
+#include "a2dp_hal.h"
 #include "aml_malloc_debug.h"
 #ifdef ENABLE_AEC_APP
 #include "audio_aec.h"
@@ -29,6 +29,7 @@
 #include "audio_hw_resource_mgr.h"
 
 //#define DEBUG_TIME
+#define DUMP_SUB_MIXING_HWSYNC       0x0001
 
 #define WRITE_COUNT_LATENCY_THRESHOLD  (6)
 #define SUBMIX_USECASE_MASK            (0xffffff7e)  /* PCM_NORMAL(0) and PCM_MMAP(7) have been cleared*/
@@ -40,6 +41,12 @@ static ssize_t out_write_subMixingPCM(struct audio_stream_out *stream,
 static int out_pause_subMixingPCM(struct audio_stream_out *stream);
 static int out_resume_subMixingPCM(struct audio_stream_out *stream);
 static int out_flush_subMixingPCM(struct audio_stream_out *stream);
+
+static int get_submixing_dump_enable(int dump_type) {
+    int value = 0;
+    value = get_debug_value(AML_DUMP_AUDIOHAL_SUBMIXING);
+    return (value & dump_type);
+}
 
 struct pcm *getSubMixingPCMdev(struct subMixing *sm)
 {
@@ -180,6 +187,7 @@ static ssize_t aml_out_write_to_mixer(struct audio_stream_out *stream, const voi
         ts_wait_time_us(&ts, 5000);
         AM_LOGV("-wait....");
         pthread_mutex_lock(&out->cond_lock);
+        /* coverity[dead_wait] */
         pthread_cond_timedwait(&out->cond, &out->cond_lock, &ts);
         AM_LOGV("--wait wakeup");
         pthread_mutex_unlock(&out->cond_lock);
@@ -262,7 +270,7 @@ void am_timer_pause_callback(union sigval sigv)
     }
 
     if (adev && out && is_hwsync_lpcm) {
-        //cts tunnel underrun case failed, depond on pause/resume invoked from AudioFlinger.
+        //cts tunnel underrun case failed, depend on pause/resume invoked from AudioFlinger.
         //sometimes AudioFlinger always invoke the pause to Hal during 800ms for track retry count.
         //so add this code to control pause/resume MediaSync and video in Hal.
 
@@ -328,13 +336,22 @@ static int consume_output_data(void *cookie, const void* buffer, size_t bytes)
     apply_volume_fade(last_volume, volume, in_buf_16, sizeof(uint16_t), channels, bytes);
     out->last_volume_l = out->volume_l;
     out->last_volume_r = out->volume_r;
-    if (out->hw_sync_mode && out->resample_outbuf != NULL) {
-        int out_frame = bytes >> 2;
-        out_frame = resample_process (&out->aml_resample, out_frame,
-                (int16_t *) buffer, (int16_t *) out->resample_outbuf);
-        out_size = out_frame << 2;
-        out_buf = out->resample_outbuf;
+    if (out->hw_sync_mode && out->hal_rate != 48000) {
+        int ret = 0;
         bResample = 1;
+        audio_resample_config_t cfg = {
+            .aformat = out->hal_internal_format,
+            .channels = out->hal_ch,
+            .input_sr = out->hal_rate,
+            .output_sr = 48000,
+        };
+        ret = aml_audio_resample_process_ex(&out->resample_handle, &cfg, (void *)buffer, bytes);
+        if (ret != 0) {
+            AM_LOGE("aml_audio_resample_process_ex fail ret=%d", ret);
+        } else {
+            out_buf = out->resample_handle->resample_buffer;
+            out_size = out->resample_handle->resample_size;
+        }
     }
     written = aml_out_write_to_mixer(stream, out_buf, out_size);
 
@@ -370,8 +387,8 @@ static int consume_output_data(void *cookie, const void* buffer, size_t bytes)
     //else
     //    out->last_frames_position = out->frame_write_sum;
     AM_LOGV("++written = %zd", written);
-    if (getprop_bool("vendor.media.audiohal.hwsync")) {
-        aml_audio_dump_audio_bitstreams("/data/audio/consumeout.raw", buffer, written);
+    if (get_submixing_dump_enable(DUMP_SUB_MIXING_HWSYNC)) {
+        aml_dump_audio_bitstreams("/data/vendor/audiohal/consumeout.raw", buffer, written);
     }
     if (0) {
         AM_LOGD("last_frames_position(%" PRId64 ") latency_frames(%" PRId64 ")",
@@ -428,7 +445,7 @@ static ssize_t out_write_hwsync_lpcm(struct audio_stream_out *stream, const void
     // when connect bt, bt stream maybe open before hdmi stream close,
     // bt stream mediasync is set to adev->hw_mediasync, and it would be
     // release in hdmi stream close, so bt stream mediasync is invalid
-    if (out->hwsync->mediasync != NULL && adev->hw_mediasync == NULL) {
+    if (out->hwsync && out->hwsync->mediasync != NULL && adev->hw_mediasync == NULL) {
         adev->hw_mediasync = aml_audio_hwsync_create();
         out->hwsync->use_mediasync = true;
         out->hwsync->mediasync = adev->hw_mediasync;
@@ -498,8 +515,8 @@ static ssize_t out_write_hwsync_lpcm(struct audio_stream_out *stream, const void
     AM_LOGV("bytes %zu, out->last_frames_position %" PRId64 " frame_sum %" PRId64 " ",
             bytes, out->last_frames_position, out->frame_write_sum);
 
-    if (getprop_bool("vendor.media.audiohal.hwsync") && written_total > 0) {
-        aml_audio_dump_audio_bitstreams("/data/audio/audiomain.raw", buffer, written_total);
+    if (get_submixing_dump_enable(DUMP_SUB_MIXING_HWSYNC) && written_total > 0) {
+        aml_dump_audio_bitstreams("/data/vendor/audiohal/audiomain.raw", buffer, written_total);
     }
 
     if (written_total > 0) {
@@ -881,16 +898,21 @@ int out_get_presentation_position_port(
             pthread_mutex_lock(&out->apts_update_lock);
             *frames = frames_written_hw;
             *timestamp = out->timestamp;
+            out->last_frames_when_paused = frames_written_hw;
             pthread_mutex_unlock(&out->apts_update_lock);
         } else {
             pthread_mutex_lock(&out->apts_update_lock);
             ret = mixer_get_presentation_position(audio_mixer,
                 out->inputPortID, frames, &negative_frames, timestamp);
             pthread_mutex_unlock(&out->apts_update_lock);
+            //this for pass xts,resume *frame > pause *frame
+            *frames = *frames > out->last_frames_when_paused ? *frames : frames_written_hw;
             // convert the frames for resample in AudioHal
-            if (out->hal_rate != MM_FULL_POWER_SAMPLING_RATE) {
+            if (out->hal_rate != MM_FULL_POWER_SAMPLING_RATE &&
+                (*frames * out->hal_rate) / MM_FULL_POWER_SAMPLING_RATE >= out->last_frames_when_paused) {
                 *frames = (*frames * out->hal_rate) / MM_FULL_POWER_SAMPLING_RATE;
             }
+
 
         }
         if (adev->debug_flag)
@@ -917,7 +939,7 @@ int out_get_presentation_position_port(
         frame_latency = latency_ms * (out->hal_rate / MSEC_PER_SEC);
 
         // negative_frames should >= -100ms
-        if (adev->is_netflix && !out->is_tv_src_stream
+        if (adev->is_netflix && !is_tv_stream_out(out)
             && negative_frames < 0 && negative_frames >= -100*48) {
             frame_latency += negative_frames;
         }
@@ -994,7 +1016,7 @@ static int initSubMixingInputPcm(
     AM_LOGI("++ io %d: out %p, flags %#x, hwsync lpcm %d", out->io_handle, out, flags, hwsync_lpcm);
     out->audioCfg = *config;
 
-    if (!out->is_tv_src_stream) {
+    if (!is_tv_stream_out(out)) {
         out->stream.write = out_write_subMixingPCM;
         out->stream.pause = out_pause_subMixingPCM;
         out->stream.resume = out_resume_subMixingPCM;
@@ -1273,6 +1295,13 @@ ssize_t mixer_main_buffer_write_sm (struct audio_stream_out *stream, const void 
         return bytes;
     }
 
+    /* do fade in if former standby fadeout is done,
+       maybe called by aml_audio_nonms12_render directly
+    */
+    if (is_output_device_muted(adev, AUDIO_DEVICE_OUT_SPEAKER, true)) {
+        set_output_device_mute(adev, AUDIO_DEVICE_OUT_SPEAKER, false, true);
+    }
+
     /* handle HWSYNC audio data*/
     /* tv ddp hwsync : hwsync header had been removed by "mixer_main_buffer_write" */
     if (aml_out->hw_sync_mode && !aml_out->hwsync_header_stripped) {
@@ -1475,6 +1504,20 @@ static int usecase_change_validate_l_sm(struct aml_stream_out *aml_out, bool is_
             aml_dev->usecase_masks &= ~(1 << aml_out->usecase);
         }
         if (0 == aml_dev->usecase_masks && is_TV(aml_dev)) {
+#ifdef USB_KARAOKE
+            /*Do not standby when usb karaoke working*/
+            struct kara_manager *karaoke = &aml_dev->usb_audio.karaoke;
+            if (karaoke && karaoke->karaoke_on) {
+                return 0;
+            }
+#endif
+#ifdef LINEIN_KARAOKE
+            /*Do not standby when linein karaoke working*/
+            struct kara_manager *linein_kara = &aml_dev->linein_karaoke;
+            if (linein_kara && linein_kara->karaoke_on) {
+                return 0;
+            }
+#endif
             ALOGI("send STANDBY msg to submix");
             aml_audiohal_sch_state_2_submix(audio_mixer, SUBMIX_SCHEDULER_STANDBY);
         }
@@ -1948,6 +1991,11 @@ static int subMixingOutMsg(struct aml_audio_device *adev, PORT_MSG msg, void *in
     struct subMixing *sm = adev->sm;
     struct amlAudioMixer *audio_mixer = NULL;
     int ret = 0;
+    R_CHECK_POINTER_LEGAL(-EINVAL, adev, "");
+    sm = adev->sm;
+    R_CHECK_POINTER_LEGAL(-EINVAL, sm, "");
+    audio_mixer = sm->mixerData;
+    R_CHECK_POINTER_LEGAL(-EINVAL, audio_mixer, "");
 
     audio_mixer = sm->mixerData;
     send_mixer_outport_message(audio_mixer, MIXER_OUTPUT_PORT_STEREO_PCM, msg, info, info_len);
@@ -1991,4 +2039,5 @@ int subMixingEnableMultiChOutput(struct aml_audio_device *adev, bool enable)
     mixer_enable_multich_output(audio_mixer, enable);
     return ret;
 }
+
 

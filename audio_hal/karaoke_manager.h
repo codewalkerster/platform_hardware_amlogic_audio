@@ -25,8 +25,6 @@
 #include <aml_echo_reference.h>
 #include <audio_data_process.h>
 
-#include "sub_mixing_factory.h"
-
 struct audioCfg;
 
 struct voice_in {

@@ -17,7 +17,7 @@
 #ifndef AML_HW_RESOURCE_H_
 #define AML_HW_RESOURCE_H_
 
-enum patch_src_assortion {
+enum patch_src_assort {
     SRC_DTV                     = 0,
     SRC_ATV                     = 1,
     SRC_LINEIN                  = 2,

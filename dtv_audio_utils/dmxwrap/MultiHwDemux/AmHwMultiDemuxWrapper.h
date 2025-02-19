@@ -46,7 +46,7 @@ public:
    virtual void AmDemuxSetNotify(const sp<TSPMessage> & msg);
    virtual sp<TSPMessage> dupNotify() const { return mNotify->dup();}
    AM_DmxErrorCode_t queueEsData(List<mEsDataInfo*>& mEsDataQueue,mEsDataInfo *mEsData) ;
-   mEsDataInfo* dequeueEsData(List<mEsDataInfo*>& mEsDataQueue);
+   mEsDataInfo* dequeueEsData(List<mEsDataInfo*>& mEsDataQueue, uint64_t timeout);
    AM_DmxErrorCode_t clearPendingEsData(List<mEsDataInfo*>& mEsDataQueue);
    TSPMutex mVideoEsDataQueueLock;
    TSPMutex mAudioEsDataQueueLock;
@@ -62,6 +62,8 @@ public:
    int              mDemuxEsDataCacheMaxThreshold;
    ST_Aduserdata     ADuserdata;
    int              adpesmode;
+   pthread_mutex_t EsDataQueueMutex;
+   pthread_cond_t  EsDataQueueCond;
    mEsDataInfo* Last_AD_EsData;
  private:
    sp<AM_DMX_Device> AmDmxDevice;

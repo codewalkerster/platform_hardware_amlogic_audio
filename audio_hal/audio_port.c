@@ -47,13 +47,23 @@
 #endif
 
 #define BUFF_CNT                    (4)
-#define SYS_BUFF_CNT                (4)
+#define SYS_BUFF_CNT                (5)
 #define DIRECT_BUFF_CNT             (8)
 #define MMAP_BUFF_CNT               (8) /* Sometimes the time interval between BT stack writes is 40ms. */
+
+#define DUMP_INPUT_PORT_READ        0x0100
+#define DUMP_INPUT_PORT_WRITE       0x0200
+#define DUMP_OUTPUT_PORT_WRITE      0x0400
+#define DUMP_OUTPUT_PORT_PROCESS    0x0800
 
 //function declaration
 static ssize_t output_port_write_alsa(output_port *port, void *buffer, int bytes);
 
+static int get_port_dump_enable(int dump_type) {
+    int value = 0;
+    value = get_debug_value(AML_DUMP_AUDIOHAL_SUBMIXING);
+    return (value & dump_type);
+}
 
 static ssize_t input_port_write(input_port *port, const void *buffer, int bytes)
 {
@@ -61,11 +71,11 @@ static ssize_t input_port_write(input_port *port, const void *buffer, int bytes)
     int written = 0;
 
     written = ring_buffer_write(port->r_buf, data, bytes, UNCOVER_WRITE);
-    if (getprop_bool("vendor.media.audiohal.inport")) {
+    if (get_port_dump_enable(DUMP_INPUT_PORT_WRITE)) {
         if (port->enInPortType == AML_MIXER_INPUT_PORT_PCM_SYSTEM)
-            aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/inportSys.raw", buffer, written);
+            aml_dump_audio_bitstreams("/data/vendor/audiohal/inportSys.raw", buffer, written);
         else if (port->enInPortType == AML_MIXER_INPUT_PORT_PCM_DIRECT)
-            aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/inportDirect.raw", buffer, written);
+            aml_dump_audio_bitstreams("/data/vendor/audiohal/inportDirect.raw", buffer, written);
     }
 
     AM_LOGV("written %d", written);
@@ -98,11 +108,8 @@ bool is_direct_flags(audio_output_flags_t flags) {
 
 uint32_t inport_get_latency_frames(input_port *port) {
     int frame_size = 4;
+    frame_size = port->cfg.frame_size;
     uint32_t latency_frames = inport_buffer_level(port) / frame_size;
-    // return full frames latency when no data in ring buffer
-    if (latency_frames == 0)
-        return port->r_buf->size / frame_size;
-
     return latency_frames;
 }
 
@@ -146,10 +153,10 @@ void inport_reset(input_port *port)
     AM_LOGD("");
     port->port_status = STOPPED;
     //port->is_hwsync = false;
-    port->consumed_bytes = 0;
     port->data_valid = 0;
     port->bytes_to_insert = 0;
     port->bytes_to_skip = 0;
+    port->consumed_bytes = 0;
     port->initial_frames = 0;
     port->mix_consumed_frames = 0;
     port->presentation_frames = 0;
@@ -430,6 +437,15 @@ static void mix_cfg_to_config(struct audio_config *config, const struct audioCfg
     config->format = cfg->format;
 }
 
+static void inport_reset_speed_info(input_port *in_port)
+{
+    port_speed_info *p_speed = &in_port->speed;
+    memset(p_speed, 0, sizeof(*p_speed));
+    p_speed->curr_speed = 1.0f;
+    p_speed->next_speed = 1.0f;
+    p_speed->speed_changed = false;
+}
+
 input_port *new_input_port(
         //aml_mixer_input_port_type_e port_index,
         //audio_format_t format//,
@@ -482,11 +498,7 @@ input_port *new_input_port(
     enPortType = get_input_port_type(&aConfig, flags);
     // system buffer larger than direct to cache more for mixing?
     if (enPortType == AML_MIXER_INPUT_PORT_PCM_SYSTEM) {
-        if (adev->is_netflix) {
-            input_port_rbuf_size = thunk_size * 8;
-        } else {
-            input_port_rbuf_size = thunk_size * SYS_BUFF_CNT;
-        }
+        input_port_rbuf_size = thunk_size * SYS_BUFF_CNT;
     } else if (AML_MIXER_INPUT_PORT_PCM_DIRECT == enPortType) {
         input_port_rbuf_size = thunk_size * DIRECT_BUFF_CNT;
     } else if (AML_MIXER_INPUT_PORT_PCM_MMAP == enPortType) {
@@ -519,7 +531,8 @@ multi_aaudio_init:
     port->data = data;
     port->data_buf_frame_cnt = buf_frames;
     port->data_len_bytes = thunk_size;
-    port->buffer_len_ns = (input_port_rbuf_size / port->cfg.frame_size) * 1000000000LL / port->cfg.sampleRate;
+    port->buffer_len_ns = (int64_t)(input_port_rbuf_size / port->cfg.frame_size) * 1000000000LL / port->cfg.sampleRate;
+    port->start_threshold_ns = (int64_t)(port->inport_start_threshold / port->cfg.frame_size) * 1000000000LL / port->cfg.sampleRate;
     if (is_multi_aaudio) {
         port->first_read = false;
         port->read = multi_aaudio_input_port_read;
@@ -537,6 +550,7 @@ multi_aaudio_init:
     port->is_hwsync = false;
     port->consumed_bytes = 0;
     port->volume = volume;
+    inport_reset_speed_info(port);
     list_init(&port->msg_list);
     //TODO
     //set_inport_hwsync(port);
@@ -573,6 +587,7 @@ int reset_input_port(input_port *port)
 {
     R_CHECK_POINTER_LEGAL(-EINVAL, port, "");
     inport_reset(port);
+    inport_reset_speed_info(port);
     return ring_buffer_reset(port->r_buf);
 }
 
@@ -635,7 +650,7 @@ int set_port_input_avail_cbk(input_port *port,
 }
 
 int set_port_meta_data_cbk(input_port *port,
-        meta_data_cbk_t meta_data_cbk,
+        /*meta_data_cbk_t*/void *meta_data_cbk,
         void *data)
 {
     if (false == port->is_hwsync) {
@@ -804,7 +819,6 @@ int outport_set_dummy(output_port *port, bool en)
     return 0;
 }
 
-
 #define STEREO_16BIT_TO_8CH_32BIT   8
 #define STEREO_16BIT_TO_8CH_16BIT   4
 #define STEREO_32BIT_TO_8CH_32BIT   4
@@ -824,8 +838,8 @@ static ssize_t output_port_post_process(output_port *port, void *buffer, int byt
     int i = 0;
     struct aml_audio_device *adev = (struct aml_audio_device *)adev_get_handle();
 
-    if (get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
-        aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/port_befor_postprocess.raw", buffer, bytes);
+    if (get_debug_value(AML_DUMP_AUDIOHAL_TV) || get_port_dump_enable(DUMP_OUTPUT_PORT_PROCESS)) {
+        aml_dump_audio_bitstreams("/data/vendor/audiohal/port_before_postprocess.raw", buffer, bytes);
     }
 
     for (int dev = AML_AUDIO_OUT_DEV_TYPE_SPEAKER; dev < AML_AUDIO_OUT_DEV_TYPE_BUTT; dev++) {
@@ -868,7 +882,7 @@ static ssize_t output_port_post_process(output_port *port, void *buffer, int byt
             /*do ease process when adjust vol,vol apply is handled by ease process,when ease process finished,
             vol apply need handled by apply volume function,vol is float type,use fabs to compare*/
             apply_volume_2ch_by_format(1.0, vol_buf, samples, src_cfg->format, target_cfg->format);
-            aml_audio_ease_process(adev->volume_ease.ease, vol_buf, samples * dest_sample_size);
+            aml_audio_ease_process(adev->volume_ease.ease, vol_buf, samples * dest_sample_size, false);
         }
 
         if (target_cfg->format == AUDIO_FORMAT_PCM_32_BIT) {
@@ -891,8 +905,8 @@ static ssize_t output_port_post_process(output_port *port, void *buffer, int byt
     //TV fix config:PCM32/8ch/48000
     //expand 2ch to 8ch, so out bytes apply 4 by format
     port->processed_bytes = samples * audio_bytes_per_sample(AUDIO_FORMAT_PCM_32_BIT) * 4;
-    if (get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
-        aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/port_processed.raw", port->processed_buf, port->processed_bytes);
+    if (get_debug_value(AML_DUMP_AUDIOHAL_TV) || get_port_dump_enable(DUMP_OUTPUT_PORT_PROCESS)) {
+        aml_dump_audio_bitstreams("/data/vendor/audiohal/port_processed.raw", port->processed_buf, port->processed_bytes);
     }
 #if 0
     AM_LOGI("src_format:%d src_frame_size:%d dest_format:%d dest_frame_size:%d in_bytes:%d",
@@ -910,8 +924,8 @@ static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, 
     struct audioCfg *target_cfg = &port->cfg;
     struct aml_audio_device *adev = (struct aml_audio_device *)adev_get_handle();
 
-    if (get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
-        aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/port_befor_postprocess.raw", buf16, bytes);
+    if (get_debug_value(AML_DUMP_AUDIOHAL_TV) || get_port_dump_enable(DUMP_OUTPUT_PORT_PROCESS)) {
+        aml_dump_audio_bitstreams("/data/vendor/audiohal/port_before_postprocess.raw", buf16, bytes);
     }
 
     if (port->postprocess)
@@ -927,8 +941,8 @@ static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, 
         apply_volume_2ch_by_format(port_gain, port->processed_buf, samples, src_cfg->format, target_cfg->format);
     }
     port->processed_bytes = bytes;
-    if (get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
-        aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/port_processed.raw",
+    if (get_debug_value(AML_DUMP_AUDIOHAL_TV) || get_port_dump_enable(DUMP_OUTPUT_PORT_PROCESS)) {
+        aml_dump_audio_bitstreams("/data/vendor/audiohal/port_processed.raw",
             port->processed_buf, port->processed_bytes);
     }
     return 0;
@@ -971,7 +985,6 @@ static ssize_t output_port_write_alsa(output_port *port, void *buffer, int bytes
         }
     }
 
-    //aml_audio_switch_output_mode((int16_t *)buffer, bytes, port->sound_track_mode);
 #ifdef USB_KARAOKE
     struct kara_manager *karaoke = port->kara;
     if (karaoke) {
@@ -991,7 +1004,6 @@ static ssize_t output_port_write_alsa(output_port *port, void *buffer, int bytes
         }
     }
 #endif
-
     if (port->pcm_restart) {
         pcm_stop(port->pcm_handle);
         AM_LOGI("restart pcm device for same src");
@@ -1038,8 +1050,8 @@ static ssize_t output_port_write_alsa(output_port *port, void *buffer, int bytes
             }
 
         }
-        if (written > 0 && getprop_bool("vendor.media.audiohal.inport")) {
-            aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/audioOutPort.raw", buffer, written);
+        if (written > 0 && get_port_dump_enable(DUMP_OUTPUT_PORT_WRITE)) {
+            aml_dump_audio_bitstreams("/data/vendor/audiohal/audioOutPort.raw", buffer, written);
         }
         if (get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
             check_audio_level("alsa_out", buffer, written);
@@ -1335,7 +1347,6 @@ static ssize_t multich_output_port_write(output_port *mc_port, void *buffer, int
         mc_port->alsa_delay_ms = calculate_delay_ms;
     }
     mc_port->alsa_delay_ts = ts_end;
-
     return ret;
 }
 
@@ -1404,8 +1415,8 @@ output_port *new_mc_output_port(struct audioCfg *config, size_t buf_frames)
     mc_port->port_status = STOPPED;
 
     memcpy(&mc_port->cfg, config, sizeof(struct audioCfg));
-    AM_LOGI("mc_port: frame_size:%d, format:%#x, sampleRate:%d, channels:%d",
-        config->frame_size, config->format, config->sampleRate, config->channelCnt);
+    AM_LOGI("mc_port: frame_size:%d, format:%#x, sampleRate:%d, channels:%d, channelMask:0x%x",
+        config->frame_size, config->format, config->sampleRate, config->channelCnt, config->channelMask);
     AM_LOGI("ok");
     return mc_port;
 

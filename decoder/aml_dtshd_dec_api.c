@@ -38,8 +38,7 @@
 
 #include "audio_hw.h"
 #include "aml_dtshd_dec_api.h"
-
-
+#include "aml_dump_debug.h"
 
 #define DOLBY_DTSHD_LIB_PATH     "/odm/lib/libHwAudio_dtshd.so"
 #define DOLBY_DTSHD_LIB64_PATH     "/odm/lib64/libHwAudio_dtshd.so"
@@ -116,14 +115,10 @@ static struct dca_dts_debug dts_debug = {0};
 static unsigned int _dca_initparam_out_ch = 2;
 static unsigned int _dca_initparam_out_bitwidth = 16;
 
-///static struct pcm_info pcm_out_info;
-/*dts decoder lib function*/
-static int (*dts_decoder_init)(int, int);
-static int (*dts_decoder_cleanup)();
-static int (*dts_decoder_process)(char * , int , int *, char *, int *, struct pcm_info *, char *, int *);
-static int (*dts_decoder_config)(dca_config_type_e, union dca_config_s *);
-static int (*dts_decoder_getinfo)(dca_info_type_e, union dca_info_s *);
-void *gDtsDecoderLibHandler = NULL;
+//these two function pointer is for dtshd_set_out_ch_internal/dtshd_get_out_ch_internal
+//they should be deleted in future.
+static int (*dts_decoder_config)(dca_config_type_e, union dca_config_s *) = NULL;
+static int (*dts_decoder_getinfo)(dca_info_type_e, union dca_info_s *) = NULL;
 static int _dts_syncword_scan(unsigned char *read_pointer, unsigned int *pTemp0);
 static int _dts_frame_scan(struct dca_dts_dec *dts_dec);
 static int _dts_pcm_output(struct dca_dts_dec *dts_dec);
@@ -445,111 +440,130 @@ static int _dts_raw_output(struct dca_dts_dec *dts_dec)
 }
 
 
-static int unload_dts_decoder_lib()
+static int unload_dts_decoder_lib(struct dca_dts_dec *dts_dec)
 {
-    if (dts_decoder_cleanup != NULL) {
-        (*dts_decoder_cleanup)();
+    Func_dts_decoder_init fInit =  dts_dec->dcaHandle.dca_init;
+    Func_dts_decoder_deinit fDeinit =  dts_dec->dcaHandle.dca_deinit;
+    Func_dts_decoder_process fProcess =  dts_dec->dcaHandle.dca_process;
+    Func_dts_decoder_config fConfig =  dts_dec->dcaHandle.dca_config;
+    Func_dts_decoder_getinfo fGetinfo =  dts_dec->dcaHandle.dca_getinfo;
+    void *pLibHandler = dts_dec->dcaHandle.dcaLibHandler;
+
+    if (fDeinit != NULL) {
+        (*fDeinit)();
     }
-    dts_decoder_init = NULL;
-    dts_decoder_process = NULL;
-    dts_decoder_config = NULL;
-    dts_decoder_getinfo = NULL;
-    dts_decoder_cleanup = NULL;
-    if (gDtsDecoderLibHandler != NULL) {
-        dlclose(gDtsDecoderLibHandler);
-        gDtsDecoderLibHandler = NULL;
+    fInit = NULL;
+    fProcess = NULL;
+    fConfig = NULL;
+    fGetinfo = NULL;
+    fDeinit = NULL;
+    if (pLibHandler != NULL) {
+        dlclose(pLibHandler);
+        pLibHandler = NULL;
     }
     return 0;
 }
 
-static int dca_decoder_init(aml_dec_control_type_t digital_raw)
+static int dca_decoder_init(struct dca_dts_dec *dts_dec, aml_dec_control_type_t digital_raw, int output_bitwidth)
 {
-    gDtsDecoderLibHandler = dlopen(DOLBY_DTSHD_LIB_PATH, RTLD_NOW);
+    Func_dts_decoder_init fInit =  dts_dec->dcaHandle.dca_init;
+    Func_dts_decoder_config fConfig =  dts_dec->dcaHandle.dca_config;
+    Func_dts_decoder_getinfo fGetinfo =  dts_dec->dcaHandle.dca_getinfo;
+    void *pLibHandler = dts_dec->dcaHandle.dcaLibHandler;
+
+    pLibHandler = dlopen(DOLBY_DTSHD_LIB_PATH, RTLD_NOW);
+    //gDtsDecoderLibHandler = dlopen(DOLBY_DTSHD_LIB_PATH, RTLD_NOW);
     //open 32bit so failed, here try to open the 64bit dolby dcv so.
-    if (gDtsDecoderLibHandler == NULL) {
-        gDtsDecoderLibHandler = dlopen(DOLBY_DTSHD_LIB64_PATH, RTLD_NOW);
-        ALOGI("%s, 64bit lib:%s, gDDPDecoderLibHandler:%p\n", __FUNCTION__, DOLBY_DTSHD_LIB64_PATH, gDtsDecoderLibHandler);
+    if (pLibHandler == NULL) {
+        pLibHandler = dlopen(DOLBY_DTSHD_LIB64_PATH, RTLD_NOW);
+        ALOGI("%s, 64bit lib:%s, DtsDecoderLibHandler:%p\n", __FUNCTION__, DOLBY_DTSHD_LIB64_PATH, pLibHandler);
     }
-    if (!gDtsDecoderLibHandler) {
+    if (!pLibHandler) {
         ALOGE("%s, failed to open (libstagefright_soft_dtshd.so), %s\n", __FUNCTION__, dlerror());
         goto Error;
     } else {
-        ALOGV("<%s::%d>--[gDtsDecoderLibHandler]", __FUNCTION__, __LINE__);
+        ALOGV("<%s::%d>--[DtsDecoderLibHandler]", __FUNCTION__, __LINE__);
     }
+    dts_dec->dcaHandle.dcaLibHandler = pLibHandler;
 
-    dts_decoder_init = (int (*)(int, int)) dlsym(gDtsDecoderLibHandler, "dca_decoder_init");
-    if (dts_decoder_init == NULL) {
+    dts_dec->dcaHandle.dca_init = (int (*)(int, int)) dlsym(pLibHandler, "dca_decoder_init");
+    if (dts_dec->dcaHandle.dca_init == NULL) {
         ALOGE("%s,can't find decoder lib,%s\n", __FUNCTION__, dlerror());
         goto Error;
     } else {
         ALOGV("<%s::%d>--[dts_decoder_init:]", __FUNCTION__, __LINE__);
     }
 
-    dts_decoder_process = (int (*)(char * , int , int *, char *, int *, struct pcm_info *, char *, int *))
-                          dlsym(gDtsDecoderLibHandler, "dca_decoder_process");
-    if (dts_decoder_process == NULL) {
+    dts_dec->dcaHandle.dca_process = (int (*)(char * , int , int *, char *, int *, struct pcm_info *, char *, int *))
+                          dlsym(pLibHandler, "dca_decoder_process");
+    if (dts_dec->dcaHandle.dca_process == NULL) {
         ALOGE("%s,can't find decoder lib,%s\n", __FUNCTION__, dlerror());
         goto Error;
     } else {
         ALOGV("<%s::%d>--[dts_decoder_process:]", __FUNCTION__, __LINE__);
     }
 
-    dts_decoder_cleanup = (int (*)()) dlsym(gDtsDecoderLibHandler, "dca_decoder_deinit");
-    if (dts_decoder_cleanup == NULL) {
+    dts_dec->dcaHandle.dca_deinit = (int (*)()) dlsym(pLibHandler, "dca_decoder_deinit");
+    if (dts_dec->dcaHandle.dca_deinit == NULL) {
         ALOGE("%s,can't find decoder lib,%s\n", __FUNCTION__, dlerror());
         goto Error;
     } else {
         ALOGV("<%s::%d>--[dts_decoder_cleanup:]", __FUNCTION__, __LINE__);
     }
 
-    dts_decoder_config = (int (*)(dca_config_type_e, union dca_config_s *)) dlsym(gDtsDecoderLibHandler, "dca_decoder_config");
-    if (dts_decoder_config == NULL) {
+    dts_dec->dcaHandle.dca_config = (int (*)(dca_config_type_e, union dca_config_s *)) dlsym(pLibHandler, "dca_decoder_config");
+    if (dts_dec->dcaHandle.dca_config == NULL) {
         ALOGE("%s,can not find decoder config function,%s\n", __FUNCTION__, dlerror());
     } else {
         ALOGV("<%s::%d>--[dts_decoder_config:]", __FUNCTION__, __LINE__);
     }
+    dts_decoder_config = dts_dec->dcaHandle.dca_config;
 
-    dts_decoder_getinfo = (int (*)(dca_info_type_e, union dca_info_s *)) dlsym(gDtsDecoderLibHandler, "dca_decoder_getinfo");
-    if (dts_decoder_getinfo == NULL) {
+    dts_dec->dcaHandle.dca_getinfo = (int (*)(dca_info_type_e, union dca_info_s *)) dlsym(pLibHandler, "dca_decoder_getinfo");
+    if (dts_dec->dcaHandle.dca_getinfo == NULL) {
         ALOGE("%s,can not find decoder getinfo function,%s\n", __FUNCTION__, dlerror());
     } else {
         ALOGV("<%s::%d>--[dts_decoder_getinfo:]", __FUNCTION__, __LINE__);
     }
+    dts_decoder_getinfo = dts_dec->dcaHandle.dca_getinfo;
+    fInit =  dts_dec->dcaHandle.dca_init;
 
     /*TODO: always decode*/
-    (*dts_decoder_init)(1, digital_raw);
+    (*fInit)(1, digital_raw);
 
-    if (dts_decoder_config) {
-        /* Set decoder output channel. */
+    if (dts_dec->dcaHandle.dca_config) {
         dca_config_t dca_config;
+        /* Set decoder output channel. */
         memset(&dca_config, 0, sizeof(dca_config));
         dca_config.output_ch = _dca_initparam_out_ch;
-        (*dts_decoder_config)(DCA_CONFIG_OUT_CH, (dca_config_t *)&dca_config);
+        (*dts_dec->dcaHandle.dca_config)(DCA_CONFIG_OUT_CH, (dca_config_t *)&dca_config);
 
         /* Set decoder output pcm bitwidth. */
         memset(&dca_config, 0, sizeof(dca_config));
-        dca_config.output_bitwidth = _dca_initparam_out_bitwidth;
-        (*dts_decoder_config)(DCA_CONFIG_OUT_BITDEPTH, (dca_config_t *)&dca_config);
+
+        dca_config.output_bitwidth = output_bitwidth;
+        (*dts_dec->dcaHandle.dca_config)(DCA_CONFIG_OUT_BITDEPTH, (dca_config_t *)&dca_config);
     }
     return 0;
 Error:
-    unload_dts_decoder_lib();
+    unload_dts_decoder_lib(dts_dec);
     return -1;
 }
 
-static int dca_decode_process(unsigned char*input, int input_size, unsigned char *outbuf,
+static int dca_decode_process(struct dca_dts_dec *dts_dec, unsigned char*input, int input_size, unsigned char *outbuf,
                               int *out_size, unsigned char *spdif_buf, int *raw_size, struct pcm_info *pcm_out_info)
 {
     int outputFrameSize = 0;
     int used_size = 0;
     int decoded_pcm_size = 0;
     int ret = -1;
+    Func_dts_decoder_process fProcess =  dts_dec->dcaHandle.dca_process;
 
-    if (dts_decoder_process == NULL) {
+    if (fProcess == NULL) {
         return ret;
     }
 
-    ret = (*dts_decoder_process)((char *) input
+    ret = (*fProcess)((char *) input
                                  , input_size
                                  , &used_size
                                  , (char *) outbuf
@@ -604,6 +618,7 @@ int dca_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
 {
     struct dca_dts_dec *dts_dec = NULL;
     aml_dec_t  *aml_dec = NULL;
+    struct aml_audio_device *adev = NULL;
 
     ALOGI("%s enter", __func__);
     dts_dec = aml_audio_calloc(1, sizeof(struct dca_dts_dec));
@@ -614,6 +629,7 @@ int dca_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
 
     aml_dec = &dts_dec->aml_dec;
     aml_dca_config_t *dca_config = &dec_config->dca_config;
+    adev = (struct aml_audio_device *)(dca_config->dev);
 
     dec_data_info_t *dec_pcm_data = &aml_dec->dec_pcm_data;
     dec_data_info_t *dec_raw_data = &aml_dec->dec_raw_data;
@@ -627,7 +643,7 @@ int dca_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
     dts_dec->stream_type = 0;
     dts_dec->is_headphone_x = false;
 
-    if (dca_decoder_init(dts_dec->digital_raw) < 0) {
+    if (dca_decoder_init(dts_dec, dts_dec->digital_raw, dca_config->output_bw) < 0) {
         goto error;
     }
     dts_dec->status |= DCA_INITED;
@@ -663,7 +679,7 @@ int dca_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
         goto error;
     }
 
-    if (property_get_bool(AML_DCA_PROP_DUMP_INPUT_RAW, 0)) {
+    if (get_debug_value(AML_DUMP_AUDIOHAL_DECODER) || property_get_bool(AML_DCA_PROP_DUMP_INPUT_RAW, 0)) {
         char name[64] = {0};
         snprintf(name, 64, "%sdts_input_raw.dts", AML_DCA_DUMP_FILE_DIR);
         dts_debug.fp_input_raw = fopen(name, "a+");
@@ -672,7 +688,7 @@ int dca_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
         }
     }
 
-    if (property_get_bool(AML_DCA_PROP_DUMP_OUTPUT_RAW, 0)) {
+    if (get_debug_value(AML_DUMP_AUDIOHAL_DECODER) || property_get_bool(AML_DCA_PROP_DUMP_OUTPUT_RAW, 0)) {
         char name[64] = {0};
         snprintf(name, 64, "%sdts_output_raw.dts", AML_DCA_DUMP_FILE_DIR);
         dts_debug.fp_output_raw = fopen(name, "a+");
@@ -681,7 +697,7 @@ int dca_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
         }
     }
 
-    if (property_get_bool(AML_DCA_PROP_DUMP_OUTPUT_PCM, 0)) {
+    if (get_debug_value(AML_DUMP_AUDIOHAL_DECODER) || property_get_bool(AML_DCA_PROP_DUMP_OUTPUT_PCM, 0)) {
         char name[64] = {0};
         snprintf(name, 64, "%sdts_%d_%dch.pcm", AML_DCA_DUMP_FILE_DIR, 48000, 2);
         dts_debug.fp_pcm = fopen(name, "a+");
@@ -690,7 +706,7 @@ int dca_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
         }
     }
 
-    if (property_get_bool(AML_DCA_PROP_DEBUG_FLAG, 0)) {
+    if (adev->debug_flag || property_get_bool(AML_DCA_PROP_DEBUG_FLAG, 0)) {
         ALOGD("true");
         dts_debug.debug_flag = true;
     } else {
@@ -735,7 +751,7 @@ int dca_decoder_release_patch(aml_dec_t *aml_dec)
     dec_data_info_t *dec_raw_data = &aml_dec->dec_raw_data;
 
     ALOGI("%s enter", __func__);
-    unload_dts_decoder_lib();
+    unload_dts_decoder_lib(dts_dec);
 
     if (dts_dec) {
         if (dts_dec->inbuf) {
@@ -777,9 +793,15 @@ int dca_decoder_release_patch(aml_dec_t *aml_dec)
         adev->dts_hd.is_headphone_x = false;
         aml_dec->frame_cnt = 0;
 
+        if (aml_dec->decFunc) {
+            aml_audio_free(aml_dec->decFunc);
+            aml_dec->decFunc = NULL;
+        }
         aml_audio_free(dts_dec);
         dts_dec = NULL;
     }
+    dts_decoder_config = NULL;
+    dts_decoder_getinfo = NULL;
     return 1;
 }
 
@@ -805,6 +827,7 @@ int dca_decoder_process_patch(aml_dec_t *aml_dec, unsigned char *buffer, int byt
     dts_dec->outlen_pcm = 0;
     dts_dec->stream_type = TYPE_DTS;
     dts_dec->is_headphone_x = false;
+    Func_dts_decoder_getinfo fGetinfo =  dts_dec->dcaHandle.dca_getinfo;
 
     adev = (struct aml_audio_device *)(aml_dec->dev);
     if (!adev) {
@@ -846,7 +869,7 @@ int dca_decoder_process_patch(aml_dec_t *aml_dec, unsigned char *buffer, int byt
     }
 
     if (frame_size > 0) {
-        used_size = dts_dec->decoder_process(dts_dec->inbuf + dts_dec->half_frame_used_size,
+        used_size = dts_dec->decoder_process(dts_dec, dts_dec->inbuf + dts_dec->half_frame_used_size,
                                 frame_size,
                                 dec_pcm_data->buf,
                                 &dts_dec->outlen_pcm,
@@ -880,13 +903,13 @@ int dca_decoder_process_patch(aml_dec_t *aml_dec, unsigned char *buffer, int byt
 
         if ( ((dts_dec->outlen_pcm > 0) || (dts_dec->outlen_raw > 0)) && (used_size > 0) ) {
             ///< get dts stream type, display audio info banner.
-            if (!dts_decoder_getinfo) {
+            if (!fGetinfo) {
                 dts_dec->stream_type = -1;
                 dts_dec->is_headphone_x = false;
             } else {
                 dca_info_t dca_info;
                 memset(&dca_info, 0, sizeof(dca_info));
-                int ret = (*dts_decoder_getinfo)(DCA_STREAM_INFO, (dca_info_t *)&dca_info);
+                int ret = (*fGetinfo)(DCA_STREAM_INFO, (dca_info_t *)&dca_info);
                 if (!ret) {
                     dts_dec->stream_type = _dts_stream_type_mapping(dca_info.stream_info.stream_type);
                     dts_dec->is_headphone_x = !!(dca_info.stream_info.stream_type & DTSSTREAMTYPE_DTS_HEADPHONE);
@@ -918,8 +941,9 @@ int dca_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, a
 {
     int ret = -1;
     struct dca_dts_dec *dts_dec = (struct dca_dts_dec *)aml_dec;
+    Func_dts_decoder_config fConfig = NULL;
 
-    if (!dts_decoder_config || !dts_dec) {
+    if (!dts_dec) {
         if (!aml_dec_config)
             return ret;
 
@@ -945,6 +969,10 @@ int dca_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, a
 
         return ret;
     }
+    fConfig = dts_dec->dcaHandle.dca_config;
+    if (!fConfig) {
+        return ret;
+    }
 
     if (!DCA_CHECK_STATUS(dts_dec->status, DCA_INITED)) {
         return ret;
@@ -957,7 +985,7 @@ int dca_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, a
             dca_config_t dca_config;
             memset(&dca_config, 0, sizeof(dca_config));
             dca_config.output_ch = aml_dec_config->dca_config.output_ch;
-            ret = (*dts_decoder_config)(DCA_CONFIG_OUT_CH, (dca_config_t *)&dca_config);
+            ret = (*fConfig)(DCA_CONFIG_OUT_CH, (dca_config_t *)&dca_config);
             break;
         }
 
@@ -972,12 +1000,14 @@ int dca_decoder_getinfo(aml_dec_t *aml_dec, aml_dec_info_type_t info_type, aml_d
 {
     int ret = -1;
     struct dca_dts_dec *dts_dec = (struct dca_dts_dec *)aml_dec;
+    Func_dts_decoder_getinfo fGetinfo = NULL;
 
-    if (!dts_decoder_getinfo || !aml_dec_info || !dts_dec) {
+    if (!aml_dec_info || !dts_dec) {
         return ret;
     }
+    fGetinfo = dts_dec->dcaHandle.dca_getinfo;
 
-    if (!DCA_CHECK_STATUS(dts_dec->status, DCA_INITED)) {
+    if (!fGetinfo || !DCA_CHECK_STATUS(dts_dec->status, DCA_INITED)) {
         return ret;
     }
 
@@ -987,7 +1017,7 @@ int dca_decoder_getinfo(aml_dec_t *aml_dec, aml_dec_info_type_t info_type, aml_d
             dca_info_t dca_info;
             struct aml_audio_device *adev = (struct aml_audio_device *)(aml_dec->dev);
             memset(&dca_info, 0, sizeof(dca_info));
-            ret = (*dts_decoder_getinfo)(DCA_STREAM_INFO, (dca_info_t *)&dca_info);
+            ret = (*fGetinfo)(DCA_STREAM_INFO, (dca_info_t *)&dca_info);
             if (ret >= 0) {
                 aml_dec_info->dec_info.stream_ch = dca_info.stream_info.stream_ch;
                 aml_dec_info->dec_info.stream_sr = dca_info.stream_info.stream_sr;
@@ -1010,7 +1040,7 @@ int dca_decoder_getinfo(aml_dec_t *aml_dec, aml_dec_info_type_t info_type, aml_d
         {
             dca_info_t dca_info;
             memset(&dca_info, 0, sizeof(dca_info));
-            ret = (*dts_decoder_getinfo)(DCA_OUTPUT_INFO, (dca_info_t *)&dca_info);
+            ret = (*fGetinfo)(DCA_OUTPUT_INFO, (dca_info_t *)&dca_info);
             if (ret >= 0) {
                 aml_dec_info->dec_output_info.output_ch = dca_info.output_info.output_ch;
                 aml_dec_info->dec_output_info.output_sr = dca_info.output_info.output_sr;
@@ -1029,6 +1059,7 @@ int dca_decoder_getinfo(aml_dec_t *aml_dec, aml_dec_info_type_t info_type, aml_d
 
 int dtshd_get_out_ch_internal(void)
 {
+    //Func_dts_decoder_config fGetinfo = dts_dec->dcaHandle.dca_getinfo;
     ///< not init yet.
     if (!dts_decoder_getinfo)
         return 0;
@@ -1059,6 +1090,25 @@ int dtshd_set_out_ch_internal(int ch_num)
     int ret = (*dts_decoder_config)(DCA_CONFIG_OUT_CH, (dca_config_t *)&dca_config);
 
     return ret;
+}
+
+aml_dec_func_t *get_dca_dec_func_handle(void)
+{
+    aml_dec_func_t *amlDcvFunc = NULL;
+
+    amlDcvFunc = (struct aml_dec_func *)aml_audio_calloc(1, sizeof(struct aml_dec_func));
+    if (amlDcvFunc) {
+        amlDcvFunc->f_init       = dca_decoder_init_patch;
+        amlDcvFunc->f_release    = dca_decoder_release_patch;
+        amlDcvFunc->f_process    = dca_decoder_process_patch;
+        amlDcvFunc->f_config     = dca_decoder_config;
+        amlDcvFunc->f_info       = dca_decoder_getinfo;
+    } else {
+        AM_LOGE(" calloc amlDcvFunc:%p failed", amlDcvFunc);
+        amlDcvFunc = NULL;
+    }
+
+    return amlDcvFunc;
 }
 
 aml_dec_func_t aml_dca_func = {

@@ -23,7 +23,7 @@
  *
  * @returns the process result
  */
-int aml_audio_ms12_render(struct audio_stream_out *stream, const void *buffer, size_t bytes);
+int aml_audio_ms12_render(struct audio_stream_out *stream, void *abuffer);
 
 #endif
 

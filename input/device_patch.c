@@ -68,41 +68,6 @@ void aml_audio_port_config_dump(struct audio_port_config *port_config, int fd)
     }
 }
 
-void audio_patch_dump(struct audio_patch *patch, int fd)
-{
-    int i = 0;
-
-    dprintf(fd, " handle %d\n", patch->id);
-    for (i = 0; i < patch->num_sources; i++) {
-        dprintf(fd, "    [src  %d]\n", i);
-        aml_audio_port_config_dump(&patch->sources[i], fd);
-    }
-
-    for (i = 0; i < patch->num_sinks; i++) {
-        dprintf(fd, "    [sink %d]\n", i);
-        aml_audio_port_config_dump(&patch->sinks[i], fd);
-    }
-}
-
-//1.2 dump all registered android audio patch
-void audio_patch_list_dump(struct aml_audio_device* aml_dev, int fd)
-{
-    struct audio_patch_set *patch_set = NULL;
-    struct audio_patch *patch = NULL;
-    struct listnode *node = NULL;
-    int i = 0;
-
-    dprintf(fd, "\nAML Audio Patches:\n");
-    list_for_each(node, &aml_dev->patch_list) {
-        dprintf(fd, "  patch %d:", i);
-        patch_set = node_to_item (node, struct audio_patch_set, list);
-        if (patch_set) {
-            audio_patch_dump(&patch_set->audio_patch, fd);
-        }
-        i++;
-    }
-}
-
 //2. dump amlogic audio patch (device to device) information
 void aml_device_patch_dump(struct aml_audio_device* aml_dev, int fd)
 {
@@ -147,6 +112,6 @@ void aml_device_patch_dump(struct aml_audio_device* aml_dev, int fd)
 */
 void adev_audio_patches_dump(struct aml_audio_device* aml_dev, int fd)
 {
-    audio_patch_list_dump(aml_dev, fd);
+    audio_patch_list_dump(aml_dev->patch_manager, fd);
     aml_device_patch_dump(aml_dev, fd);
 }

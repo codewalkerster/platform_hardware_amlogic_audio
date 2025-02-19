@@ -17,6 +17,7 @@
 #ifndef _AML_DRA_DEC_API_H_
 #define _AML_DRA_DEC_API_H_
 
+aml_dec_func_t *get_dra_dec_func_handle(void);
 extern aml_dec_func_t aml_dra_func;
 
 #endif

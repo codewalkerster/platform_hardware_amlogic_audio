@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-#ifndef _AML_FAAD_DEC_API_H_
-#define _AML_FAAD_DEC_API_H_
+#ifndef _AML_AAC_DEC_API_H_
+#define _AML_AAC_DEC_API_H_
 
+aml_dec_func_t *get_faad_dec_func_handle(void);
 extern aml_dec_func_t aml_faad_func;
 
-#endif
+#endif //_AML_AAC_DEC_API_H_

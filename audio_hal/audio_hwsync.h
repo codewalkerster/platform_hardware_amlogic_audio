@@ -21,6 +21,7 @@
 
 #include <stdbool.h>
 #include <cutils/log.h>
+#include "aml_parser_common.h"
 
 #define SYSTIME_CORRECTION_THRESHOLD        (90000*10/100)
 #define NSEC_PER_SECOND 1000000000ULL
@@ -74,6 +75,7 @@
 #define HWSYNC_MAX_BODY_SIZE  (32768)  ///< Will do fine tune according to the bitstream.
 #define HWSYNC_MAX_METADATA_UNIT_SIZE  (16384) ///< Will do fine tune according to the bitstream.
 
+#define HW_SYNC_MAX 4
 
 enum hwsync_status {
     CONTINUATION,  // good sync condition
@@ -180,6 +182,7 @@ typedef struct  audio_hwsync {
     bool wait_video_done;
     bool hwsync_need_resume;
     struct timespec last_hwsync_timestamp;
+    float play_rate;
     bool end_of_hwsync_frame;
 } audio_hwsync_t;
 static inline bool hwsync_header_valid(uint8_t *header)
@@ -338,5 +341,16 @@ void aml_audio_hwsync_release(audio_hwsync_t *p_hwsync);
 
 int aml_audio_hwsync_open(void);
 int aml_audio_hwsync_close(void);
+
+void aml_mediasync_init(void *adev);
+void aml_add_mediasync_info(void *pSyncHandle, void *pItem, int32_t id);
+int aml_remove_mediasync_info(void *pSyncHandle, void *pItem);
+void *aml_lookup_mediasync_handle(void *pSyncHandle, int32_t id);
+void aml_add_mediasync_ref_count(void *pSyncHandle, int32_t id);
+
+
+int aml_audio_hwsync_data_parser(audio_hwsync_t *pHwsync,
+        const void *inBuffer, const size_t inbytes, size_t parsedSize, void **outBuffer, size_t *outBytes, uint64_t *outPts);
+aml_parser_func_t *get_hwsync_parser_func_handle(void);
 
 #endif

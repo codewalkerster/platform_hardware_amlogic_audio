@@ -17,8 +17,8 @@
 #ifndef _TV_PATCH_H_
 #define _TV_PATCH_H_
 
-int create_tv_patch(struct aml_audio_device *aml_dev, audio_devices_t input, audio_devices_t output);
-int release_tv_patch(struct aml_audio_device *aml_dev);
+int create_tv_patch(struct aml_audio_patch **patch, audio_devices_t input, audio_devices_t output);
+int release_tv_patch(struct aml_audio_patch *patch);
 
 #endif /* _TV_PATCH_H_ */
 

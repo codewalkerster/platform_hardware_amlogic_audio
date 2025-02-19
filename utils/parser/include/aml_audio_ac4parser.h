@@ -17,6 +17,8 @@
 #ifndef _AML_AUDIO_AC4PARSER_H_
 #define _AML_AUDIO_AC4PARSER_H_
 
+#include "aml_parser_common.h"
+
 struct ac4_parser_info {
     int frame_size;     /*bitsteam size*/
     int frame_rate;   /*ac4 frame rate*/
@@ -28,6 +30,8 @@ int aml_ac4_parser_open(void **pparser_handle);
 int aml_ac4_parser_close(void *parser_handle);
 int aml_ac4_parser_process(void *parser_handle, const void *buffer, int32_t numBytes, int32_t *used_size, void **output_buf, int32_t *out_size, struct ac4_parser_info * ac4_info);
 int aml_ac4_parser_reset(void *parser_handle);
+
+aml_parser_func_t *get_ac4_parser_func_handle(void);
 
 
 #endif

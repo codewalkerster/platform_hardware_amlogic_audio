@@ -56,6 +56,11 @@ typedef mediasync_result (*MediaSync_updateAnchor_func)(void* handle, int64_t an
 typedef mediasync_result (*MediaSync_forceUpdateAnchor_func)(void* handle, int64_t anchorTimeMediaUs,
                                                         int64_t anchorTimeRealUs,
                                                         int64_t maxTimeMediaUs);
+typedef mediasync_result (*MediaSync_updateSpeedAnchor_func)(void* handle, int64_t anchorTimeMediaUs,
+                                                        int64_t anchorTimeRealUs,
+                                                        int64_t maxTimeMediaUs,
+                                                        bool forceUpdate,
+                                                        float speed);
 
 typedef mediasync_result (*MediaSync_setPlaybackRate_func)(void* handle, float rate);
 typedef mediasync_result (*MediaSync_getPlaybackRate_func)(void* handle, float *rate);
@@ -92,6 +97,7 @@ static MediaSync_setStartingTimeMedia_func gMediaSync_setStartingTimeMedia = NUL
 static MediaSync_clearAnchor_func gMediaSync_clearAnchor = NULL;
 static MediaSync_updateAnchor_func gMediaSync_updateAnchor = NULL;
 static MediaSync_forceUpdateAnchor_func gMediaSync_forceUpdateAnchor = NULL;
+static MediaSync_updateSpeedAnchor_func gMediaSync_updateSpeedAnchor = NULL;
 static MediaSync_setPlaybackRate_func gMediaSync_setPlaybackRate = NULL;
 static MediaSync_getPlaybackRate_func gMediaSync_getPlaybackRate = NULL;
 static MediaSync_getMediaTime_func gMediaSync_getMediaTime = NULL;
@@ -199,9 +205,15 @@ static bool mediasync_wrap_create_init()
     }
 
     gMediaSync_forceUpdateAnchor =
-        (MediaSync_updateAnchor_func)dlsym(glibHandle, "MediaSync_forceUpdateAnchor");
+        (MediaSync_forceUpdateAnchor_func)dlsym(glibHandle, "MediaSync_forceUpdateAnchor");
     if (gMediaSync_forceUpdateAnchor == NULL) {
         ALOGW(" dlsym MediaSync_forceUpdateAnchor failed, err=%s \n", dlerror());
+    }
+
+    gMediaSync_updateSpeedAnchor =
+        (MediaSync_updateSpeedAnchor_func)dlsym(glibHandle, "MediaSync_updateSpeedAnchor");
+    if (gMediaSync_updateSpeedAnchor == NULL) {
+        ALOGW(" dlsym MediaSync_updateSpeedAnchor failed, err=%s \n", dlerror());
     }
 
     gMediaSync_setPlaybackRate =
@@ -381,6 +393,7 @@ bool mediasync_wrap_getSyncMode(void* handle, sync_mode *mode) {
             if (gDebugFlag || *mode != MEDIA_SYNC_AMASTER) {
                ALOGD(" mediasync_wrap_getSyncMode, mode=%d \n", *mode);
             }
+            ALOGV(" mediasync_wrap_getSyncMode, mode=%d \n", *mode);
             return true;
          } else {
             ALOGE("[%s] no ok\n", __func__);
@@ -473,6 +486,35 @@ bool mediasync_wrap_forceUpdateAnchor(void* handle, int64_t anchorTimeMediaUs,
         }
 
         ret = gMediaSync_forceUpdateAnchor(handle, anchorTimeMediaUs, anchorTimeRealUs, maxTimeMediaUs);
+        if (ret == AM_MEDIASYNC_OK) {
+            return true;
+        } else {
+            ALOGE("[%s] no ok\n", __func__);
+        }
+    } else {
+        ALOGE("[%s] no handle\n", __func__);
+    }
+    return false;
+}
+
+bool mediasync_wrap_updateSpeedAnchor(void* handle, int64_t anchorTimeMediaUs,
+                                int64_t anchorTimeRealUs,
+                                int64_t maxTimeMediaUs,
+                                bool forceUpdate,
+                                float speed) {
+    if (gMediaSync_updateSpeedAnchor == NULL) {
+        ALOGV("[%s] gMediaSync_updateSpeedAnchor = NULL\n", __func__);
+        return false;
+    }
+
+    if (handle != NULL)  {
+        bool ispause = false;
+        mediasync_result ret = gMediaSync_getPause(handle, &ispause);
+        if ((ret == AM_MEDIASYNC_OK) && ispause) {
+            gMediaSync_setPause(handle, false);
+        }
+
+        ret = gMediaSync_updateSpeedAnchor(handle, anchorTimeMediaUs, anchorTimeRealUs, maxTimeMediaUs, forceUpdate, speed);
         if (ret == AM_MEDIASYNC_OK) {
             return true;
         } else {

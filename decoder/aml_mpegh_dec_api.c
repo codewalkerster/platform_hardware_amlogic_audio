@@ -137,6 +137,11 @@ static int mpegh_decoder_release(aml_dec_t * aml_dec)
         if (aml_dec->raw_in_data.buf) {
             aml_audio_free(aml_dec->raw_in_data.buf);
         }
+
+        if (aml_dec->decFunc) {
+            aml_audio_free(aml_dec->decFunc);
+            aml_dec->decFunc = NULL;
+        }
         aml_audio_free(mpegh_dec);
         aml_dec = NULL;
     }
@@ -189,6 +194,25 @@ int mpegh_decoder_config(aml_dec_t * aml_dec __unused, aml_dec_config_type_t con
     int ret = 0;
     ALOGV("mpegh_decoder_config \n");
     return ret;
+}
+
+aml_dec_func_t *get_mpegh_dec_func_handle(void)
+{
+    aml_dec_func_t *amlDcvFunc = NULL;
+
+    amlDcvFunc = (struct aml_dec_func *)aml_audio_calloc(1, sizeof(struct aml_dec_func));
+    if (amlDcvFunc) {
+        amlDcvFunc->f_init       = mpegh_decoder_init;
+        amlDcvFunc->f_release    = mpegh_decoder_release;
+        amlDcvFunc->f_process    = mpegh_decoder_process;
+        amlDcvFunc->f_config     = mpegh_decoder_config;
+        amlDcvFunc->f_info       = mpegh_decoder_getinfo;
+    } else {
+        AM_LOGE(" calloc amlDcvFunc:%p failed", amlDcvFunc);
+        amlDcvFunc = NULL;
+    }
+
+    return amlDcvFunc;
 }
 
 aml_dec_func_t aml_mpegh_func = {

@@ -23,7 +23,7 @@
 #include "aml_dec_api.h"
 #include "audio_data_process.h"
 #include "aml_malloc_debug.h"
-
+#include "aml_dump_debug.h"
 
 #define MAD_LIB_PATH "/vendor/lib/libmad.so"
 #define MAD_LIB_64BIT_PATH "/vendor/lib64/libmad.so"
@@ -292,6 +292,11 @@ static int mad_decoder_release(aml_dec_t * aml_dec)
         }
         ad_mad_op->release((void *)ad_mad_op);
         unload_mad_decoder_lib(mad_dec);
+
+        if (aml_dec->decFunc) {
+            aml_audio_free(aml_dec->decFunc);
+            aml_dec->decFunc = NULL;
+        }
         aml_audio_free(aml_dec);
     }
     ALOGI("%s success", __func__);
@@ -299,13 +304,8 @@ static int mad_decoder_release(aml_dec_t * aml_dec)
 }
 static void dump_mad_data(void *buffer, int size, char *file_name)
 {
-   if (property_get_bool("vendor.media.mad.dump",false)) {
-        FILE *fp1 = fopen(file_name, "a+");
-        if (fp1) {
-            int flen = fwrite((char *)buffer, 1, size, fp1);
-            ALOGI("%s buffer %p size %d flen %d\n", __FUNCTION__, buffer, size,flen);
-            fclose(fp1);
-        }
+   if (get_debug_value(AML_DUMP_AUDIOHAL_DECODER) || property_get_bool("vendor.media.mad.dump",false)) {
+       aml_dump_audio_bitstreams(file_name, buffer, size);
     }
 }
 
@@ -591,6 +591,27 @@ int mad_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, a
 
     return ret;
 }
+
+aml_dec_func_t *get_mad_dec_func_handle(void)
+{
+    aml_dec_func_t *amlDcvFunc = NULL;
+
+    amlDcvFunc = (struct aml_dec_func *)aml_audio_calloc(1, sizeof(struct aml_dec_func));
+    if (amlDcvFunc) {
+        amlDcvFunc->f_init       = mad_decoder_init;
+        amlDcvFunc->f_release    = mad_decoder_release;
+        amlDcvFunc->f_process    = mad_decoder_process;
+        amlDcvFunc->f_config     = mad_decoder_config;
+        amlDcvFunc->f_info       = mad_decoder_getinfo;
+        amlDcvFunc->f_flush      = mad_decoder_flush;
+    } else {
+        AM_LOGE(" calloc amlDcvFunc:%p failed", amlDcvFunc);
+        amlDcvFunc = NULL;
+    }
+
+    return amlDcvFunc;
+}
+
 aml_dec_func_t aml_mad_func = {
     .f_init                 = mad_decoder_init,
     .f_release              = mad_decoder_release,

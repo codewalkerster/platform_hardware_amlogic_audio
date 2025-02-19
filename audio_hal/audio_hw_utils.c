@@ -54,13 +54,13 @@
 #else
 #include "audio_avsync_table_aml_ms12_v2.h"
 #endif
-#include "aml_async_write.h"
 #include "tv_private_object.h"
 #include "dtv_private_object.h"
 #include "audio_hw_resource_mgr.h"
 #include "device_patch.h"
 #include "aml_audio_spdifout.h"
 #include "dolby_lib_api.h"
+#include <ctype.h>
 
 
 #ifdef LOG_NDEBUG_FUNCTION
@@ -835,6 +835,7 @@ bool aml_audio_check_sbr_product()
 #endif
 }
 
+
 int aml_audio_debug_set_optical_format()
 {
     char buf[PROPERTY_VALUE_MAX] = {'\0'};
@@ -853,28 +854,6 @@ int aml_audio_debug_set_optical_format()
         }
     }
     return -1;
-}
-
-int aml_audio_dump_audio_bitstreams(const char *path, const void *buf, size_t bytes)
-{
-    if (!path) {
-        return -1;
-    }
-
-    if (get_debug_value(AML_DUMP_AUDIOHAL_ASYNC_WRITE)) {
-        aml_async_dump_data(buf, bytes, path);
-    } else {
-        FILE *fp = fopen(path, "a+");
-        if (fp) {
-            int flen = fwrite((char *)buf, 1, bytes, fp);
-            fclose(fp);
-            return 0;
-        }
-        AM_LOGE("fail to open path=%s, errno=%d/%s",  path, errno, strerror(errno));
-        return -1;
-    }
-
-    return 0;
 }
 
 //Tune the eRAC with non-tunnel for earc-ddp
@@ -1063,8 +1042,7 @@ uint32_t out_get_outport_latency(const struct audio_stream_out *stream)
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = out->dev;
-    struct subMixing *sm = adev->sm;
-    struct amlAudioMixer *audio_mixer = sm->mixerData;
+    struct amlAudioMixer *audio_mixer = adev->mixerData;
     int frames = 0, latency_ms = 0;
 
     if (out->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) {
@@ -1130,10 +1108,9 @@ uint32_t out_get_alsa_latency_frames(const struct audio_stream_out *stream)
     }
 
     whole_latency_frames = out->config.period_size * out->config.period_count / 2;
-    if (adev->useSubMix) {
+    if (adev->useAudioMixer) {
         int delay_ms = 0;
-        struct subMixing *sm = adev->sm;
-        struct amlAudioMixer *audio_mixer = sm->mixerData;
+        struct amlAudioMixer *audio_mixer = adev->mixerData;
         if (out->standby)
             return whole_latency_frames;
 
@@ -1210,7 +1187,7 @@ int aml_audio_get_arc_tuning_latency(audio_format_t arc_fmt)
     return latency_ms;
 }
 
-int aml_audio_get_src_tune_latency(enum patch_src_assortion patch_src) {
+int aml_audio_get_src_tune_latency(enum patch_src_assort patch_src) {
     char *prop_name = NULL;
     char buf[PROPERTY_VALUE_MAX] = {'\0'};
     int latency_ms = 0;
@@ -1503,6 +1480,64 @@ void aml_audio_set_cpu_affinity(bool APU)
     }
 }
 
+
+// audio writer thread migrate to apu, to reduce other cpu loading
+// currently only apply on netflix apk
+void aml_audio_stream_migrate_to_apu(struct aml_stream_out *aml_out)
+{
+    int status = 0;
+    cpu_set_t cpuSet;
+    CPU_ZERO(&cpuSet);
+    struct aml_audio_device *adev = aml_out->dev;
+    struct aml_stream_out *ms12_out = (struct aml_stream_out *)adev->ms12_out;
+    struct audio_board_config *bd_config = &adev->board_config;
+
+    // don't apply on system/deep buffer audio (it will cause sleep time inaccurate,
+    // thus mediavol test fail)
+    if (!adev->is_netflix || aml_out->is_normal_pcm || eDolbyMS12Lib != adev->dolby_lib_type) {
+        return;
+    }
+    if (bd_config->cpux_affinity_support <= 0) {
+        AM_LOGV("without apu, cpux_affinity_support %d", bd_config->cpux_affinity_support);
+        return;
+    }
+    if (adev->apu_migrate_stream_count > 0) {
+        // avoid apu loading too heavy.
+        AM_LOGI("only support one stream migrate on apu");
+        return;
+    }
+
+    CPU_SET(bd_config->cpux_affinity_support, &cpuSet);
+    status = sched_setaffinity(0, sizeof(cpu_set_t), &cpuSet);
+    if (status) {
+        AM_LOGW("failed to set cpu affinity");
+        return;
+    }
+
+    status = aml_set_thread_sched_priority("writer", pthread_self(), AUDIO_FIFO_THREAD_DEFAULT_PRIORITY - 2);
+    if (status != 0) {
+        AM_LOGE("aml_set_thread_sched_priority fail");
+        return;
+    }
+
+    aml_out->migrated_on_apu = true;
+    adev->apu_migrate_stream_count++;
+    AM_LOGI("cpu_%d successfully", bd_config->cpux_affinity_support);
+}
+
+void aml_audio_stream_delete_migrate_flag(struct aml_stream_out *aml_out)
+{
+    struct aml_audio_device *adev = aml_out->dev;
+
+    if (aml_out->migrated_on_apu) {
+        if (adev->apu_migrate_stream_count > 0) {
+            adev->apu_migrate_stream_count--;
+        }
+        aml_out->migrated_on_apu = false;
+    }
+    aml_out->b_migrate_check = false;
+}
+
 void * aml_audio_get_muteframe(audio_format_t output_format, int * frame_size, int bAtmos) {
     if (output_format == AUDIO_FORMAT_AC3) {
         *frame_size = sizeof(muted_frame_dd);
@@ -1710,8 +1745,8 @@ int aml_audio_data_handle(struct audio_stream_out *stream, const void* buffer, s
     }
     detect_data_unit = (DETECT_AUDIO_TIME_UNIT * hal_frame_size * hal_rate / 1000);
 
-    AM_LOGV("out_stream usecase:%d-->%s, hal_format:%#x hal_ch:%u --> hal_frame_size:%u, hal_rate:%u, DETECT_AUDIO_DATA_UNIT:%u, bytes:%zu",
-          out->usecase, usecase2Str(out->usecase), hal_format, hal_ch, hal_frame_size, hal_rate, detect_data_unit, bytes);
+    AM_LOGV("out_stream type:%d-->%s, hal_format:%#x hal_ch:%u --> hal_frame_size:%u, hal_rate:%u, DETECT_AUDIO_DATA_UNIT:%u, bytes:%zu",
+          out->streamType, streamType2Str(out->streamType), hal_format, hal_ch, hal_frame_size, hal_rate, detect_data_unit, bytes);
 
     while (out->audio_data_handle_state < AUDIO_DATA_HANDLE_FINISHED && remaining_size) {
         AM_LOGD("remaining_size:%zu,  out->audio_data_handle_status:%u", remaining_size, out->audio_data_handle_state);
@@ -1777,7 +1812,7 @@ int aml_audio_data_handle(struct audio_stream_out *stream, const void* buffer, s
                 out->audio_data_handle_state = AUDIO_DATA_HANDLE_EASING;
                 break;
             case AUDIO_DATA_HANDLE_EASING:
-                aml_audio_ease_process(out->audio_stream_ease, (void *)((uint8_t *)buffer + detected_size), remaining_size);
+                aml_audio_ease_process(out->audio_stream_ease, (void *)((uint8_t *)buffer + detected_size), remaining_size, false);
                 out->easing_time += remaining_size/(hal_frame_size * hal_rate / 1000);
                 ALOGD("%s  easing_time:%u, audio_stream_ease->ease_time:%u", __func__, out->easing_time, out->audio_stream_ease->ease_time);
                 remaining_size = 0;
@@ -2058,7 +2093,7 @@ bool is_disable_ms12_continuous(struct audio_stream_out *stream) {
     return false;
 }
 
-float aml_audio_get_s_gain_by_src(struct aml_audio_device *adev, enum patch_src_assortion type)
+float aml_audio_get_s_gain_by_src(struct aml_audio_device *adev, enum patch_src_assort type)
 {
     switch(type) {
         case SRC_ATV:
@@ -2076,6 +2111,8 @@ float aml_audio_get_s_gain_by_src(struct aml_audio_device *adev, enum patch_src_
 
 int android_dev_convert_to_hal_dev(audio_devices_t android_dev, int *hal_dev_port)
 {
+    uint32_t dev = android_dev;
+
     switch ((int)android_dev) {
     /* audio hal output device port */
     case AUDIO_DEVICE_OUT_FM:
@@ -2138,6 +2175,7 @@ int android_dev_convert_to_hal_dev(audio_devices_t android_dev, int *hal_dev_por
     case AUDIO_DEVICE_IN_LINE:
         *hal_dev_port = INPORT_LINEIN;
         break;
+    case AUDIO_DEVICE_IN_TV_TUNER_DTV:
     case AUDIO_DEVICE_IN_TV_TUNER:
         *hal_dev_port = INPORT_TUNER;
         break;
@@ -2254,10 +2292,11 @@ audio_format_t tunerhal_fmt_to_native_fmt(int audioFormat) {
 }
 #endif
 
-enum patch_src_assortion android_input_dev_convert_to_hal_patch_src(audio_devices_t android_dev)
+enum patch_src_assort android_input_dev_convert_to_hal_patch_src(audio_devices_t android_dev)
 {
-    enum patch_src_assortion patch_src = SRC_INVAL;
-    switch (android_dev) {
+    enum patch_src_assort patch_src = SRC_INVAL;
+    uint32_t dev = android_dev;
+    switch (dev) {
     case AUDIO_DEVICE_IN_HDMI:
         patch_src = SRC_HDMIIN;
         break;
@@ -2272,6 +2311,9 @@ enum patch_src_assortion android_input_dev_convert_to_hal_patch_src(audio_device
         break;
     case AUDIO_DEVICE_IN_TV_TUNER:
         patch_src = SRC_ATV;
+        break;
+    case AUDIO_DEVICE_IN_TV_TUNER_DTV:
+        patch_src = SRC_DTV;
         break;
     case AUDIO_DEVICE_IN_REMOTE_SUBMIX:
         patch_src = SRC_REMOTE_SUBMIXIN;
@@ -2336,7 +2378,7 @@ enum input_source android_input_dev_convert_to_hal_input_src(audio_devices_t and
     return input_src;
 }
 
-const char* patchSrc2Str(enum patch_src_assortion type)
+const char* patchSrc2Str(enum patch_src_assort type)
 {
     ENUM_TYPE_TO_STR_START("SRC_");
     ENUM_TYPE_TO_STR(SRC_DTV)
@@ -2357,7 +2399,7 @@ const char* patchSrc2Str(enum patch_src_assortion type)
     ENUM_TYPE_TO_STR_END
 }
 
-const char* usecase2Str(stream_usecase_t type)
+const char* streamType2Str(stream_type_t type)
 {
     ENUM_TYPE_TO_STR_START("STREAM_");
     ENUM_TYPE_TO_STR(STREAM_PCM_NORMAL)
@@ -2369,7 +2411,7 @@ const char* usecase2Str(stream_usecase_t type)
     ENUM_TYPE_TO_STR(STREAM_RAW_PATCH)
     ENUM_TYPE_TO_STR(STREAM_PCM_MMAP)
     ENUM_TYPE_TO_STR(STREAM_PCM_DEEP_BUF)
-    ENUM_TYPE_TO_STR(STREAM_USECASE_MAX)
+    ENUM_TYPE_TO_STR(STREAM_TYPE_MAX)
     ENUM_TYPE_TO_STR_END
 }
 
@@ -2434,56 +2476,6 @@ const char* mixerOutputType2Str(MIXER_OUTPUT_PORT type)
     ENUM_TYPE_TO_STR(MIXER_OUTPUT_PORT_MULTI_PCM)
     ENUM_TYPE_TO_STR_END
 }
-
-#ifdef ENABLE_DVB_PATCH
-const char* mediasyncAudiopolicyType2Str(audio_policy type)
-{
-    ENUM_TYPE_TO_STR_START("MEDIASYNC_AUDIO_");
-    ENUM_TYPE_TO_STR(MEDIASYNC_AUDIO_NORMAL_OUTPUT)
-    ENUM_TYPE_TO_STR(MEDIASYNC_AUDIO_DROP_PCM)
-    ENUM_TYPE_TO_STR(MEDIASYNC_AUDIO_INSERT)
-    ENUM_TYPE_TO_STR(MEDIASYNC_AUDIO_HOLD)
-    ENUM_TYPE_TO_STR(MEDIASYNC_AUDIO_MUTE)
-    ENUM_TYPE_TO_STR(MEDIASYNC_AUDIO_RESAMPLE)
-    ENUM_TYPE_TO_STR(MEDIASYNC_AUDIO_ADJUST_CLOCK)
-    ENUM_TYPE_TO_STR_END
-}
-
-const char* dtvAudioPatchCmd2Str(AUDIO_DTV_PATCH_CMD_TYPE type)
-{
-    ENUM_TYPE_TO_STR_START("AUDIO_DTV_PATCH_");
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_NULL)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_START)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_PAUSE)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_RESUME)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_STOP)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_AD_SUPPORT)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_VOLUME)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_MUTE)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_OUTPUT_MODE)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_PRE_GAIN)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_PRE_MUTE)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_OPEN)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_CLOSE)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_DEMUX_INFO)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_SECURITY_MEM_LEVEL)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_HAS_VIDEO)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_CONTROL)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_PID)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_FMT)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_AD_PID)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_AD_FMT)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_AD_ENABLE)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_AD_MIX_LEVEL)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_AD_VOL_LEVEL)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_MEDIA_SYNC_ID)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_MEDIA_PRESENTATION_ID)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_MEDIA_FIRST_LANG)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_SET_MEDIA_SECOND_LANG)
-    ENUM_TYPE_TO_STR(AUDIO_DTV_PATCH_CMD_NUM)
-    ENUM_TYPE_TO_STR_END
-}
-#endif
 
 const char* hdmiFormat2Str(AML_HDMI_FORMAT_E type)
 {
@@ -2924,7 +2916,7 @@ int aml_get_stream_dump_file_name(audio_format_t audio_format, char *file_name)
     }
 
     if (file_name)
-        snprintf(file_name, 128, "%sstream_pid%d_tid%d.%s", AUDIO_HAL_DUMP_DEFAULT_PATH, getpid(), gettid(), audio_type);
+        snprintf(file_name, 128, "%soutput_stream_in.%s", AUDIO_HAL_DUMP_DEFAULT_PATH, audio_type);
 
     ALOGI("%s line %d file_name %s\n", __func__, __LINE__, file_name);
     return 0;
@@ -3016,12 +3008,12 @@ bool is_AC4_stream_with_pcm_sink_on_stb(struct aml_stream_out *aml_out)
 {
     struct aml_audio_device *adev = aml_out->dev;
 
-    bool is_dtv_patch = (is_dev_patch_exist(adev) && is_same_patch_src(adev, SRC_DTV));
+    bool is_dtv_patch = aml_out->is_dtv_src_stream;
     bool is_local_offload =
         (!is_dtv_patch &&
         (aml_out->flags & (AUDIO_OUTPUT_FLAG_DIRECT|AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)));
     if (adev->debug_flag > 1) {
-        ALOGI("%s line %d audio_patch %p flags %d\n", __func__, __LINE__, get_dev_patch(adev), aml_out->flags);
+        ALOGI("%s line %d flags %d\n", __func__, __LINE__, aml_out->flags);
     }
     bool is_ac4 = (aml_out->hal_internal_format == AUDIO_FORMAT_AC4);
     bool is_pcm_sink_format = (adev->sink_format == AUDIO_FORMAT_PCM_16_BIT);
@@ -3044,19 +3036,19 @@ float get_ac4_stream_volume(struct aml_stream_out *aml_out)
     struct aml_audio_device *adev = aml_out->dev;
     float ret = 1.0f;
 
-    bool is_dtv_patch = (is_dev_patch_exist(adev) && is_same_patch_src(adev, SRC_DTV));
+    bool is_dtv_stream = is_dtv_stream_out(&aml_out->stream) ;
     bool is_local_offload =
-        (!is_dev_patch_exist(adev) &&
+        (!is_tv_stream_out(aml_out) &&
         (aml_out->flags & (AUDIO_OUTPUT_FLAG_DIRECT|AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD)));
 
-    if (is_dtv_patch) {
+    if (is_dtv_stream) {
         if (!adev->dev2mix_patch) {
             ret = adev->sink_gain[get_output_by_devices(adev->cur_out_devices)];
         }
-        if (adev->tv_mute && get_dev_patch(adev)) {
+        if (aml_out->offload_mute) {
             ret = 0.0f;
         }
-        ret *= get_dtv_volume(adev);
+        ret *= aml_out->volume_l;
         if (adev->debug_flag > 1) {
             ALOGI("%s line %d target AC4 volume %f\n", __func__, __LINE__, ret);
         }
@@ -3198,6 +3190,26 @@ bool is_aaudio_low_latency_mode()
     if (adev) {
         return adev->aaudio_low_latency;
     }
+    return false;
+}
+
+enum AudioMMapPolicy {
+    MMAP_POLICY_UNSPECIFIED = 0,
+    MMAP_POLICY_NEVER = 1,
+    MMAP_POLICY_AUTO = 2,
+    MMAP_POLICY_ALWAYS = 3,
+};
+
+bool get_media_aaudio_enable_status()
+{
+    const char *mmapPolicyProperty = "aaudio.mmap_policy";
+    int mmapPolicy = aml_getprop_int(mmapPolicyProperty);
+
+    if (mmapPolicy == MMAP_POLICY_AUTO || mmapPolicy == MMAP_POLICY_ALWAYS) {
+        AM_LOGI("return true");
+        return true;
+    }
+    AM_LOGI("return false");
     return false;
 }
 
@@ -4062,3 +4074,20 @@ void aml_unlock_lib_address(void)
 {
     _aml_lock_lib_address(false);
 }
+char *aml_strlower(char *str)
+{
+    int i = 0;
+    char *new = str;
+    while (*str != 0) {
+        *str = tolower(*str);
+        str++;
+    }
+    return new;
+}
+
+bool is_float_equal(float a, float b)
+{
+    const float PRECISION = 1e-06;
+    return (fabs(a - b) < PRECISION);
+}
+

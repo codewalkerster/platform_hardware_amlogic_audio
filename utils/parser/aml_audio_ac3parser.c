@@ -26,6 +26,7 @@
 #include <pthread.h>
 #include <sys/prctl.h>
 #include <cutils/log.h>
+#include <aml_dump_debug.h>
 
 #include "aml_audio_ac3parser.h"
 #include "aml_malloc_debug.h"
@@ -163,8 +164,10 @@ int aml_ac3_parser_close(void *parser_handle)
     if (aml_parser_handle) {
         if (aml_parser_handle->buf) {
             aml_audio_free(aml_parser_handle->buf);
+            aml_parser_handle->buf = NULL;
         }
         aml_audio_free(aml_parser_handle);
+        aml_parser_handle = NULL;
     }
     ALOGE("%s exit", __func__);
     return 0;
@@ -182,6 +185,15 @@ int aml_ac3_parser_reset(void *parser_handle)
     return 0;
 }
 
+int aml_ac3_parser_flush(void *parser_handle)
+{
+    struct aml_ac3_parser *aml_parser_handle = (struct aml_ac3_parser *)parser_handle;
+
+    //use reset to complete flush action.
+    aml_ac3_parser_reset(parser_handle);
+    ALOGI("%s exit", __func__);
+    return 0;
+}
 
 static int seek_dolby_sync_word(char *buffer, int size)
 {
@@ -256,7 +268,7 @@ static int aml_ac3_parser_frame_header
     }
     /*step 1, frame header 0x0b77/0x770b*/
     if (header == 0) {
-        //ALOGE("locate frame header 0x0b77/0x770b failed\n");
+        ALOGE("locate frame header 0x0b77/0x770b failed\n");
         goto error;/*no frame header, maybe need more data*/
     }
 
@@ -290,6 +302,7 @@ static int aml_ac3_parser_frame_header
         //    inheader[0],inheader[1],inheader[2], inheader[3],inheader[4],inheader[5]);
         int bsid = (inheader[5] >> 3) & 0x1f;//bitstream_id,bit[40,44]
         if (bsid > 16) {
+            AM_LOGE(" invalid bitstream_id:%d", bsid);
             goto error;    //invalid bitstream_id
         }
         if (bsid <= 8) {
@@ -463,6 +476,7 @@ int aml_ac3_parser_process(void *parser_handle, const void *in_buffer, int32_t n
         if (buf_left < need_size) {
             memcpy(parser_buf + aml_parser_handle->buf_remain, buffer + buf_offset, buf_left);
             aml_parser_handle->buf_remain += buf_left;
+            AM_LOGE(" buf_left:%d  need_size:%d", buf_left, need_size);
             goto error;
         }
         /*make sure the remain buf has 12 bytes*/
@@ -470,7 +484,6 @@ int aml_ac3_parser_process(void *parser_handle, const void *in_buffer, int32_t n
         aml_parser_handle->buf_remain += need_size;
         buf_offset += need_size;
         buf_left   = numBytes - buf_offset;
-
     }
 
     if (aml_parser_handle->status == PARSER_SYNCING) {
@@ -492,6 +505,7 @@ int aml_ac3_parser_process(void *parser_handle, const void *in_buffer, int32_t n
                 if (buf_left < need_size) {
                     memcpy(parser_buf + aml_parser_handle->buf_remain, buffer + buf_offset, buf_left);
                     aml_parser_handle->buf_remain += buf_left;
+                    AM_LOGE(" buf_left:%d  need_size:%d", buf_left, need_size);
                     /*don't find the header, and there is no enough data*/
                     goto error;
                 }
@@ -520,6 +534,7 @@ int aml_ac3_parser_process(void *parser_handle, const void *in_buffer, int32_t n
             if (buf_left < need_size) {
                 memcpy(parser_buf + aml_parser_handle->buf_remain, buffer + buf_offset, buf_left);
                 aml_parser_handle->buf_remain += buf_left;
+                AM_LOGI(" buf_left:%d  need_size:%d", buf_left, need_size);
                 goto error;
             }
             /*make sure the remain buf has 12 bytes*/
@@ -528,8 +543,6 @@ int aml_ac3_parser_process(void *parser_handle, const void *in_buffer, int32_t n
             buf_offset += need_size;
             buf_left = numBytes - buf_offset;
         }
-
-
     }
 
     /*double check here*/
@@ -627,6 +640,7 @@ int aml_ac3_parser_process(void *parser_handle, const void *in_buffer, int32_t n
         memcpy(parser_buf + aml_parser_handle->buf_remain, buffer + buf_offset, buf_left);
         aml_parser_handle->buf_remain += buf_left;
         aml_parser_handle->status = PARSER_LACK_DATA;
+        AM_LOGV(" aml_parser_handle->status:%d", aml_parser_handle->status);
         goto error;
     }
     if (aml_parser_handle->framesize != frame_size) {
@@ -641,3 +655,68 @@ error:
     *used_size = numBytes;
     return 0;
 }
+
+int ac3_parsing_data_process(void *phandle, const void *inABuffer, void *outABuffer, void *parser_callback)
+{
+    aml_audio_buffer_t *audioBuffer = (aml_audio_buffer_t *)inABuffer;
+    const void *inBuffer = audioBuffer->pData;
+    size_t inBytes = audioBuffer->size;
+    aml_audio_buffer_t *outAudioBuffer = (aml_audio_buffer_t *)outABuffer;
+    int retValue = 0;
+    struct ac3_parser_info ac3_info = { 0 };
+    void *outBuffer = NULL;
+    int32_t outBytes = 0;
+    int32_t leftBytes = inBytes;
+    int32_t usedBytes = 0, totalUsedBytes = 0;
+    int32_t inSize = (int32_t)inBytes;
+    char *inBuf = (char *)inBuffer;
+    //AM_LOGI("phandle:%p inBuffer:%p inBytes:%zu parser_callback:%p", phandle, inBuffer, inBytes, parser_callback);
+
+    //keep parsing the inBuffer until parse finished.
+    do {
+        aml_ac3_parser_process(phandle, inBuf, inSize, &usedBytes, &outBuffer, &outBytes, &ac3_info);
+        totalUsedBytes += usedBytes;
+        if (leftBytes >= usedBytes) {
+            leftBytes -= usedBytes;
+            inSize = leftBytes;
+        }
+        inBuf = inBuf + usedBytes;
+
+        if (parser_callback && outBuffer && outBytes > 0) {
+            aml_parser_data_callback_t *pCallback = (aml_parser_data_callback_t *)parser_callback;
+            Func_Write_CallBack __callback = pCallback->callback;
+            outAudioBuffer->pData = outBuffer;
+            outAudioBuffer->size = outBytes;
+            outAudioBuffer->apts = audioBuffer->apts;
+            //outAudioBuffer->bufFormat.format = audioBuffer->bufFormat.format;
+            memcpy(&outAudioBuffer->bufFormat, &audioBuffer->bufFormat, sizeof(buffer_data_format_t));
+
+            retValue = (*__callback)(pCallback->common.pAmlParser, outAudioBuffer, phandle);
+        }
+        //AM_LOGI("phandle:%p inBuf:%p inSize(leftBytes):%d %d,  used_bytes:%d totalUsedBytes:%d outBuffer:%p out_frame_size:%d  ac3_info.frame_size:%d",
+        //    phandle, inBuf, inSize, leftBytes, usedBytes, totalUsedBytes, outBuffer, outBytes, ac3_info.frame_size);
+    } while (inSize > 0);
+
+
+    return retValue;
+}
+
+aml_parser_func_t *get_ac3_parser_func_handle(void)
+{
+    aml_parser_func_t *amlParserFunc = NULL;
+
+    amlParserFunc = (struct aml_parser_func *)aml_audio_calloc(1, sizeof(struct aml_parser_func));
+    if (amlParserFunc) {
+        amlParserFunc->f_init       = aml_ac3_parser_open;
+        amlParserFunc->f_deinit     = aml_ac3_parser_close;
+        amlParserFunc->f_process    = ac3_parsing_data_process;
+        amlParserFunc->f_reset      = aml_ac3_parser_reset;
+        amlParserFunc->f_flush      = aml_ac3_parser_flush;
+    } else {
+        AM_LOGE(" calloc amlParserFunc:%p failed", amlParserFunc);
+        amlParserFunc = NULL;
+    }
+
+    return amlParserFunc;
+}
+

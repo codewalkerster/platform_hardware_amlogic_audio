@@ -21,7 +21,7 @@
 
 int sonic_speed_open(void **handle, audio_speed_config_t *speed_config);
 void sonic_speed_close(void *handle);
-int sonic_speed_process(void *handle, void * in_buffer, size_t bytes, void * out_buffer, size_t * out_size);
+int sonic_speed_process(void *handle, void * in_buffer, size_t bytes, void **p_out_buffer, size_t *p_out_buf_size, size_t *p_data_size);
 
 extern audio_speed_func_t audio_sonic_speed_func;
 

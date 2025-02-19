@@ -106,6 +106,8 @@ int extend_channel_5_8(void *data_out, void *data_in,
         size_t frames, int ch_cnt_out, int ch_cnt_in);
 
 void channel_layout_swap_center_lfe(void * data, int size, int channels, audio_format_t audio_format);
+int channel_num_to_channelmask(int channel_configuration);
+void downmix_channel_layout_swap(void * data, int channels,int out_frame, audio_format_t output_format);
 
 int init_aml_pcm_mixer(aml_pcm_mixing_st *p_mixer, const struct audioCfg *p_mixer_cfg, int mixed_frames);
 void deinit_aml_pcm_mixer(aml_pcm_mixing_st *p_mixer);

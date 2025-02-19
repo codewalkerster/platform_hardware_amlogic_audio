@@ -27,7 +27,10 @@
 #define AUDIO_FADEOUT_TV_DURATION_US 100 * 1000
 #define MS12_AUDIO_FADEOUT_TV_DURATION_US 30 * 1000
 #define MS12_AUDIO_FADEIN_TV_DURATION_US  200 * 1000
+#define NON_MS12_AUDIO_FADEIN_TV_DURATION_US  32 * 1000
 #define AUDIO_FADEOUT_STB_DURATION_US 40 * 1000
+#define AUDIO_FADEIN_STB_DURATION_US 40 * 1000
+
 
 enum {
     DO_FADE_AT_HAL,
@@ -282,9 +285,9 @@ enum {
     ATTEND_TYPE_EARC = 2
 };
 
-static inline bool is_main_write_usecase(stream_usecase_t usecase)
+static inline bool is_main_write_usecase(stream_type_t streamType)
 {
-    return usecase > 0;
+    return streamType > 0;
 }
 
 static inline bool is_digital_raw_format(audio_format_t format)
@@ -300,6 +303,7 @@ static inline bool is_digital_raw_format(audio_format_t format)
     case AUDIO_FORMAT_DTS_UHD_P2:
     case AUDIO_FORMAT_DOLBY_TRUEHD:
     case AUDIO_FORMAT_IEC61937:
+    case AUDIO_FORMAT_MP2:
     case AUDIO_FORMAT_MP3:
     case AUDIO_FORMAT_AAC:
     case AUDIO_FORMAT_HE_AAC_V1:
@@ -307,6 +311,7 @@ static inline bool is_digital_raw_format(audio_format_t format)
     case AUDIO_FORMAT_AAC_HE_V1:
     case AUDIO_FORMAT_AAC_HE_V2:
     case AUDIO_FORMAT_AAC_LATM:
+    case AUDIO_FORMAT_DRA:
         return true;
     default:
         return false;
@@ -363,7 +368,7 @@ static inline bool is_iec61937_format(struct audio_stream_out *stream)
     return (aml_out->hal_format == AUDIO_FORMAT_IEC61937);
 }
 
-static inline stream_usecase_t attr_to_usecase(uint32_t devices __unused,
+static inline stream_type_t attr_to_streamType(uint32_t devices __unused,
         audio_format_t format, uint32_t flags)
 {
     // hwsync case
@@ -374,7 +379,7 @@ static inline stream_usecase_t attr_to_usecase(uint32_t devices __unused,
         } else if (is_digital_raw_format(format)) {
             return STREAM_RAW_HWSYNC;
         } else {
-            return STREAM_USECASE_MAX;
+            return STREAM_TYPE_MAX;
         }
     }
 
@@ -396,25 +401,25 @@ static inline stream_usecase_t attr_to_usecase(uint32_t devices __unused,
         return STREAM_PCM_NORMAL;
     }
 }
-static inline stream_usecase_t convert_usecase_mask_to_stream_usecase(usecase_mask_t mask)
+static inline stream_type_t convert_usecase_mask_to_stream_usecase(usecase_mask_t mask)
 {
     int i = 0;
-    for (i = 0; i < STREAM_USECASE_MAX; i++) {
+    for (i = 0; i < STREAM_TYPE_MAX; i++) {
         if ((1 << i) & mask) {
             break;
         }
     }
     ALOGI("%s mask %#x i %d", __func__, mask, i);
-    if (i >= STREAM_USECASE_MAX) {
-        return STREAM_USECASE_MAX;
+    if (i >= STREAM_TYPE_MAX) {
+        return STREAM_TYPE_MAX;
     } else {
-        return (stream_usecase_t)i;
+        return (stream_type_t)i;
     }
 }
 
-static inline alsa_device_t usecase_to_device(stream_usecase_t usecase)
+static inline alsa_device_t usecase_to_device(stream_type_t streamType)
 {
-    switch (usecase) {
+    switch (streamType) {
     case STREAM_PCM_NORMAL:
     case STREAM_PCM_DIRECT:
     case STREAM_PCM_HWSYNC:
@@ -437,7 +442,7 @@ static inline bool is_hdmi_out(audio_devices_t cur_out_devices) {
 struct audio_stream_out;
 struct audio_stream_in;
 
-stream_usecase_t convert_usecase_mask_to_stream_usecase(usecase_mask_t mask);
+stream_type_t convert_usecase_mask_to_stream_usecase(usecase_mask_t mask);
 
 static inline bool need_hw_mix(usecase_mask_t masks)
 {
@@ -477,7 +482,11 @@ bool is_direct_stream_and_pcm_format(struct aml_stream_out *out);
 bool is_mmap_stream_and_pcm_format(struct aml_stream_out *out);
 void get_audio_indicator(struct aml_audio_device *dev, char *temp_buf);
 void update_audio_format(struct aml_audio_device *adev, audio_format_t format);
+bool is_dtv_stream_out(struct audio_stream_out *stream);
+bool is_tv_stream_out(struct aml_stream_out *aml_out);
 
+int aml_init_audio_buffer(struct aml_stream_out *out);
+int aml_deinit_audio_buffer(struct aml_stream_out *out);
 
 /*
  *@brief update the sink format after HDMI/HDMI-ARC hot plugged
@@ -487,8 +496,8 @@ int update_sink_format_after_hotplug(struct aml_audio_device *adev);
 
 uint32_t tv_in_write(struct audio_stream_out *stream, const void* buffer, size_t bytes);
 uint32_t tv_in_read(struct audio_stream_in *stream, void* buffer, size_t bytes);
-void tv_do_ease_out(struct aml_audio_device *adev);
-void tv_do_ease_in(struct audio_stream_out *stream, void *write_buf, size_t write_bytes);
+void tv_set_ease(struct aml_stream_out *out, int ease_mode);
+void tv_do_ease(struct aml_stream_out *out, void *write_buf, size_t write_bytes);
 
 const char *write_func_to_str(enum stream_write_func func);
 int aml_audio_earctx_get_type(struct aml_audio_device *adev);
@@ -498,5 +507,6 @@ int set_device_control(struct audio_hw_device *dev, struct str_parms *parms);
 audio_channel_mask_t aml_map_ch_to_mask(int ch);
 audio_channel_mask_t aml_map_ca_to_mask(int ca);
 void aml_netflix_volume_correction(struct aml_stream_out *aml_out);
+void aml_stream_clear_speed_aux_info(struct aml_stream_out *aml_out);
 
 #endif /* _AML_AUDIO_STREAM_H_ */

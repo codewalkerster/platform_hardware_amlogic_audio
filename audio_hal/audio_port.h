@@ -22,8 +22,6 @@
 #include <cutils/list.h>
 #include <alsa_device_profile.h>
 
-#include "hw_avsync.h"
-#include "sub_mixing_factory.h"
 #include "karaoke_manager.h"
 
 /* Max number of pcm mixing ports */
@@ -82,10 +80,22 @@ typedef struct {
     char info[0];
 } port_message;
 
-typedef int (*meta_data_cbk_t)(void *cookie,
+typedef struct {
+    float curr_speed;
+    float next_speed;
+    bool speed_changed;
+    uint64_t next_speed_position;  // uints:frames; used with input_frame_sum
+    uint64_t input_frame_sum;
+    uint64_t curr_speed_frame;
+    uint64_t output_frames;        // base on speed 1.0f
+    uint64_t output_frame_sum;     // base on speed 1.0f
+} port_speed_info;
+
+
+/*typedef int (*meta_data_cbk_t)(void *cookie,
             uint64_t offset,
             struct hw_avsync_header *header,
-            int *diff_ms);
+            int *diff_ms);*/
 
 
 typedef struct INPUT_PORT {
@@ -114,8 +124,7 @@ typedef struct INPUT_PORT {
     void *input_avail_cbk_data;
     int (*on_input_avail_cbk)(void *data);
     void *meta_data_cbk_data;
-
-    meta_data_cbk_t meta_data_cbk;
+    /*meta_data_cbk_t*/void * meta_data_cbk; //these cbk can be deleted later.
     float volume;
     struct fade_out fout;
     struct listnode msg_list;
@@ -131,9 +140,11 @@ typedef struct INPUT_PORT {
     bool pts_valid;
     bool        first_read;
     int         inport_start_threshold;
+    int64_t     start_threshold_ns;
     /* channel mux mixer need these configs*/
     uint32_t mux_channel_table[MAX_IN_PORT_CHANNEL_COUNT];
     uint32_t mux_channels;
+    port_speed_info speed;
 } input_port;
 
 typedef enum {
@@ -173,7 +184,6 @@ typedef struct OUTPUT_PORT {
     int (*start)(struct OUTPUT_PORT *port);
     int (*standby)(struct OUTPUT_PORT *port);
     struct timespec tval_last;
-    int sound_track_mode;
     /* pcm device need to stop/start to enable same source */
     bool pcm_restart;
     int dummy;
@@ -218,7 +228,7 @@ int set_port_notify_cbk(input_port *port,
 int set_port_input_avail_cbk(input_port *port,
         int (*on_input_avail_cbk)(void *data), void *data);
 int set_port_meta_data_cbk(input_port *port,
-        meta_data_cbk_t meta_data_cbk,
+        /*meta_data_cbk_t*/void * meta_data_cbk,
         void *data);
 int send_inport_message(input_port *port, PORT_MSG msg);
 int send_outport_message(output_port *port, PORT_MSG msg, void *info, int info_len);

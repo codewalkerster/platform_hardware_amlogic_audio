@@ -17,6 +17,7 @@
 #ifndef _AML_PCM_DEC_API_H_
 #define _AML_PCM_DEC_API_H_
 
+aml_dec_func_t *get_pcm_dec_func_handle(void);
 extern aml_dec_func_t aml_pcm_func;
 
 #endif

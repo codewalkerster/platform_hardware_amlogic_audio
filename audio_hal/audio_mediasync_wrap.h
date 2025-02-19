@@ -44,6 +44,11 @@ bool mediasync_wrap_updateAnchor(void* handle, int64_t anchorTimeMediaUs,
 bool mediasync_wrap_forceUpdateAnchor(void* handle, int64_t anchorTimeMediaUs,
 								int64_t anchorTimeRealUs,
 								int64_t maxTimeMediaUs);
+bool mediasync_wrap_updateSpeedAnchor(void* handle, int64_t anchorTimeMediaUs,
+								int64_t anchorTimeRealUs,
+								int64_t maxTimeMediaUs,
+								bool forceUpdate,
+								float speed);
 
 bool mediasync_wrap_setPlaybackRate(void* handle, float rate);
 bool mediasync_wrap_getPlaybackRate(void* handle, float *rate);

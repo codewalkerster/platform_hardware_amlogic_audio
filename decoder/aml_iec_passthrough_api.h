@@ -22,6 +22,7 @@ struct iec_dec_t {
     aml_iec_config_t iec_config;
 };
 
+aml_dec_func_t *get_iec_dec_func_handle(void);
 extern aml_dec_func_t aml_iec_func;
 
 #endif

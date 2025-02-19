@@ -100,5 +100,4 @@ void usb_out_close(struct usb_out *out);
 
 ssize_t usb_out_write(struct usb_out *out, const void *buffer, size_t bytes);
 
-ssize_t usb_check_write(struct aml_audio_device *adev, const void *buffer, size_t bytes, audio_config_base_t*cfg);
 #endif

@@ -65,6 +65,86 @@ static int ch2_ch8_n_b16_b32(void *data_mixed, void *data_sys, size_t frames)
     return 0;
 }
 
+int channel_num_to_channelmask(int channel_configuration)
+{
+    switch (channel_configuration) {
+        case 0:
+            return -1;//defined in GASpecificConfig
+        case 0x1:
+            return AUDIO_CHANNEL_OUT_MONO;
+        case 0x2:
+            return AUDIO_CHANNEL_OUT_STEREO;
+        case 0x3:
+            return AUDIO_CHANNEL_OUT_2POINT1;
+        case 0x6:
+            return AUDIO_CHANNEL_OUT_5POINT1;//center front speaker, left, right front speakers, left surround, right surround rear speakers, front low frequency effects speaker
+        case 0x8:
+            return AUDIO_CHANNEL_OUT_7POINT1;//center front speaker, left, right front speakers, left surround, right surround rear speakers, front low frequency effects speaker, left, right outside front speakers,
+        default:
+            ALOGE("%s line %d reserved channel_configuration %d\n", __func__, __LINE__, channel_configuration);
+            return -1;
+    }
+
+}
+
+/*****************************************************************************
+*   Function Name:  downmix_channel_layout_swap
+*   Description:    swap the channel layout
+*   Parameters:     (void *)data; channels; out_frame;
+*   Return value:   NULL
+*   faad decoder 6ch map: C L R LS RS LFE
+*   aml_dolby decoder 6ch map: L R C LFE LS RS
+*   faad decoder 8ch map: C L R LS RS LRS RRS LFE
+*   aml_dolby decoder 8ch map: L R C LFE LS RS LRS RRS
+******************************************************************************/
+
+void downmix_channel_layout_swap(void * data, int channels,int out_frame,audio_format_t output_format) {
+    int i = 0, j = 0;
+    if (data == NULL) {
+        //ALOGE("%s(), NULL pointer", __func__);
+        return;
+    }
+    if (channels == 0 || channels == 2) {
+        //ALOGE("%s() channels=%d", __func__, channels);
+        return;
+    }
+    if (output_format == AUDIO_FORMAT_PCM_16_BIT) {
+        int16_t *temp = data;
+        int16_t vale = 0;
+        for (i = 0; i < out_frame; i++) {
+            for (j = 0;j < channels ; j++) {
+                if (j < 2) {
+                    vale = temp[channels * i + j];
+                    temp[channels * i + j] = temp[channels * i + j  + 1];
+                    temp[channels * i + j + 1] = vale;
+                }
+                if (j > 2 && j < channels - 1) {
+                    vale = temp[channels * i + channels - j + 1];
+                    temp[channels * i + channels - j + 1] = temp[channels * i + channels - j  +  2];
+                    temp[channels * i + channels - j  +  2] = vale;
+                }
+            }
+        }
+    } else if (output_format == AUDIO_FORMAT_PCM_32_BIT) {
+        int32_t *temp = data;
+        int32_t vale = 0;
+        for (i = 0; i < out_frame; i++) {
+            for (j = 0;j < channels ; j++) {
+                if (j < 2) {
+                    vale = temp[channels * i + j];
+                    temp[channels * i + j] = temp[channels * i + j  + 1];
+                    temp[channels * i + j + 1] = vale;
+                }
+                if (j > 2 && j < channels - 1) {
+                    vale = temp[channels * i + channels - j + 1];
+                    temp[channels * i + channels - j + 1] = temp[channels * i + channels - j  +  2];
+                    temp[channels * i + channels - j  +  2] = vale;
+                }
+            }
+        }
+    }
+}
+
 int do_mixing_by_ch_mux(void *data_mixed,
                         uint32_t *out_ch_tab,
                         uint32_t out_mux_channels,

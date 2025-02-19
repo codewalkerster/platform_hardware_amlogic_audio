@@ -186,7 +186,7 @@ static int out_add_audio_effect(const struct audio_stream *stream, effect_handle
     pthread_mutex_lock (&adev->lock);
     status = aml_add_audio_effect(&adev->native_postprocess, effect, -1);
 
-    if (status >= 0 && adev->useSubMix) {
+    if (status >= 0 && adev->useAudioMixer) {
         void *process = &adev->native_postprocess;
         subMixingSetAudioPostprocess(adev, &process);
         ALOGI("%s, add audio postprocess: %p", __func__, process);

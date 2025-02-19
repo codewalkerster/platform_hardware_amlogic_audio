@@ -25,6 +25,7 @@
 #include <cutils/log.h>
 #include <cutils/properties.h>
 #include <sys/utsname.h>
+#include <utils/Timers.h>
 
 #include "audio_hw_utils.h"
 #include "audio_hwsync.h"
@@ -32,6 +33,8 @@
 #include "audio_tsync_wrap.h"
 #include "aml_audio_sysfs.h"
 #include "dolby_lib_api.h"
+
+void aml_hwsync_wrap_set_playback_rate(audio_hwsync_t *p_hwsync, float rate);
 
 /***************  wrap hwsync interfaces.   *****************/
 //wrap hwsync interfaces.
@@ -82,7 +85,7 @@ int aml_hwsync_wrap_set_start_pts(audio_hwsync_t *p_hwsync, uint32_t pts)
 
 int aml_hwsync_wrap_set_start_pts64(audio_hwsync_t *p_hwsync, uint64_t pts)
 {
-    ALOGI("%s(), set tsync start pts64: %" PRId64 "", __func__, pts);
+    ALOGI("%s(), set start pts64: %" PRId64 "", __func__, pts);
     if (!p_hwsync->use_mediasync) {
         return aml_hwsync_wrap_single_set_tsync_start_pts64(pts);
     }
@@ -160,6 +163,68 @@ int aml_hwsync_wrap_force_reset_pcrscr(audio_hwsync_t *p_hwsync, uint64_t pts)
         return -1;
     }
     return 0;
+}
+
+int aml_hwsync_wrap_reset_pcrscr_speed(audio_hwsync_t *p_hwsync, uint64_t pts, float speed, bool forceUpdate)
+{
+    if (forceUpdate) {
+        ALOGI("%s(), reset mediasync pcr:(%" PRIu64 "), forceUpdate true, speed %.3f", __func__, pts, speed);
+    } else {
+        ALOGV("%s(), reset mediasync pcr:(%" PRIu64 "), forceUpdate false, speed %.3f", __func__, pts, speed);
+    }
+
+    if (!p_hwsync->use_mediasync) {
+        ALOGE("%s : not support tsync", __func__);
+        return -1;
+    }
+
+    int result = 0;
+    bool debug = get_debug_value(AML_DEBUG_AUDIOHAL_HW_SYNC);
+    int64_t timeus = ((int64_t)pts) / 90 *1000;
+    bool ret = mediasync_wrap_updateSpeedAnchor(p_hwsync->mediasync, timeus, 0, 0, forceUpdate, speed);
+    if (ret == false) {
+        if (debug) {
+            ALOGD("mediasync_wrap_updateSpeedAnchor error, try reset_pcrscr and set_playback_rate");
+        }
+        if (forceUpdate) {
+            result = aml_hwsync_wrap_force_reset_pcrscr(p_hwsync, pts);
+        }
+        if (result != 0 || !forceUpdate) {
+            result = aml_hwsync_wrap_reset_pcrscr(p_hwsync, pts);
+        }
+
+        if (!is_float_equal(p_hwsync->play_rate, speed)) {
+            aml_hwsync_wrap_set_playback_rate(p_hwsync, speed);
+        }
+        return result;
+    }
+    return 0;
+}
+
+void aml_hwsync_wrap_set_playback_rate(audio_hwsync_t *p_hwsync, float rate)
+{
+    if (!p_hwsync->use_mediasync) {
+        return;
+    }
+    if (p_hwsync->mediasync) {
+        AM_LOGV("p_hwsync->mediasync=%p, set rate=%f\n", p_hwsync->mediasync, rate);
+        mediasync_wrap_setPlaybackRate(p_hwsync->mediasync, rate);
+        p_hwsync->play_rate = rate;
+        return;
+    }
+    return;
+}
+void aml_hwsync_wrap_get_playback_rate(audio_hwsync_t *p_hwsync, float *rate)
+{
+    if (!p_hwsync->use_mediasync) {
+        return;
+    }
+    if (p_hwsync->mediasync) {
+        mediasync_wrap_getPlaybackRate(p_hwsync->mediasync, rate);
+        AM_LOGV("p_hwsync->mediasync=%p, get rate=%f\n", p_hwsync->mediasync, *rate);
+        return;
+    }
+    return;
 }
 
 

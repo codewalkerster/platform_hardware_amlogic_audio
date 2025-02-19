@@ -39,7 +39,7 @@ typedef struct mixer_callbacks
     void *user;
     on_input_avail_t onInputAvail;
     on_notify_t onNotifyEvent;
-    meta_data_cbk_t onMetaCbk;
+    /*meta_data_cbk_t*/void *onMetaCbk;
 } MixCallbacks;
 
 input_port * create_mixer_port(BusSubMixCore *mixCore,

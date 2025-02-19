@@ -44,9 +44,25 @@ int sonic_speed_init(sonic_speed_handle_t *handle,
 
     handle->speed   = speed;
     //sonicFlushStream(handle->stream);
-    ALOGI("init sonic  speed %f sr %d ch %d rate %f", speed, sr ,ch, rate);
+    ALOGI("init sonic speed %f sr %d ch %d rate %f format %d", speed, sr ,ch, rate, handle->format);
     return 0;
 
+}
+
+static void aml_memcpy_to_i16_from_i32(int16_t *dst, const int32_t *src, size_t count)
+{
+    for (; count > 0; --count) {
+        *dst++ = *src++ >> 16;
+    }
+}
+
+static void aml_memcpy_to_i32_from_i16(int32_t *dst, const int16_t *src, size_t count)
+{
+    dst += count;
+    src += count;
+    for (; count > 0; --count) {
+        *--dst = (int32_t)*--src << 16;
+    }
 }
 
 int sonic_speed_write(sonic_speed_handle_t *handle, void *buf, size_t in_size) {
@@ -56,7 +72,16 @@ int sonic_speed_write(sonic_speed_handle_t *handle, void *buf, size_t in_size) {
         return -1;
     }
     in_frame = in_size / audio_bytes_per_frame(handle->channels, handle->format);
-    ret = sonicWriteShortToStream(handle->stream, buf, in_frame);
+    if (handle->format == AUDIO_FORMAT_PCM_FLOAT) {
+        ret = sonicWriteFloatToStream(handle->stream, buf, in_frame);
+    } else {
+        if (handle->format == AUDIO_FORMAT_PCM_32_BIT) {
+            // currently, sonic internal data use int16, api only support int16 and float pcm
+            aml_memcpy_to_i16_from_i32(buf, buf, in_frame * handle->channels);
+        }
+
+        ret = sonicWriteShortToStream(handle->stream, buf, in_frame);
+    }
     ALOGV("ret %d in_frame %d", ret, in_frame);
     return in_frame;
 }
@@ -72,8 +97,16 @@ int sonic_speed_read(void *handle, void *buf, size_t read_size) {
     }
     sonic_speed_handle_t *sonic_handle = (sonic_speed_handle_t *)handle;
     read_frame = read_size / audio_bytes_per_frame(sonic_handle->channels, sonic_handle->format);
-    samplesprocess = sonicReadShortFromStream(sonic_handle->stream, buf, read_frame);
+    if (sonic_handle->format == AUDIO_FORMAT_PCM_FLOAT) {
+        samplesprocess = sonicReadFloatFromStream(sonic_handle->stream, buf, read_frame);
+    } else {
+        samplesprocess = sonicReadShortFromStream(sonic_handle->stream, buf, read_frame);
 
+        if (sonic_handle->format == AUDIO_FORMAT_PCM_32_BIT) {
+            // currently, sonic internal data use int16, api only support int16 and float pcm
+            aml_memcpy_to_i32_from_i16(buf, buf, samplesprocess * sonic_handle->channels);
+        }
+    }
     ALOGV("samplesprocess=%d\n", samplesprocess);
     return samplesprocess;
 

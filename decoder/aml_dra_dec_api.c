@@ -15,7 +15,7 @@
  */
 
 #define LOG_TAG "audio_hw_decoder_dra"
-//#define LOG_NDEBUG 0
+#define LOG_NDEBUG 0
 
 #include <dlfcn.h>
 #include <cutils/log.h>
@@ -23,6 +23,7 @@
 #include "aml_dec_api.h"
 #include "audio_data_process.h"
 #include "aml_malloc_debug.h"
+#include "aml_dump_debug.h"
 
 #if ANDROID_PLATFORM_SDK_VERSION > 29
 #define DRA_LIB_PATH "/odm/lib/libdra.so"
@@ -199,6 +200,7 @@ static int dra_decoder_init(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config
         ALOGE("malloc buffer failed\n");
         goto exit;
     }
+    ALOGI("dec_pcm_data->buf %p  size:%d", dec_dra_data->buf, DRA_MAX_LENGTH);
 
     ad_dec_pcm_data = &aml_dec->ad_dec_pcm_data;
 
@@ -209,7 +211,7 @@ static int dra_decoder_init(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config
         goto exit;
     }
 
-    ALOGI("ad_dec_pcm_data->buf %p", ad_dec_pcm_data->buf);
+    ALOGI("ad_dec_pcm_data->buf %p  size:%d", ad_dec_pcm_data->buf, DRA_MAX_LENGTH);
     if (load_dra_decoder_lib(dra_dec) == 0) {
 
         int ret = dra_dec->dra_op.init((void *)&dra_dec->dra_op);
@@ -265,6 +267,7 @@ static int dra_decoder_release(aml_dec_t * aml_dec)
     dra_decoder_operations_t *ad_dra_op = &dra_dec->ad_dra_op;
     if (aml_dec != NULL) {
         dec_pcm_data = &aml_dec->dec_pcm_data;
+        ALOGI("%s dec_pcm_data->buf %p", __func__, dec_pcm_data->buf);
         if (dec_pcm_data->buf) {
             aml_audio_free(dec_pcm_data->buf);
         }
@@ -278,6 +281,10 @@ static int dra_decoder_release(aml_dec_t * aml_dec)
         ad_dra_op->release((void *)ad_dra_op);
 
         unload_dra_decoder_lib(dra_dec);
+        if (aml_dec->decFunc) {
+             aml_audio_free(aml_dec->decFunc);
+             aml_dec->decFunc = NULL;
+         }
         aml_audio_free(aml_dec);
     }
     ALOGI("%s success", __func__);
@@ -285,13 +292,8 @@ static int dra_decoder_release(aml_dec_t * aml_dec)
 }
 static void dump_dra_data(void *buffer, int size, char *file_name)
 {
-    if (property_get_bool("vendor.audio.dra.outdump", false)) {
-        FILE *fp1 = fopen(file_name, "a+");
-        if (fp1) {
-            int flen = fwrite((char *)buffer, 1, size, fp1);
-            ALOGI("%s buffer %p size %d flen %d\n", __FUNCTION__, buffer, size, flen);
-            fclose(fp1);
-        }
+    if (get_debug_value(AML_DUMP_AUDIOHAL_DECODER) || property_get_bool("vendor.audio.dra.outdump", false)) {
+        aml_dump_audio_bitstreams(file_name, buffer, size);
     }
 }
 
@@ -543,6 +545,25 @@ int dra_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, a
     }
 
     return ret;
+}
+
+aml_dec_func_t *get_dra_dec_func_handle(void)
+{
+    aml_dec_func_t *amlDcvFunc = NULL;
+
+    amlDcvFunc = (struct aml_dec_func *)aml_audio_calloc(1, sizeof(struct aml_dec_func));
+    if (amlDcvFunc) {
+        amlDcvFunc->f_init       = dra_decoder_init;
+        amlDcvFunc->f_release    = dra_decoder_release;
+        amlDcvFunc->f_process    = dra_decoder_process;
+        amlDcvFunc->f_config     = dra_decoder_config;
+        amlDcvFunc->f_info       = dra_decoder_getinfo;
+    } else {
+        AM_LOGE(" calloc amlDcvFunc:%p failed", amlDcvFunc);
+        amlDcvFunc = NULL;
+    }
+
+    return amlDcvFunc;
 }
 
 aml_dec_func_t aml_dra_func = {

@@ -159,11 +159,17 @@ struct dolby_ms12_desc {
     unsigned char *lpcm_temp_buffer;
     int   dap_bypass_enable;
     float dap_bypassgain;
+    char lang[4];
+    char lang2[4];
+    int at;
+    int pat;
     /*
      *-ac4_de             * <int> [ac4] Dialogue Enhancement gain that will be applied in the decoder
      *                      Range: 0 to 12 dB (in 1 dB steps, default is 0 dB)
      */
     int ac4_de;
+    int dap_dialogue_enhancer[2];
+    int dap_leveler[2];
     /*
      *-dmx              * <int>   Downmix modes
      *                       0 = Lt/Rt (Default)

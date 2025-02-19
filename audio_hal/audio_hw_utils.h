@@ -20,9 +20,6 @@
 #define _AUDIO_HW_UTILS_H_
 #include <system/audio.h>
 #include "audio_hw.h"
-#ifdef ENABLE_DVB_PATCH
-#include "dtv_patch.h"
-#endif
 #include "aml_audio_types_def.h"
 #include "aml_audio_stream.h"
 #include "alsa_device_parser.h"
@@ -34,8 +31,6 @@ extern unsigned int gSys_log_level;
 
 /* Maximum string length in audio hal. */
 #define AUDIO_HAL_CHAR_MAX_LEN     (256)
-
-#define ENUM_TYPE_STR_MAX_LEN                           (100)
 
 #define DD_MUTE_FRAME_SIZE 1536
 #define DDP_MUTE_FRAME_SIZE 6144
@@ -97,6 +92,7 @@ enum {
     AUDIO_DEVICE_IN_HDMI_EARC                   = 0x88000001u,
     AUDIO_DEVICE_IN_BLE_HEADSET                 = 0xA0000000u,
 #endif
+   AUDIO_DEVICE_IN_TV_TUNER_DTV                 = 0x80004001u,
 };
 
 #define AVSYNC_NONMS12_AUDIO_HAL_EARC_LATENCY_DDP_PROPERTY "vendor.media.audio.hal.nonms12.earc_latency.ddp"
@@ -132,7 +128,6 @@ int check_chip_name(char *chip_name, unsigned int length, struct aml_mixer_handl
 int aml_audio_get_debug_flag();
 int aml_audio_get_default_alsa_output_ch();
 int aml_audio_debug_set_optical_format();
-int aml_audio_dump_audio_bitstreams(const char *path, const void *buf, size_t bytes);
 int aml_audio_get_arc_latency_offset(int format);
 int aml_audio_get_ddp_latency_offset(int aformat,  bool dual_spdif);
 int aml_audio_get_pcm_latency_offset(int format, bool is_netflix);
@@ -143,7 +138,7 @@ uint32_t out_get_outport_latency(const struct audio_stream_out *stream);
 uint32_t out_get_latency_frames(const struct audio_stream_out *stream);
 int aml_audio_get_spdif_tuning_latency(void);
 int aml_audio_get_arc_tuning_latency(audio_format_t arc_afmt);
-int aml_audio_get_src_tune_latency(enum patch_src_assortion patch_src);
+int aml_audio_get_src_tune_latency(enum patch_src_assort patch_src);
 void audio_fade_func_16bit(void *buf, int fade_size, int is_fadein, int channel_num);
 void audio_fade_func_32bit(void *buf, int fade_size, int is_fadein, int channel_num);
 void ts_wait_time_us(struct timespec *ts, uint32_t time_us);
@@ -178,7 +173,7 @@ bool is_multi_channel_48k_pcm(struct audio_stream_out *stream);
 bool is_high_rate_pcm(struct audio_stream_out *stream);
 bool is_disable_ms12_continuous(struct audio_stream_out *stream);
 int find_offset_in_file_strstr(char *mystr, char *substr);
-float aml_audio_get_s_gain_by_src(struct aml_audio_device *adev, enum patch_src_assortion type);
+float aml_audio_get_s_gain_by_src(struct aml_audio_device *adev, enum patch_src_assort type);
 int android_dev_convert_to_hal_dev(audio_devices_t android_dev, int *hal_dev_port);
 #if ANDROID_PLATFORM_SDK_VERSION > 29
 int android_fmt_convert_to_dmx_fmt(audio_format_t android_fmt);
@@ -186,21 +181,16 @@ audio_format_t tunerhal_fmt_to_native_fmt(int audioFormat);
 audio_format_t encoding_fmt_to_native_fmt(int audioFormat);
 
 #endif
-enum patch_src_assortion android_input_dev_convert_to_hal_patch_src(audio_devices_t android_dev);
+enum patch_src_assort android_input_dev_convert_to_hal_patch_src(audio_devices_t android_dev);
 enum input_source android_input_dev_convert_to_hal_input_src(audio_devices_t android_dev);
 
-const char* patchSrc2Str(enum patch_src_assortion type);
-const char* usecase2Str(stream_usecase_t type);
+const char* patchSrc2Str(enum patch_src_assort type);
+const char* streamType2Str(stream_type_t type);
 const char* outputPort2Str(enum OUT_PORT type);
 const char* inputPort2Str(enum IN_PORT type);
 const char* mixerInputType2Str(aml_mixer_input_port_type_e type);
 const char* mixerOutputType2Str(MIXER_OUTPUT_PORT type);
 uint8_t get_bit_position_in_mask(uint8_t max_position, uint32_t *p_mask);
-
-#ifdef ENABLE_DVB_PATCH
-const char* mediasyncAudiopolicyType2Str(audio_policy type);
-const char* dtvAudioPatchCmd2Str(AUDIO_DTV_PATCH_CMD_TYPE type);
-#endif
 const char* hdmiFormat2Str(AML_HDMI_FORMAT_E type);
 const char* audioEncodingFormat2Str(AUDIO_ENCODING_FORMAT_E type);
 const char* audioPortRole2Str(audio_port_role_t type);
@@ -268,7 +258,7 @@ bool is_AC4_stream_with_pcm_sink_on_stb(struct aml_stream_out *aml_out);
 float get_ac4_stream_volume(struct aml_stream_out *aml_out);
 int aml_audio_get_netflix_port_latency(enum OUT_PORT port, audio_format_t output_format);
 
-static inline bool is_tvinput_source(enum patch_src_assortion patch_src) {
+static inline bool is_tvinput_source(enum patch_src_assort patch_src) {
     return (patch_src == SRC_DTV || patch_src == SRC_ATV || patch_src == SRC_HDMIIN || \
            patch_src == SRC_LINEIN || patch_src == SRC_SPDIFIN || patch_src == SRC_ARCIN);
 }
@@ -279,6 +269,8 @@ void aml_enter_aaudio_low_latency(struct aml_audio_device *adev);
 void aml_leave_aaudio_low_latency(struct aml_audio_device *adev);
 bool is_aaudio_low_latency_mode();
 bool netflix_request_dd_output(void);
+bool get_media_aaudio_enable_status();
+
 
 #define AUDIO_CONFIG_STR_LEN        64
 static inline char *show_audio_config(audio_config_base_t *p, char *s, size_t n) {
@@ -344,6 +336,8 @@ int adev_open_sys_resource_mgr(struct aml_audio_device *adev);
 int adev_close_sys_resource_mgr(struct aml_audio_device *adev);
 int get_loudness_level(void);
 int get_digital_terresteral_tv_standards(void);
+char *aml_strlower(char *str);
+bool is_float_equal(float a, float b);
 
 inline bool is_dts_format(audio_format_t format) {
     switch (format) {

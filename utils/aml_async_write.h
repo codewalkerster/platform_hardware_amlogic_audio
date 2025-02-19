@@ -17,11 +17,14 @@
 #ifndef _AML_ASYNC_WRITE_H_
 #define _AML_ASYNC_WRITE_H_
 
+#include <system/audio.h>
 
 #define AML_ASYNC_WRITE_TRY_WITH_COMPRESS    0x100
 
 
 int create_async_write_thread(void);
+int destroy_async_write_thread(void);
+
 
 void aml_async_dump_data(const void *data_ptr, int data_size, const char *file_name);
 

@@ -26,11 +26,6 @@
 #include "component_picture_mode.h"
 #include "aml_audio_resampler.h"
 #include "aml_audio_heaacparser.h"
-#ifdef ENABLE_DVB_PATCH
-#include "dtv_patch_utils.h"
-#include "dtv_patch_hal_avsync.h"
-#include "dtv_patch_dtvsync.h"
-#endif
 
 typedef void (*dtv_avsync_process_cb)(struct audio_stream_out *stream, size_t bytes, audio_format_t output_format);
 
@@ -100,11 +95,11 @@ struct tv_param_config
 struct aml_audio_patch
 {
     struct audio_hw_device *dev;
+    int patch_id;
+    enum patch_src_assort patch_src;
     ring_buffer_t aml_ringbuffer;
     ring_buffer_t tvin_ringbuffer;
-    ring_buffer_t assoc_ringbuffer;
     pthread_t audio_input_threadID;
-    pthread_t audio_cmd_process_threadID;
     pthread_t audio_output_threadID;
     pthread_t audio_parse_threadID;
     pthread_mutex_t mutex;
@@ -138,27 +133,12 @@ struct aml_audio_patch
     enum earc_audio_type earcin_audio_type;
     bool cs_mute;
     bool need_reconfig_mediasync;
+    bool reset_input;
     audio_devices_t output_src;
     bool is_dtv_src;
     audio_channel_mask_t out_chanmask;
     int out_sample_rate;
     audio_format_t out_format;
-    /*start play strategy*/
-    int startplay_avsync_flag;
-    unsigned long startplay_firstvpts;
-    unsigned long startplay_first_checkinapts;
-    unsigned long startplay_pcrpts;
-    unsigned long startplay_apts_lookup;
-    unsigned int startplay_vpts;
-
-#if 0
-    struct ring_buffer
-    struct thread_read
-    struct thread_write
-    struct audio_mixer;
-    void *output_process_buf;
-    void *mixed_buf;
-#endif
 
     /* for AVSYNC tuning */
     int vltcy;
@@ -176,129 +156,18 @@ struct aml_audio_patch
 
     struct audio_patch_latency_detail audio_latency;
     /* end of AVSYNC tuning */
-    /*for dtv play parameters */
-    int dtv_aformat;
-    int dtv_has_video;
-    int dtv_decoder_state;
-    int dtv_decoder_cmd;
-    int dtv_first_apts_flag; /*first apts looked up flag*/
-    unsigned char dtv_NchOriginal;
-    unsigned char dtv_lfepresent;
-    unsigned int dtv_first_apts;
-    uint64_t  dtv_pcm_wrote;
-    unsigned int dtv_pcm_readed;
-    unsigned int dtv_decoder_ready;
-    unsigned int input_thread_created;
-    unsigned int output_thread_created;
-    uint64_t decoder_offset;
-	uint64_t parser_offset;
-    uint64_t input_skipped_bytes;
-    unsigned int outlen_after_last_validpts;
-    unsigned long last_valid_pts;
-    unsigned int first_apts_lookup_over; /*cache audio data before start-play flag*/
-    int dtv_sample_rate;
-    int dtv_pcm_channel;
-    bool dtv_replay_flag; // set for the first play
-    unsigned int dtv_output_clock;
-    unsigned int dtv_default_i2s_clock;
-    unsigned int dtv_default_spdif_clock;
-    unsigned int dtv_default_arc_clock;
-    unsigned int spdif_format_set;
-    int spdif_step_clk;
-    int i2s_step_clk;
-    int arc_step_clk;
-    int dtv_audio_mode;
-    int tsync_mode;
-    int dtv_apts_lookup;
-    int dtv_audio_tune;
-    int pll_state;
-    unsigned int last_checkin_apts;
-    int64_t last_min_pts;
-    int64_t last_max_pts;
-    unsigned int last_apts;
-    unsigned int last_pcrpts;
-    unsigned int cur_outapts;
-    unsigned int anchor_apts;
-    unsigned int show_first_frame;
-    dtv_avsync_process_cb avsync_callback;
-    pthread_mutex_t dtv_output_mutex;
-    pthread_mutex_t dtv_input_mutex;
-    pthread_cond_t dtv_cmd_process_cond;
-    pthread_mutex_t dtv_cmd_process_mutex;
-    pthread_mutex_t assoc_mutex;
-    pthread_mutex_t apts_cal_mutex;
-    int need_drop_size;
-    /*end dtv play*/
-    struct resample_para dtv_resample;
-    unsigned char *resample_outbuf;
-    AM_AOUT_OutputMode_t mode;
-    bool ac3_pcm_dropping;
-    bool tysnc_tune_processing;
-    int last_audio_delay;
-    // add only for debug.
-    int dtv_log_retry_cnt;
-    unsigned int last_apts_record;
-    unsigned int last_vpts_record;
-    unsigned int last_pcrpts_record;
-    struct timespec last_debug_record;
-    bool pcm_inserting;
-    int tsync_pcr_debug;
-    int pre_latency;
-    int video_valid_time; // Effective time of video
-    bool video_invalid;   // Used to determine whether the video is valid
-    bool ad_substream_checked_flag;
-    int a_discontinue_threshold;
-    int pid;
-    int i2s_div_factor;
-    struct timespec speed_time;
-    struct timespec slow_time;
-    int media_sync_id;
-#ifdef ENABLE_DVB_PATCH
-    struct audiohal_debug_para debug_para;
-    struct avsync_para sync_para;
-    struct mAudioEsDataInfo *mADEsData;
-    void *demux_handle;
-    void *demux_info;
-    aml_dtvsync_t *dtvsync;
-    int uio_fd;
-    struct cmd_node *dtv_cmd_list;
-    void *dtv_package_list;
-    struct package *cur_package;
-    int audio_pts_dts_flag;
-    int pts_margin;//use for t5d ptsserver lookup
-#endif
-    bool skip_amadec_flag;
-    int in_read_frame_size;
-    int sync_type;
-    /*add a new flag to check the patch is created from tuner framework*/
-    bool cbs_patch;
-    int adec_handle;
-    void *ac3_parser_handle;
-    void *ad_ac3_parser_handle;
-    void *ad_remain_buf;
-    int  ad_remain_size;
-    void *heaac_parser_handle;
-    void *ad_heaac_parser_handle;
-    void *ac4_parser_handle;
-    struct heaac_parser_info main_heaac_info;
-    struct heaac_parser_info ad_heaac_info;
 
     /* user setting picture mode */
     picture_mode_t pic_mode;
     bool IEC61937_format;
     bool mode_reconfig_flag;
     /* user setting picture mode end */
-    int dtv_disable_tune_latency;
-    unsigned char main_head[32];
-    bool need_save_main_head;
-    int main_head_read_size;
     int sync_offset;
     int read_size;
     struct timespec start_ts;
     int mdelay;
     bool start_mute;
     struct aml_stream_out *output_stream;
-    int32_t PServerDev;
     /* source data format change */
     bool format_change;
     bool input_teardown_over;
@@ -309,6 +178,6 @@ struct aml_audio_patch
 
 void create_tvin_buffer(struct aml_audio_patch *patch);
 void release_tvin_buffer(struct aml_audio_patch *patch);
-
+void aml_audio_port_config_dump(struct audio_port_config *port_config, int fd);
 void adev_audio_patches_dump(struct aml_audio_device *aml_dev, int fd);
 #endif

@@ -219,6 +219,10 @@ int ms12_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_info_t 
  */
 int ms12_scaletempo(void *priv_data, void *info);
 
+void dolby_ms12_create_dec_handle(struct audio_stream_out *stream);
+
+void dolby_ms12_release_dec_handle(struct audio_stream_out *stream);
+
 /*
  *@brief dolby ms12 open the main decoder
  */
@@ -233,6 +237,9 @@ int dolby_ms12_main_close(struct audio_stream_out *stream);
  *@brief dolby ms12 flush the main related buffer
  */
 int dolby_ms12_main_flush(struct audio_stream_out *stream);
+
+int dolby_ms12_main_pause(struct audio_stream_out *stream);
+int dolby_ms12_main_resume(struct audio_stream_out *stream);
 
 /*
  *@brief dolby ms12 flush the app related buffer
@@ -257,16 +264,16 @@ int dolby_ms12_bypass_process(struct audio_stream_out *stream, void *buffer, siz
 /*
  *@brief set dolby ms12 ad mixing enable
  */
-void set_ms12_ad_mixing_enable(struct dolby_ms12_desc *ms12, int ad_mixing_enable);
+void set_ms12_ad_mixing_enable(struct audio_stream_out *stream, int ad_mixing_enable);
 
 /*
  *@brief set dolby ms12 mixing level
  */
-void set_ms12_ad_mixing_level(struct dolby_ms12_desc *ms12, int mixing_level);
+void set_ms12_ad_mixing_level(struct audio_stream_out *stream, int mixing_level);
 /*
  *@brief set dolby ms12 ad volume
  */
-void set_ms12_ad_vol(struct dolby_ms12_desc *ms12, int ad_vol);
+void set_ms12_ad_vol(struct audio_stream_out *stream, int ad_vol);
 
 /*
  *@brief set dolby ms12 system mixing enable
@@ -289,22 +296,8 @@ bool is_dolby_ms12_main_stream(struct audio_stream_out *stream);
 bool is_support_ms12_reset(struct audio_stream_out *stream);
 bool is_bypass_dolbyms12(struct audio_stream_out *stream);
 bool is_dolbyms12_dap_enable(struct aml_stream_out *aml_out);
+
 bool get_ms12_dap_virtual_bass_enable(void);
-
-/*
- *@brief init the ms12 hwsync module to save pts info
- */
-int dolby_ms12_hwsync_init(void);
-
-/*
- *@brief release the ms12 hwsync module
- */
-int dolby_ms12_hwsync_release(void);
-
-/*
- *@brief check in the audio offset with pts
- */
-int dolby_ms12_hwsync_checkin_pts(int offset, int apts);
 
 /*
  *@brief dolby ms12 insert one frame, it is 32ms
@@ -364,7 +357,29 @@ int mat_bitstream_output(void *buffer, void *priv_data, size_t size);
  *@brief set ms12 dap postgain
  */
 void set_ms12_dap_postgain(struct dolby_ms12_desc *ms12, int postgain);
-void set_ms12_ac4_presentation_group_index(struct dolby_ms12_desc *ms12, int index);
+void set_ms12_ac4_presentation_group_index(struct audio_stream_out *stream, int index);
+
+//-lang               * <str> [ac4] 1st Preferred Language code (3 Letter ISO 639)
+void set_ms12_ac4_1st_preferred_language_code(struct audio_stream_out *stream, char *lang_iso639_code);
+//-lang2              * <str> [ac4] 2nd Preferred Language code (3 Letter ISO 639)
+void set_ms12_ac4_2nd_preferred_language_code(struct audio_stream_out *stream, char *lang_iso639_code);
+//-pat                * <int> [ac4] Prefer Presentation Selection by associated type over language.
+//                            0: Prefer selection by language
+//                            1: Prefer selection by associated type (default)
+void set_ms12_ac4_prefer_presentation_selection_by_associated_type_over_language(struct audio_stream_out *stream, int prefer_selection_type);
+
+//-ac4_short_prog_id  * <int> [ac4] The short program identifier as an 16 bit unsigned value or -1 for no program ID (default)
+void set_ms12_ac4_short_prog_identifier(struct audio_stream_out *stream, int short_program_identifier);
+
+void set_ms12_ac4_preferred_associated_type(struct audio_stream_out *stream, int associated_type);
+
+void set_ms12_ac4_dialogue_enhancement(struct audio_stream_out *stream, int ac4_de);
+
+void set_ms12_content_volume_leveler(struct audio_stream_out *stream, int* volume_leveler);
+
+void set_ms12_content_dialogue_enhancer(struct audio_stream_out *stream, int* content_de);
+
+void set_ms12_decoder_parameters(struct aml_audio_device *adev, char * parm);
 
 /*
  *@brief set ms12 fade and pan parameter
@@ -377,7 +392,7 @@ void set_ms12_ac4_presentation_group_index(struct dolby_ms12_desc *ms12, int ind
  *     int pan_byte
  */
 void set_ms12_fade_pan
-    (struct dolby_ms12_desc *ms12
+    (struct audio_stream_out *stream
     , int fade_byte
     , int gain_byte_center
     , int gain_byte_front
@@ -403,18 +418,20 @@ void set_ms12_main_audio_pts(struct dolby_ms12_desc *ms12, uint64_t apts, uint64
 void set_ms12_main1_audio_pts(struct dolby_ms12_desc *ms12, uint64_t apts, uint64_t bytes_offset);
 
 /*
- *@brief set ms12 main audio mute or non mute
+ *@brief set ms12 main decoder mute or non mute
  * input parameters
- *     struct dolby_ms12_desc *ms12: ms12 pointer
+ *     struct audio_stream_out *stream: output stream pointer
  *     bool b_mute: 1 mute , 0 unmute
+ *     unsigned int duration : mute/unmute easing duration, unit : ms
  */
-void set_ms12_main_audio_mute(struct dolby_ms12_desc *ms12, bool b_mute, unsigned int duration);
+//void set_ms12_main_audio_mute(struct dolby_ms12_desc *ms12, bool b_mute, unsigned int duration);
+void set_ms12_decoder_mute(struct audio_stream_out *stream, bool b_mute, unsigned int duration);
 
 audio_format_t ms12_get_audio_hal_format(audio_format_t hal_format);
 
 int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12);
 
-void set_dolby_ms12_main_speed(struct dolby_ms12_desc *ms12, double speed);
+void set_dolby_ms12_main_speed(struct audio_stream_out *stream, double speed);
 
 void set_dolby_ms12_continuous_state(struct dolby_ms12_desc *ms12, int status);
 

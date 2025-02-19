@@ -53,7 +53,14 @@ typedef struct ease_setting{
     float start_volume;     /*the vol range is 0.0~1.0*/
     float target_volume;    /*the vol range is 0.0~1.0*/
     int duration;           /*the value is ms*/
+    int ease_type;
+    int ease_frames;        /*provide precise frames, compared with duration*/
 } ease_setting_t;
+
+typedef struct aml_audio_ease_config {
+    ease_status_t ease_mode;
+    int duration_ms;
+} aml_audio_ease_config_t;
 
 typedef struct aml_audio_ease {
     int ease_type;
@@ -82,11 +89,13 @@ int aml_audio_ease_close(aml_audio_ease_t * ease_handle);
 
 int aml_audio_ease_config(aml_audio_ease_t * ease_handle, ease_setting_t *setting);
 
-int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_t size);
+int aml_audio_ease_config_frame(aml_audio_ease_t * ease_handle, ease_setting_t *setting, aml_data_format_t *pdata_format);
+
+int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_t size, bool always_process);
 
 float aml_audio_ease_get_current_volume(aml_audio_ease_t * ease_handle);
 
-int start_ease_in(aml_audio_ease_t *audio_ease);
+int start_ease_in(aml_audio_ease_t *audio_ease, bool is_TV, int duration_ms);
 
 int start_ease_out(aml_audio_ease_t *audio_ease, bool is_TV, int duration_ms);
 

@@ -13,7 +13,10 @@
 #include <AmHwMultiDemuxWrapper.h>
 #include <inttypes.h>
 #include "pes.h"
+extern "C" {
 #include "aml_malloc_debug.h"
+#include "aml_dump_debug.h"
+}
 #define PESBUFFERLEN 2048
 
 #define TS_PACKET_SIZE (188)
@@ -75,13 +78,8 @@ static int dmx_audio_dump_audio_bitstreams(const char *path, const void *buf, si
     if (!path) {
         return 0;
     }
-    if (property_get_bool("vendor.dvb.demux_audio_pes.dump",false)) {
-        FILE *fp = fopen(path, "a+");
-        if (fp) {
-            int flen = fwrite((char *)buf, 1, bytes, fp);
-            ALOGI("flen %d", flen);
-            fclose(fp);
-        }
+    if (get_debug_value(AML_DUMP_AUDIOHAL_DTV)) {
+        aml_dump_audio_bitstreams(path, buf, bytes);
     }
     return 0;
 }
@@ -527,7 +525,7 @@ void* AM_DMX_Device::dmx_data_thread(void *arg)
                         break;
                     } else {
                         if (ret == AM_DMX_ERR_NO_DATA) {
-                           usleep(5000);
+                           usleep(2000);
                         }
                     }
                     continue;
@@ -545,7 +543,7 @@ void* AM_DMX_Device::dmx_data_thread(void *arg)
                         sec[0], sec[1], sec[2], sec[3], sec[4],
                         sec[5], sec[6], sec[7], sec[8], sec[9]);*/
                     cb(dev->mDemuxWrapper, id, sec, sec_len, data);
-                    if (id && sec)
+                    if (/*id && sec*/1)
                         ALOGV("filter %d data callback ok", id);
                 }
             }
@@ -558,7 +556,7 @@ void* AM_DMX_Device::dmx_data_thread(void *arg)
         }
         else
         {
-            usleep(10000);
+            usleep(2000);
         }
     }
 

@@ -27,6 +27,7 @@ struct pcm_info {
     int is_dolby_atmos;
     int lorocmixlev;
     int lorosurmixlev;
+    uint32_t channel_mask;
     char padding[200];
 };
 

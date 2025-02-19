@@ -18,85 +18,115 @@
 #define _DTV_PATCH_H_
 
 #include <cutils/str_parms.h>
+#include "device_patch.h"
+#include "dtv_patch_utils.h"
+#include "dtv_patch_hal_avsync.h"
+#include "dtv_patch_dtvsync.h"
 
 enum {
-    AUDIO_DTV_PATCH_DECODER_STATE_INIT,
-    AUDIO_DTV_PATCH_DECODER_STATE_START,
+    AUDIO_DTV_PATCH_DECODER_STATE_IDLE,
+    AUDIO_DTV_PATCH_DECODER_STATE_PREPARED,
     AUDIO_DTV_PATCH_DECODER_STATE_RUNNING,
-    AUDIO_DTV_PATCH_DECODER_STATE_PAUSE,
+    AUDIO_DTV_PATCH_DECODER_STATE_PAUSED,
     AUDIO_DTV_PATCH_DECODER_STATE_RESUME,
     AUDIO_DTV_PATCH_DECODER_STATE_RELEASE,
 };
 
-/* refer to AudioSystemCmdManager */
+#define  DVB_DEMUX_ID_BASE 25
+#define  DVB_DEMUX_SUPPORT_MAX_NUM 6
+
+#define DTVSYNC_INIT_PTS     (-10000)
+#define DTVSYNC_INVALID_PTS   (-20000)
+
+
+#define DTVSYNC_APTS_THRESHOLD  (-5000)
 typedef enum {
-    AUDIO_DTV_PATCH_CMD_NULL        = 0,
-    AUDIO_DTV_PATCH_CMD_START       = 1,    /* AUDIO_SERVICE_CMD_START_DECODE */
-    AUDIO_DTV_PATCH_CMD_PAUSE       = 2,    /* AUDIO_SERVICE_CMD_PAUSE_DECODE */
-    AUDIO_DTV_PATCH_CMD_RESUME      = 3,    /* AUDIO_SERVICE_CMD_RESUME_DECODE */
-    AUDIO_DTV_PATCH_CMD_STOP        = 4,    /* AUDIO_SERVICE_CMD_STOP_DECODE */
-    AUDIO_DTV_PATCH_CMD_SET_AD_SUPPORT  = 5,    /* AUDIO_SERVICE_CMD_SET_DECODE_AD */
-    AUDIO_DTV_PATCH_CMD_SET_VOLUME  = 6,    /*AUDIO_SERVICE_CMD_SET_VOLUME*/
-    AUDIO_DTV_PATCH_CMD_SET_MUTE    = 7,    /*AUDIO_SERVICE_CMD_SET_MUTE*/
-    AUDIO_DTV_PATCH_CMD_SET_OUTPUT_MODE = 8,/*AUDIO_SERVICE_CMD_SET_OUTPUT_MODE */
-    AUDIO_DTV_PATCH_CMD_SET_PRE_GAIN  = 9,    /*AUDIO_SERVICE_CMD_SET_PRE_GAIN */
-    AUDIO_DTV_PATCH_CMD_SET_PRE_MUTE  = 10,  /*AUDIO_SERVICE_CMD_SET_PRE_MUTE */
-    AUDIO_DTV_PATCH_CMD_OPEN        = 12,   /*AUDIO_SERVICE_CMD_OPEN_DECODER */
-    AUDIO_DTV_PATCH_CMD_CLOSE       = 13,   /*AUDIO_SERVICE_CMD_CLOSE_DECODER */
-    AUDIO_DTV_PATCH_CMD_SET_DEMUX_INFO = 14, /*AUDIO_SERVICE_CMD_SET_DEMUX_INFO ;*/
-    AUDIO_DTV_PATCH_CMD_SET_SECURITY_MEM_LEVEL = 15,/*AUDIO_SERVICE_CMD_SET_SECURITY_MEM_LEVEL*/
-    AUDIO_DTV_PATCH_CMD_SET_HAS_VIDEO   = 16,/*AUDIO_SERVICE_CMD_SET_HAS_VIDEO */
-    AUDIO_DTV_PATCH_CMD_CONTROL       = 17,
-    AUDIO_DTV_PATCH_CMD_SET_PID       = 18,
-    AUDIO_DTV_PATCH_CMD_SET_FMT        = 19,
-    AUDIO_DTV_PATCH_CMD_SET_AD_PID      = 20,
-    AUDIO_DTV_PATCH_CMD_SET_AD_FMT      = 21,
-    AUDIO_DTV_PATCH_CMD_SET_AD_ENABLE      = 22,
-    AUDIO_DTV_PATCH_CMD_SET_AD_MIX_LEVEL   = 23,
-    AUDIO_DTV_PATCH_CMD_SET_AD_VOL_LEVEL   = 24,
-    AUDIO_DTV_PATCH_CMD_SET_MEDIA_SYNC_ID   = 25,
-    AUDIO_DTV_PATCH_CMD_SET_MEDIA_PRESENTATION_ID   = 26,
-    AUDIO_DTV_PATCH_CMD_SET_DTV_DEMUX_ID = 27,
-    AUDIO_DTV_PATCH_CMD_SET_MEDIA_FIRST_LANG  = 29,
-    AUDIO_DTV_PATCH_CMD_SET_MEDIA_SECOND_LANG = 30,
-    AUDIO_DTV_PATCH_CMD_SET_SPDIF_PROTECTION_MODE  = 31,
-    AUDIO_DTV_PATCH_CMD_ES_PTS_DTS_FLAG  = 32,
-    AUDIO_DTV_PATCH_CMD_NUM             = 33,
-} AUDIO_DTV_PATCH_CMD_TYPE;
+   DTV_AUDIO_PATCH = 0,
+   DTV_TUNER_FRAMEWORK,
+} dtv_audio_scene;
 
-enum {
-    AVSYNC_ACTION_NORMAL,
-    AVSYNC_ACTION_DROP,
-    AVSYNC_ACTION_HOLD,
-};
-enum {
-    DIRECT_SPEED = 0, // DIRECT_SPEED
-    DIRECT_SLOW,
-    DIRECT_NORMAL,
-};
-enum {
-    AUDIO_FREE = 0,
-    AUDIO_BREAK,
-    AUDIO_LOOKUP,
-    AUDIO_DROP,
-    AUDIO_RAISE,
-    AUDIO_LATENCY,
-    AUDIO_RUNNING,
-};
-enum {
-    TSYNC_MODE_VMASTER = 0,
-    TSYNC_MODE_AMASTER,
-    TSYNC_MODE_PCRMASTER,
-};
 
-typedef struct ps_alloc_para {
-    uint32_t mMaxCount;
-    uint32_t mLookupThreshold;
-    uint32_t kDoubleCheckThreshold;
-} ptsserver_alloc_para;
-int create_dtv_patch(struct audio_hw_device *dev, audio_devices_t input, audio_devices_t output __unused);
-int release_dtv_patch(struct aml_audio_device *dev);
-int release_dtv_patch_l(struct aml_audio_device *dev);
+typedef struct aml_dtv_stream_out {
+    struct aml_stream_out *stream_out;
+} aml_dtv_stream_out;
+
+typedef struct aml_dtv_audio_instance {
+
+    struct aml_audio_patch audio_patch_base;
+    struct aml_dtv_stream_out dtv_stream_out;
+    pthread_t audio_input_threadID;
+    pthread_t audio_output_threadID;
+    unsigned int input_thread_created;
+    unsigned int output_thread_created;
+    pthread_mutex_t dtv_output_mutex;
+    pthread_mutex_t dtv_input_mutex;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int input_thread_exit;
+    int output_thread_exit;
+    audio_devices_t input_src;
+    audio_devices_t output_sink;
+    audio_format_t aformat;
+    int input_sample_rate;
+    audio_channel_mask_t in_chanmask;
+    audio_format_t in_format;
+    bool is_dtv_src;
+    audio_channel_mask_t out_chanmask;
+    int out_sample_rate;
+    audio_format_t out_format;
+    bool ad_substream_checked_flag;
+
+    int dtv_aformat;
+    int dtv_has_video;
+    bool package_checked_flag;
+    unsigned char dtv_NchOriginal;
+    unsigned char dtv_lfepresent;
+    uint64_t  dtv_pcm_wrote;
+    unsigned int dtv_pcm_readed;
+    AM_AOUT_OutputMode_t mode;
+
+    void *demux_handle;
+    aml_dtv_audiopara_t dtv_audio_info;
+    aml_dtvsync_t dtvsync;
+    dtv_audio_scene dtv_scene;
+    int uio_fd;
+    int dtv_audio_state;
+
+    int64_t last_min_pts;
+    int64_t last_max_pts;
+    int64_t last_checkin_apts;
+    void *dtv_package_list;
+    int audio_pts_dts_flag;
+    int pts_margin;//use for t5d ptsserver lookup
+    int in_read_frame_size;
+    void *ac3_parser_handle;
+    void *ad_ac3_parser_handle;
+    void *ad_remain_buf;
+    int  ad_remain_size;
+    void *heaac_parser_handle;
+    void *ad_heaac_parser_handle;
+    void *ac4_parser_handle;
+    struct heaac_parser_info main_heaac_info;
+    struct heaac_parser_info ad_heaac_info;
+    int32_t PServerDev;
+} aml_dtv_audio_instance_t;
+
+typedef struct aml_dtv_audio_context {
+    int dtv_demux_id;
+    aml_dtv_audio_instance_t instances[DVB_DEMUX_SUPPORT_MAX_NUM];
+    pthread_t audio_cmd_process_threadID;
+    pthread_cond_t dtv_cmd_process_cond;
+    pthread_mutex_t dtv_cmd_process_mutex;
+    struct cmd_node dtv_cmd_list;
+    int cmd_process_thread_exit;
+} aml_dtv_audio_context_t;
+
+
+int create_dtv_patch(struct aml_audio_patch **audio_patch, audio_devices_t input, audio_devices_t output __unused);
+int release_dtv_patch(struct aml_audio_patch *audio_patch);
+int create_dtv_cmd_process_thread(struct aml_dtv_audio_context *context);
+int release_dtv_cmd_process_thread(struct aml_dtv_audio_context *context);
+
 #if ANDROID_PLATFORM_SDK_VERSION > 29
 int enable_dtv_patch_for_tuner_framework(struct audio_config *config, struct audio_stream_out *stream);
 int disable_dtv_patch_for_tuner_framework(struct audio_stream_out *stream);
@@ -112,36 +142,13 @@ int out_set_audio_description_mix_level(struct audio_stream_out *stream, const f
 int out_get_dual_mono_mode(struct audio_stream_out *stream, audio_dual_mono_mode_t *mode);
 int out_set_dual_mono_mode(struct audio_stream_out *stream, audio_dual_mono_mode_t mode);
 int out_set_volume_for_tunerframework(struct audio_stream_out *stream, float left, float right);
-
+int out_set_playback_rate_parameters_for_tunerframework(struct audio_stream_out *stream, const audio_playback_rate_t *playbackRate);
+int out_get_playback_rate_parameters_for_tunerframework(struct audio_stream_out *stream, audio_playback_rate_t *playbackRate);
+int out_get_presentation_position_for_tunerframework (const struct audio_stream_out *stream, uint64_t *frames, struct timespec *timestamp);
 #endif
-//int dtv_patch_add_cmd(int cmd);
-void save_latest_dtv_aformat(int afmt);
-int audio_set_spdif_clock(struct aml_stream_out *stream,int type);
-int dtv_get_syncmode(void);
-
-void clean_dtv_patch_pts(struct aml_audio_patch *patch);
-int audio_decoder_status(unsigned int *perror_count);
-extern size_t aml_alsa_output_write(struct audio_stream_out *stream, void *buffer, size_t bytes);
-
-extern int get_tsync_pcr_debug(void);
-extern int get_video_delay(void);
-extern void set_video_delay(int delay_ms);
-extern void dtv_do_process_pcm(int avail, struct aml_audio_patch *patch,
-                            struct audio_stream_out *stream_out);
-extern void dtv_do_insert_zero_pcm(struct aml_audio_patch *patch,
-                            struct audio_stream_out *stream_out);
-extern void dtv_do_drop_pcm(int avail, struct aml_audio_patch *patch);
-extern void dtv_adjust_output_clock(struct aml_audio_patch * patch, int direct, int step, bool is_dual);
-extern void dtv_avsync_process(struct audio_stream_out *stream, size_t bytes, audio_format_t output_format);
-extern void decoder_set_pcrscr(unsigned int pcrscr);
-int get_audio_checkin_underrun(void);
 int set_dtv_parameters(struct audio_hw_device *dev, struct str_parms *parms);
 int get_dtv_parameters(struct audio_hw_device *dev, const char *keys);
-bool is_dtv_patch_alive(struct aml_audio_device *aml_dev);
 int dtv_patch_get_latency(struct aml_audio_device *aml_dev);
 int dtv_patch_get_es_pts_dts_flag(struct aml_audio_device *aml_dev);
-int audio_get_sample_rate_channels(int *sample_rate, int *channels, int *lfepresent);
-void get_dtv_amadec_audio_info (struct aml_audio_device *dev );
 int dtv_patch_get_cmd_close_status(struct aml_audio_device *aml_dev);
-
 #endif /* _DTV_PATCH_H_ */

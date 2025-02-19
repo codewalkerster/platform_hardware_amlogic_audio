@@ -25,6 +25,11 @@ cc_library_shared {
         "libamaudioutils_headers",
     ],
 
+    include_dirs: [
+        "hardware/amlogic/audio/utils",
+        "hardware/amlogic/audio/utils/include",
+    ],
+
     arch: {
         x86: {
             enabled: false,

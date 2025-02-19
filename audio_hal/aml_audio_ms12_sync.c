@@ -1045,6 +1045,7 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
 {
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
+    struct dolby_ms12_dec_desc *ms12_dec = out->ms12_dec_handle;
     int32_t latency_frames = 0;
     int32_t tuning_delay = 0;
     int32_t atmos_tuning_delay = 0;
@@ -1099,7 +1100,7 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
                                                       platform_type,
                                                       is_earc) * 48;
 
-    if (adev->ms12.is_dolby_atmos || adev->atoms_lock_flag) {
+    if (ms12_dec->is_dolby_atmos || adev->atoms_lock_flag) {
         /*
          * In DV AV sync, the ATMOS(DDP_JOC) item, it will add atmos_tuning_delay into the latency_frames.
          * If other case choose an diff value, here separate by is_netflix.
@@ -1107,7 +1108,7 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
         atmos_tuning_delay = get_ms12_atmos_latency_offset(true, adev->is_netflix) * 48;
     }
 
-    if (adev->ms12.is_bypass_ms12) {
+    if (ms12_dec->is_bypass_ms12) {
         bypass_delay = get_ms12_bypass_latency_offset(true, adev->is_netflix) * 48;
     }
 
@@ -1478,7 +1479,7 @@ int aml_audio_get_ms12_nontunel_tune_latency(const struct audio_stream_out * str
         platform_type = SBR;
     }
 
-    if (adev->ms12.is_bypass_ms12) {
+    if (out->ms12_dec_handle->is_bypass_ms12) {
         frame_latency = get_ms12_bypass_latency_offset(false, is_netflix) * 48;
         if (adev->bDVEnable && !is_TV(adev)) {
             frame_latency += get_sink_dv_latency_offset(false, is_netflix) * 48;
@@ -1493,8 +1494,12 @@ int aml_audio_get_ms12_nontunel_tune_latency(const struct audio_stream_out * str
         if (out->is_normal_pcm && b_deepbuffer) {
             frame_latency += get_ms12_nontunel_deepbuffer_latency_offset(is_netflix) * 48;
         }
-        if (adev->ms12.is_dolby_atmos || adev->atoms_lock_flag) {
-            frame_latency += get_ms12_atmos_latency_offset(false, is_netflix) * 48;
+        if (out->ms12_dec_handle->is_dolby_atmos || adev->atoms_lock_flag) {
+            if (is_netflix && platform_type == TV && adev->sink_format == AUDIO_FORMAT_E_AC3) {
+                // Do not add atmos latency, reduce apk atmos bitstream underrun probability
+            } else {
+                frame_latency += get_ms12_atmos_latency_offset(false, is_netflix) * 48;
+            }
         }
     }
 
@@ -1505,16 +1510,6 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
 {
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
-#if ENABLE_DVB_PATCH
-#if ANDROID_PLATFORM_SDK_VERSION > 29
-    if (dtv_tuner_framework((struct audio_stream_out *)stream)) {
-        struct aml_stream_out *cbs_out =  adev->active_outputs[STREAM_PCM_DIRECT];
-        if (cbs_out)  {
-            out = cbs_out;
-        }
-    }
-#endif
-#endif
     int frame_latency = 0, timems_latency = 0;
     bool b_raw_in = false;
     bool b_raw_out = false;
@@ -1529,12 +1524,12 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
     *timestamp = out->lasttimestamp;
 
     {
-        if (direct_continuous((struct audio_stream_out *)stream) && adev->ms12.dolby_ms12_enable) {
+        if (direct_continuous((struct audio_stream_out *)stream) && adev->ms12.dolby_ms12_enable && out->ms12_dec_handle) {
             pthread_mutex_lock(&adev->ms12.main_apts_update_lock);
             clock_gettime(CLOCK_MONOTONIC, timestamp);
-            frames_written_hw = adev->ms12.last_frames_position;
-            if (adev->ms12.ms12_position_update) {
-                int diff_ms = calc_time_interval_us(&adev->ms12.timestamp, timestamp) / MSEC_PER_SEC;
+            frames_written_hw = out->ms12_dec_handle->last_frames_position;
+            if (out->ms12_dec_handle->ms12_position_update) {
+                int diff_ms = calc_time_interval_us(&out->ms12_dec_handle->timestamp, timestamp) / MSEC_PER_SEC;
                 /*ms12 output is 32ms, so we only consider the below drift*/
                 if (adev->debug_flag) {
                     ALOGI(" original frames:%"PRIu64" , diff_ms = %d", *frames, diff_ms);
@@ -1570,8 +1565,8 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
 
     ALOGV("[%s]cur_devices %#x out->hal_internal_format %x adev->ms12.sink_format %x adev->continuous_audio_mode %d \n",
             __func__,adev->cur_out_devices, out->hal_internal_format, adev->ms12.sink_format, adev->continuous_audio_mode);
-    ALOGV("[%s]adev->ms12.is_bypass_ms12 %d adev->ms12.is_dolby_atmos %d adev->atmos_lock_flag %d\n",
-            __func__,adev->ms12.is_bypass_ms12, adev->ms12.is_dolby_atmos, adev->atoms_lock_flag);
+    ALOGV("[%s]adev->atmos_lock_flag %d\n",
+            __func__, adev->atoms_lock_flag);
     ALOGV("[%s]  *frames:%"PRIu64"  frame_latency %d\n",__func__, *frames, frame_latency);
 
     if (frame_latency < 0) {
@@ -1587,8 +1582,7 @@ int aml_audio_get_ms12_presentation_position(const struct audio_stream_out *stre
         *frames = (*frames * out->hal_rate) / MM_FULL_POWER_SAMPLING_RATE;
     }
 
-
-    if (out->usecase == STREAM_PCM_HWSYNC) {
+    if (out->streamType == STREAM_PCM_HWSYNC) {
         //write data not update to trigge underrun
         //~580ms from xts Audio Pause to Resume, so setup the threshold 200ms
         struct timespec ts;

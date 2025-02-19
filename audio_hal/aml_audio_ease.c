@@ -190,6 +190,7 @@ int aml_audio_ease_config(aml_audio_ease_t * ease_handle, ease_setting_t *settin
         ease_handle->start_volume = ease_handle->current_volume;
     }
 
+    ease_handle->ease_type = setting->ease_type;
     ease_handle->ease_time = setting->duration;
     if (ease_handle->ease_time == 0) {
         ease_handle->current_volume = setting->target_volume;
@@ -202,7 +203,42 @@ int aml_audio_ease_config(aml_audio_ease_t * ease_handle, ease_setting_t *settin
     return 0;
 }
 
-int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_t size) {
+int aml_audio_ease_config_frame(aml_audio_ease_t *ease_handle, ease_setting_t *setting, aml_data_format_t *pdata_format)
+{
+    if (ease_handle == NULL || setting == NULL || pdata_format == NULL) {
+        if (ease_handle) {
+            /*coverity[missing_lock]*/
+            ease_handle->do_easing = false;
+        }
+        return -1;
+    }
+
+    pthread_mutex_lock(&ease_handle->ease_lock);
+    ease_handle->target_volume = setting->target_volume;
+    ease_handle->start_volume = setting->start_volume;
+    if (ease_handle->start_volume < ease_handle->target_volume) {
+        ease_handle->ease_status = EaseIn;
+    } else {
+        ease_handle->ease_status = EaseOut;
+    }
+    memcpy(&ease_handle->data_format, pdata_format, sizeof(*pdata_format));
+
+    ease_handle->ease_type = setting->ease_type;
+    ease_handle->ease_time = setting->ease_frames / (ease_handle->data_format.sr / 1000);
+    ease_handle->ease_frames = setting->ease_frames;
+    if (ease_handle->ease_time == 0) {
+        ease_handle->current_volume = setting->target_volume;
+    } else {
+        ease_handle->current_volume = ease_handle->start_volume;
+    }
+    ease_handle->ease_frames_elapsed = 0;
+    ease_handle->do_easing = true;
+    pthread_mutex_unlock(&ease_handle->ease_lock);
+    return 0;
+}
+
+
+int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_t size, bool always_process) {
     if (!ease_handle) {
         ALOGE("%s(), ease_handle is NULL", __func__);
         return -1;
@@ -215,7 +251,7 @@ int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_
     float vol_delta;
     pthread_mutex_lock(&ease_handle->ease_lock);
     if (in_data == NULL || ch == 0 || size == 0 || ease_handle->ease_status == Invalid
-            || (format != AUDIO_FORMAT_PCM_16_BIT && format != AUDIO_FORMAT_PCM_32_BIT)) {
+            || (format != AUDIO_FORMAT_PCM_16_BIT && format != AUDIO_FORMAT_PCM_32_BIT && format != AUDIO_FORMAT_PCM_FLOAT)) {
         if (ease_handle) {
             ease_handle->do_easing = false;
             pthread_mutex_unlock(&ease_handle->ease_lock);
@@ -227,7 +263,7 @@ int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_
     format = ease_handle->data_format.format;
     nframes  = size / (audio_bytes_per_sample(format) * ch);
 
-    if (ease_handle->ease_frames_elapsed >= ease_handle->ease_frames) {
+    if (!always_process && ease_handle->ease_frames_elapsed >= ease_handle->ease_frames && ease_handle->ease_status == EaseIn) {
         ease_handle->do_easing = false;
         pthread_mutex_unlock(&ease_handle->ease_lock);
         return 0;
@@ -240,13 +276,13 @@ int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_
                 short * data = (short*) in_data;
 
                 for (j = 0; j < nframes; j++) {
-                    if (ease_handle->ease_frames == 0) {
-                        ease_handle->current_volume = ease_handle->target_volume;
-                    } else if (ease_handle->ease_frames_elapsed < ease_handle->ease_frames) {
+                    if (ease_handle->ease_frames_elapsed < ease_handle->ease_frames) {
 
                         ease_handle->current_volume= floatEaseNext(ease_handle->ease_type, (float)ease_handle->ease_frames_elapsed,
                                                     ease_handle->start_volume, vol_delta, (float)(ease_handle->ease_frames - 1));
                         ease_handle->ease_frames_elapsed++;
+                    } else {
+                        ease_handle->current_volume = ease_handle->target_volume;
                     }
 
                     for (i = 0 ; i < ch; i++) {
@@ -260,13 +296,34 @@ int aml_audio_ease_process(aml_audio_ease_t * ease_handle, void * in_data, size_
                 //ALOGD("ease frames=%d time=%d cur=%f target=%f\n",
                 //ease_handle->ease_frames, ease_handle->ease_time,ease_handle->current_volume,ease_handle->target_volume);
                 for (j = 0; j < nframes; j++) {
-                    if (ease_handle->ease_frames == 0) {
-                        ease_handle->current_volume = ease_handle->target_volume;
-                    } else if (ease_handle->ease_frames_elapsed < ease_handle->ease_frames) {
+                    if (ease_handle->ease_frames_elapsed < ease_handle->ease_frames) {
 
                         ease_handle->current_volume= floatEaseNext(ease_handle->ease_type, (float)ease_handle->ease_frames_elapsed,
                                                    ease_handle->start_volume, vol_delta, (float)(ease_handle->ease_frames - 1));
                         ease_handle->ease_frames_elapsed++;
+                    } else {
+                        ease_handle->current_volume = ease_handle->target_volume;
+                    }
+                    //ALOGD("frame=%d ease volume=%f\n",j, ease_handle->current_volume);
+                    for (i = 0 ; i < ch; i++) {
+                        data[j * ch + i] = data[j * ch + i] * ease_handle->current_volume;
+                    }
+                }
+
+            }
+            break;
+        case AUDIO_FORMAT_PCM_FLOAT: {
+                float * data = (float *) in_data;
+                //ALOGD("ease frames=%d time=%d cur=%f target=%f\n",
+                //ease_handle->ease_frames, ease_handle->ease_time,ease_handle->current_volume, ease_handle->target_volume);
+                for (j = 0; j < nframes; j++) {
+                    if (ease_handle->ease_frames_elapsed < ease_handle->ease_frames) {
+
+                        ease_handle->current_volume= floatEaseNext(ease_handle->ease_type, (float)ease_handle->ease_frames_elapsed,
+                                                   ease_handle->start_volume, vol_delta, (float)(ease_handle->ease_frames - 1));
+                        ease_handle->ease_frames_elapsed++;
+                    } else {
+                        ease_handle->current_volume = ease_handle->target_volume;
                     }
                     //ALOGD("frame=%d ease volume=%f\n",j, ease_handle->current_volume);
                     for (i = 0 ; i < ch; i++) {
@@ -300,15 +357,25 @@ float aml_audio_ease_get_current_volume(aml_audio_ease_t * ease_handle)
     return vol;
 }
 
-int start_ease_in(aml_audio_ease_t *audio_ease) {
+int start_ease_in(aml_audio_ease_t *audio_ease, bool is_TV, int duration_ms) {
     /*start ease in the audio*/
     ease_setting_t ease_setting;
 
-    audio_ease->data_format.format = AUDIO_FORMAT_PCM_16_BIT;
+    if (is_TV) {
+        audio_ease->data_format.format = AUDIO_FORMAT_PCM_32_BIT;
+
+    } else {
+        audio_ease->data_format.format = AUDIO_FORMAT_PCM_16_BIT;
+    }
+
+    ease_setting.duration = 32;
+    if (duration_ms > 0) {
+        ease_setting.duration = duration_ms;
+    }
+
     audio_ease->data_format.ch = 2;
     audio_ease->data_format.sr = 48000;
     audio_ease->ease_type = EaseInCubic;
-    ease_setting.duration = 200;
     ease_setting.start_volume = 0.0;
     ease_setting.target_volume = 1.0;
 
@@ -321,28 +388,21 @@ int start_ease_out(aml_audio_ease_t *audio_ease, bool is_TV, int duration_ms) {
     /*start ease out the audio*/
     ease_setting_t ease_setting;
     if (is_TV) {
-        ease_setting.duration = 150;
-        if (duration_ms > 0 && duration_ms < ease_setting.duration) {
-            ease_setting.duration = duration_ms;
-        }
-        ease_setting.start_volume = 1.0;
-        ease_setting.target_volume = 0.0;
-        audio_ease->ease_type = EaseOutCubic;
-        audio_ease->data_format.format = AUDIO_FORMAT_PCM_16_BIT;
-        audio_ease->data_format.ch = 2;
-        audio_ease->data_format.sr = 48000;
+        audio_ease->data_format.format = AUDIO_FORMAT_PCM_32_BIT;
+
     } else {
-        ease_setting.duration = 30;
-        if (duration_ms > 0) {
-            ease_setting.duration = duration_ms;
-        }
-        ease_setting.start_volume = 1.0;
-        ease_setting.target_volume = 0.0;
-        audio_ease->ease_type = EaseOutCubic;
         audio_ease->data_format.format = AUDIO_FORMAT_PCM_16_BIT;
-        audio_ease->data_format.ch = 2;
-        audio_ease->data_format.sr = 48000;
     }
+
+    ease_setting.duration = 32;
+    if (duration_ms > 0) {
+        ease_setting.duration = duration_ms;
+    }
+    ease_setting.start_volume = 1.0;
+    ease_setting.target_volume = 0.0;
+    audio_ease->ease_type = EaseOutCubic;
+    audio_ease->data_format.ch = 2;
+    audio_ease->data_format.sr = 48000;
     aml_audio_ease_config(audio_ease, &ease_setting);
 
     return 0;

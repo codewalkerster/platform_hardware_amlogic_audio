@@ -14,8 +14,10 @@
 #include "List.h"
 #include "RefBase.h"
 #include <inttypes.h>
+#include <pthread.h>
 extern "C" {
 #include "aml_malloc_debug.h"
+#include "aml_dump_debug.h"
 }
 
 static void getVideoEsData(AmHwMultiDemuxWrapper* mDemuxWrapper,int fid,const uint8_t *data, int len, void *user_data) {
@@ -44,17 +46,12 @@ static void getVideoEsData(AmHwMultiDemuxWrapper* mDemuxWrapper,int fid,const ui
     msg->post();
     return;
 }
-#define  DEMUX_AUDIO_DUMP_PATH "/data/demux_audio.es"
-#define  DEMUX_AD_AUDIO_DUMP_PATH "/data/demux_audio_ad.es"
+#define  DEMUX_AUDIO_DUMP_PATH "/data/audio/demux_audio.es"
+#define  DEMUX_AD_AUDIO_DUMP_PATH "/data/audio/demux_audio_ad.es"
 static void dump_demux_data(void *buffer, int size, const char* file_name)
 {
-   if (property_get_bool("vendor.dvb.demux_audio_es.dump",false)) {
-        FILE *fp1 = fopen(file_name, "a+");
-        if (fp1) {
-            int flen = fwrite((char *)buffer, 1, size, fp1);
-            ALOGI("%s buffer %p size %d flen %d\n", __FUNCTION__, buffer, size,flen);
-            fclose(fp1);
-        }
+   if (get_debug_value(AML_DUMP_AUDIOHAL_DTV)) {
+       aml_dump_audio_bitstreams(file_name, buffer, size);
     }
 }
 
@@ -79,13 +76,13 @@ static void getAudioEsData(AmHwMultiDemuxWrapper* mDemuxWrapper, int fid, const 
         mEsData->size = es_header->len;
         mEsData->pts = es_header->pts;
         mEsData->pts_dts_flag = es_header->pts_dts_flag;
-        ALOGV("es_header->pts_dts_flag %0x",es_header->pts_dts_flag);
+
+        //ALOGI("es_header->pts_dts_flag %0x",es_header->pts_dts_flag);
         if (es_header->pts) {
             mDemuxWrapper->last_queue_es_apts = es_header->pts;
         }
-
         mEsData->used_size = 0;
-        //ALOGI("getAudioEsData %p mEsData->size %d mEsData->pts %lld, cached size:%d",mEsData, mEsData->size,mEsData->pts, mDemuxWrapper->mDemuxEsDataCacheSize);
+        //ALOGI("getAudioEsData %p mEsData->size %d mEsData->pts:%" PRIx64 ", cached size:%d",mEsData, mEsData->size,mEsData->pts, mDemuxWrapper->mDemuxEsDataCacheSize);
         dump_demux_data((void *)data_es, es_header->len, DEMUX_AUDIO_DUMP_PATH);
     } else {
         ALOGV("error es data len %d es_header->len %d",len, es_header->len);
@@ -94,7 +91,7 @@ static void getAudioEsData(AmHwMultiDemuxWrapper* mDemuxWrapper, int fid, const 
     }
 
     {
-        TSPMutex::Autolock l(mDemuxWrapper->mAudioEsDataQueueLock);
+        //TSPMutex::Autolock l(mDemuxWrapper->mAudioEsDataQueueLock);
         mDemuxWrapper->queueEsData(mDemuxWrapper->mAudioEsDataQueue,mEsData);
         mDemuxWrapper->mDemuxEsDataCacheSize += mEsData->size;
         //ALOGI("mDemuxWrapper->mDemuxEsDataCacheSize %d mDemuxWrapper %p",mDemuxWrapper->mDemuxEsDataCacheSize,mDemuxWrapper);
@@ -178,19 +175,20 @@ static void getAudioADEsData(AmHwMultiDemuxWrapper* mDemuxWrapper, int fid, cons
             mDemuxWrapper->Last_AD_EsData = tmp_EsData;
         }
     } else {
-        mDemuxWrapper->Last_AD_EsData->data = (uint8_t*)aml_audio_realloc(mDemuxWrapper->Last_AD_EsData->data, mDemuxWrapper->Last_AD_EsData->size + mEsData->size);
-        memcpy(mDemuxWrapper->Last_AD_EsData->data + mDemuxWrapper->Last_AD_EsData->size, mEsData->data, mEsData->size);
-        mDemuxWrapper->Last_AD_EsData->size += mEsData->size;
+        if (mDemuxWrapper->Last_AD_EsData) {
+            mDemuxWrapper->Last_AD_EsData->data = (uint8_t*)aml_audio_realloc(mDemuxWrapper->Last_AD_EsData->data, mDemuxWrapper->Last_AD_EsData->size + mEsData->size);
+            memcpy(mDemuxWrapper->Last_AD_EsData->data + mDemuxWrapper->Last_AD_EsData->size, mEsData->data, mEsData->size);
+            mDemuxWrapper->Last_AD_EsData->size += mEsData->size;
+        }
         aml_audio_free(mEsData);
         return;
     }
 
     {
-        TSPMutex::Autolock l(mDemuxWrapper->mAudioADEsDataQueueLock);
+        //TSPMutex::Autolock l(mDemuxWrapper->mAudioADEsDataQueueLock);
         mDemuxWrapper->queueEsData(mDemuxWrapper->mAudioADEsDataQueue,mEsData);
         ALOGV("mAudioADEsDataQueue size %zu",mDemuxWrapper->mAudioADEsDataQueue.size());
     }
-
 }
 
 AmHwMultiDemuxWrapper::AmHwMultiDemuxWrapper() {
@@ -237,17 +235,19 @@ AmHwMultiDemuxWrapper::~AmHwMultiDemuxWrapper() {
     filtering_aud_pid  = 0x1fff;
     filtering_aud_ad_pid  = 0x1fff;
     {
-        TSPMutex::Autolock l(mVideoEsDataQueueLock);
+        //TSPMutex::Autolock l(mVideoEsDataQueueLock);
         clearPendingEsData(mVideoEsDataQueue);
     }
     {
-        TSPMutex::Autolock l(mAudioEsDataQueueLock);
+        //TSPMutex::Autolock l(mAudioEsDataQueueLock);
         clearPendingEsData(mAudioEsDataQueue);
     }
     {
-        TSPMutex::Autolock l(mAudioADEsDataQueueLock);
+        //TSPMutex::Autolock l(mAudioADEsDataQueueLock);
         clearPendingEsData(mAudioADEsDataQueue);
     }
+    pthread_mutex_destroy(&EsDataQueueMutex);
+    pthread_cond_destroy(&EsDataQueueCond);
 }
 
 AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperOpen(Am_DemuxWrapper_OpenPara_t *mPara) {
@@ -257,6 +257,8 @@ AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperOpen(Am_DemuxWrapper_Open
     }
     memcpy(&mDemuxPara,mPara,sizeof(Am_DemuxWrapper_OpenPara_t));
     AmDmxDevice->AM_DMX_Open(mDemuxPara.dev_no);
+    pthread_mutex_init(&EsDataQueueMutex, NULL);
+    pthread_cond_init(&EsDataQueueCond, NULL);
 
     return AM_Dmx_SUCCESS;
 }
@@ -280,26 +282,38 @@ AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperWriteData(Am_TsPlayer_Inp
     return AM_Dmx_SUCCESS;
 }
 
+void ts_wait_time(struct timespec *ts, uint32_t time)
+{
+    clock_gettime(CLOCK_REALTIME, ts);
+    ts->tv_sec += time / 1000000;
+    ts->tv_nsec += (time * 1000) % 1000000000;
+    if (ts->tv_nsec >= 1000000000) {
+        ts->tv_sec++;
+        ts->tv_nsec -=1000000000;
+    }
+}
+
 AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperReadData(int pid, mEsDataInfo **mEsData,uint64_t timeout) {
     //(void) pid;
     //(void) mEsData;
-    (void) timeout;
     *mEsData = NULL;
+
     if (pid == mDemuxPara.vid_id) {
         TSPMutex::Autolock l(mVideoEsDataQueueLock);
-        *mEsData = dequeueEsData(mVideoEsDataQueue);
+        *mEsData = dequeueEsData(mVideoEsDataQueue, timeout);
     } else if (pid == mDemuxPara.aud_id){
-        TSPMutex::Autolock l(mAudioEsDataQueueLock);
-        *mEsData = dequeueEsData(mAudioEsDataQueue);
+        //TSPMutex::Autolock l(mAudioEsDataQueueLock);
+        *mEsData = dequeueEsData(mAudioEsDataQueue, timeout);
         if (*mEsData) {
             mDemuxEsDataCacheSize -= (*mEsData)->size;
             //ALOGI("AmDemuxWrapperReadData: mDemuxEsDataCacheSize: %d, mEsData->size: %d", mDemuxEsDataCacheSize, (*mEsData)->size);
         }
     } else if (pid == mDemuxPara.aud_ad_id) {
-        TSPMutex::Autolock l(mAudioADEsDataQueueLock);
+         //TSPMutex::Autolock l(mAudioADEsDataQueueLock);
          ALOGV("%s mAudioADEsDataQueue size %zu mDemuxPara.aud_ad_id %d", __FUNCTION__,mAudioADEsDataQueue.size(), mDemuxPara.aud_ad_id);
-        *mEsData = dequeueEsData(mAudioADEsDataQueue);
+        *mEsData = dequeueEsData(mAudioADEsDataQueue, timeout);
     }
+
     return AM_Dmx_SUCCESS;
 }
 
@@ -412,7 +426,6 @@ AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperSetADAudioParam(int aid, 
     AmDmxDevice->AM_DMX_SetPesFilter(fid_audio, &aparam);
     mDemuxPara.aud_ad_fd = fid_audio;
     ALOGI("aud_ad_fd %d",fid_audio);
-    //AmDmxDevice->AM_DMX_StartFilter(fid_audio);
     return AM_Dmx_SUCCESS;
 }
 
@@ -616,24 +629,36 @@ void AmHwMultiDemuxWrapper::AmDemuxSetNotify(const sp<TSPMessage> & msg) {
 }
 
 AM_DmxErrorCode_t AmHwMultiDemuxWrapper::queueEsData(List<mEsDataInfo*>& mEsDataQueue,mEsDataInfo *mEsData) {
-   // TSPMutex::Autolock l(mEsDataQueueLock);
+
+    pthread_mutex_lock(&EsDataQueueMutex);
     mEsDataQueue.push_back(mEsData);
+    pthread_cond_signal(&EsDataQueueCond);
+    pthread_mutex_unlock(&EsDataQueueMutex);
     return AM_Dmx_SUCCESS;
 }
 
-mEsDataInfo* AmHwMultiDemuxWrapper::dequeueEsData(List<mEsDataInfo*>& mEsDataQueue) {
-    //Mutex::Autolock autoLock(mPacketQueueLock);
-   //TSPMutex::Autolock l(mEsDataQueueLock);
-    if (!mEsDataQueue.empty()) {
-        mEsDataInfo *mEsData = *mEsDataQueue.begin();
+mEsDataInfo* AmHwMultiDemuxWrapper::dequeueEsData(List<mEsDataInfo*>& mEsDataQueue,uint64_t timeout) {
+
+    pthread_mutex_lock(&EsDataQueueMutex);
+    mEsDataInfo *mEsData = NULL;
+    if (mEsDataQueue.empty()) {
+        struct timespec ts;
+        ts_wait_time(&ts, timeout);
+         int ret = pthread_cond_timedwait(&EsDataQueueCond, &EsDataQueueMutex, &ts);
+        if (ret == TIMED_OUT) {
+            ALOGV("dequeueEsData timeout !!!");
+        }
+        pthread_mutex_unlock(&EsDataQueueMutex);
+    } else {
+        mEsData = *mEsDataQueue.begin();
         mEsDataQueue.erase(mEsDataQueue.begin());
-        return mEsData;
     }
-    return NULL;
+    pthread_mutex_unlock(&EsDataQueueMutex);
+    return mEsData;
 }
 
 AM_DmxErrorCode_t AmHwMultiDemuxWrapper::clearPendingEsData(List<mEsDataInfo*>& mEsDataQueue) {
-   // TSPMutex::Autolock l(mEsDataQueueLock);
+    pthread_mutex_lock(&EsDataQueueMutex);
     List<mEsDataInfo *>::iterator it = mEsDataQueue.begin();
     while (it != mEsDataQueue.end()) {
         mEsDataInfo *mEsData = *it;
@@ -642,6 +667,7 @@ AM_DmxErrorCode_t AmHwMultiDemuxWrapper::clearPendingEsData(List<mEsDataInfo*>& 
         ++it;
     }
     mEsDataQueue.clear();
+    pthread_mutex_unlock(&EsDataQueueMutex);
     return AM_Dmx_SUCCESS;
 }
 

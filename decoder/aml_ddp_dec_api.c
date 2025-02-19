@@ -37,6 +37,7 @@
 #include "aml_ddp_dec_api.h"
 #include "aml_ac3_parser.h"
 #include "aml_audio_report.h"
+#include "aml_dump_debug.h"
 
 enum {
     EXITING_STATUS = -1001,
@@ -131,24 +132,10 @@ const short frmsizetab[MAXFSCOD][MAXDDDATARATE] = {
     }
 };
 
-static int (*ddp_decoder_init)(int, int, void **);
-static int (*ddp_decoder_cleanup)(void *);
-static int (*ddp_decoder_process)(char *, int, int *, int, char *, int *, struct pcm_info *, char *, int *,void *);
-static int (*ddp_decoder_config)(void *, ddp_config_type_t, ddp_config_t *);
-
-static void *gDDPDecoderLibHandler = NULL;
-static void *handle = NULL;
-static int gDDPDecoderCount = 0;
-
 static void dump_ddp_data(void *buffer, int size, char *dump_name, char *file_name)
 {
-   if (property_get_bool(dump_name, false)) {
-        FILE *fp1 = fopen(file_name, "a+");
-        if (fp1) {
-            int flen = fwrite((char *)buffer, 1, size, fp1);
-            ALOGI("%s buffer %p size %d flen %d\n", __FUNCTION__, buffer, size,flen);
-            fclose(fp1);
-        }
+   if (get_debug_value(AML_DUMP_AUDIOHAL_DECODER) || property_get_bool(dump_name, false)) {
+        aml_dump_audio_bitstreams(file_name, buffer, size);
     }
 }
 
@@ -379,85 +366,92 @@ static int  Get_Parameters(void *buf, int *sample_rate, int *frame_size, int *Ch
     return 0;
 }
 
-static  int unload_ddp_decoder_lib()
+static int unload_ddp_decoder_lib(struct dolby_ddp_dec *ddpDec)
 {
-    if (ddp_decoder_cleanup != NULL && handle != NULL) {
-        (*ddp_decoder_cleanup)(handle);
-        handle = NULL;
+    Func_decoder_init       fInit = ddpDec->dcvHandle.dcv_init;
+    Func_decoder_cleanup    fCleanup = ddpDec->dcvHandle.dcv_cleanup;
+    Func_decoder_process    fProcess = ddpDec->dcvHandle.dcv_process;
+    Func_decoder_config     fConfig = ddpDec->dcvHandle.dcv_config;
+    void *pLibHandler = ddpDec->dcvHandle.dcvLibHandler;
+    void *pInstance = ddpDec->dcvHandle.Instance;
+
+    if (fCleanup != NULL && pInstance != NULL) {
+        (*fCleanup)(pInstance);
+        pInstance = NULL;
     }
-    ddp_decoder_init = NULL;
-    ddp_decoder_process = NULL;
-    ddp_decoder_cleanup = NULL;
-    ddp_decoder_config = NULL;
-    if (gDDPDecoderLibHandler != NULL) {
-        dlclose(gDDPDecoderLibHandler);
-        gDDPDecoderLibHandler = NULL;
+    fInit = NULL;
+    fProcess = NULL;
+    fCleanup = NULL;
+    fConfig = NULL;
+    if (pLibHandler != NULL) {
+        dlclose(pLibHandler);
+        pLibHandler = NULL;
     }
     return 0;
 }
 
-static int dcv_decoder_init(int decoding_mode, aml_dec_control_type_t digital_raw)
+
+static int dcv_decoder_init(struct dolby_ddp_dec *ddpDec, int decoding_mode, aml_dec_control_type_t digital_raw, int is_pcmout_32bits)
 {
     int input_mode = 1;
 
-    if (access(DOLBY_DCV_LIB_PATH_OEM, R_OK) == 0)
-        gDDPDecoderLibHandler = dlopen(DOLBY_DCV_LIB_FINAL_SO, RTLD_NOW);
-
-    if (gDDPDecoderLibHandler == NULL)
-        gDDPDecoderLibHandler = dlopen(DOLBY_DCV_LIB_PATH_A, RTLD_NOW);
+    ddpDec->dcvHandle.dcvLibHandler = dlopen(DOLBY_DCV_LIB_PATH_A, RTLD_NOW);
     //open 32bit so failed, here try to open the 64bit dolby dcv so.
-    if (gDDPDecoderLibHandler == NULL) {
-        gDDPDecoderLibHandler = dlopen(DOLBY_DCV_LIB64_PATH_A, RTLD_NOW);
-        ALOGI("%s, 64bit lib:%s, gDDPDecoderLibHandler:%p\n", __FUNCTION__, DOLBY_DCV_LIB64_PATH_A, gDDPDecoderLibHandler);
+    if (ddpDec->dcvHandle.dcvLibHandler == NULL) {
+        ddpDec->dcvHandle.dcvLibHandler = dlopen(DOLBY_DCV_LIB64_PATH_A, RTLD_NOW);
+        ALOGI("%s, 64bit lib:%s, DDPDecoderLibHandler:%p\n", __FUNCTION__, DOLBY_DCV_LIB64_PATH_A, ddpDec->dcvHandle.dcvLibHandler);
     }
-    if (!gDDPDecoderLibHandler) {
+    if (!ddpDec->dcvHandle.dcvLibHandler) {
         ALOGE("%s, failed to open (libstagefright_soft_dcvdec.so), %s\n", __FUNCTION__, dlerror());
         goto Error;
     } else {
-        ALOGV("<%s::%d>--[gDDPDecoderLibHandler]", __FUNCTION__, __LINE__);
+        ALOGI("<%s::%d>--[DDPDecoderLibHandler]:%p", __FUNCTION__, __LINE__, ddpDec->dcvHandle.dcvLibHandler);
     }
 
-    ddp_decoder_init = (int (*)(int, int,void **)) dlsym(gDDPDecoderLibHandler, "ddp_decoder_init");
-    if (ddp_decoder_init == NULL) {
+    ddpDec->dcvHandle.dcv_init = (int (*)(int, int,void **)) dlsym(ddpDec->dcvHandle.dcvLibHandler, "ddp_decoder_init");
+    if (ddpDec->dcvHandle.dcv_init == NULL) {
         ALOGE("%s,can't find decoder lib,%s\n", __FUNCTION__, dlerror());
         goto Error;
     } else {
         ALOGV("<%s::%d>--[ddp_decoder_init:]", __FUNCTION__, __LINE__);
     }
 
-    ddp_decoder_process = (int (*)(char * , int , int *, int , char *, int *, struct pcm_info *, char *, int *,void *))
-                          dlsym(gDDPDecoderLibHandler, "ddp_decoder_process");
-    if (ddp_decoder_process == NULL) {
+    ddpDec->dcvHandle.dcv_process = (int (*)(char * , int , int *, int , char *, int *, struct pcm_info *, char *, int *,void *))
+                          dlsym(ddpDec->dcvHandle.dcvLibHandler, "ddp_decoder_process");
+    if (ddpDec->dcvHandle.dcv_process == NULL) {
         ALOGE("%s,can't find decoder lib,%s\n", __FUNCTION__, dlerror());
         goto Error;
     } else {
         ALOGV("<%s::%d>--[ddp_decoder_process:]", __FUNCTION__, __LINE__);
     }
 
-    ddp_decoder_cleanup = (int (*)(void *)) dlsym(gDDPDecoderLibHandler, "ddp_decoder_cleanup");
-    if (ddp_decoder_cleanup == NULL) {
+    ddpDec->dcvHandle.dcv_cleanup = (int (*)(void *)) dlsym(ddpDec->dcvHandle.dcvLibHandler, "ddp_decoder_cleanup");
+    if (ddpDec->dcvHandle.dcv_cleanup == NULL) {
         ALOGE("%s,can't find decoder lib,%s\n", __FUNCTION__, dlerror());
         goto Error;
     } else {
         ALOGV("<%s::%d>--[ddp_decoder_cleanup:]", __FUNCTION__, __LINE__);
     }
 
-    ddp_decoder_config = (int (*)(void *, ddp_config_type_t, ddp_config_t *)) dlsym(gDDPDecoderLibHandler, "ddp_decoder_config");
-    if (ddp_decoder_config == NULL) {
+    ddpDec->dcvHandle.dcv_config = (int (*)(void *, ddp_config_type_t, ddp_config_t *)) dlsym(ddpDec->dcvHandle.dcvLibHandler, "ddp_decoder_config");
+    if (ddpDec->dcvHandle.dcv_config == NULL) {
         ALOGE("%s,can not find decoder config function,%s\n", __FUNCTION__, dlerror());
     } else {
         ALOGV("<%s::%d>--[ddp_decoder_config:]", __FUNCTION__, __LINE__);
+        if (is_pcmout_32bits) {
+            int out_bps = 32;
+            ddpDec->dcvHandle.dcv_config(NULL, DDP_CONFIG_OUT_BITDEPTH, (ddp_config_t *)&out_bps);
+        }
     }
 
-    (*ddp_decoder_init)(decoding_mode, digital_raw, &handle);
-    gDDPDecoderCount++;
+    ddpDec->dcvHandle.dcv_init(decoding_mode, digital_raw, &(ddpDec->dcvHandle.Instance));
     return 0;
 Error:
-    unload_ddp_decoder_lib();
+    unload_ddp_decoder_lib(ddpDec);
     return -1;
 }
 
-static int dcv_decode_process(unsigned char*input, int input_size, unsigned char *outbuf,
+static int dcv_decode_process(struct dolby_ddp_dec *ddpDec,unsigned char*input, int input_size, unsigned char *outbuf,
                               int *out_size, char *spdif_buf, int *raw_size, int nIsEc3,
                               struct pcm_info *pcm_out_info)
 {
@@ -465,12 +459,16 @@ static int dcv_decode_process(unsigned char*input, int input_size, unsigned char
     int used_size = 0;
     int decoded_pcm_size = 0;
     int ret = -1;
+    Func_decoder_process fProcess = ddpDec->dcvHandle.dcv_process;
+    void *pInstance = ddpDec->dcvHandle.Instance;
+    void *pLibHandler = ddpDec->dcvHandle.dcvLibHandler;
 
-    if (ddp_decoder_process == NULL) {
+    if (fProcess == NULL /*ddp_decoder_process == NULL*/) {
+        AM_LOGE("  ddp_decoder_process:%p  return", ddpDec->dcvHandle.dcv_process);
         return ret;
     }
 
-    ret = (*ddp_decoder_process)((char *) input
+    ret = (*fProcess)((char *) input
                                  , input_size
                                  , &used_size
                                  , nIsEc3
@@ -479,7 +477,7 @@ static int dcv_decode_process(unsigned char*input, int input_size, unsigned char
                                  , pcm_out_info
                                  , (char *) spdif_buf
                                  , (int *) raw_size
-                                 ,handle);
+                                 ,pInstance /*handle*/);
     ALOGV("used_size %d,lpcm out_size %d,raw out size %d",used_size,*out_size,*raw_size);
     return used_size;
 }
@@ -516,7 +514,7 @@ int dcv_decoder_init_patch(aml_dec_t ** ppaml_dec, aml_dec_config_t * dec_config
     ddp_dec->is_iec61937   = dcv_config->is_iec61937;
 
     aml_dec->format = dcv_config->format;
-    ret = dcv_decoder_init(ddp_dec->decoding_mode, ddp_dec->digital_raw);
+    ret = dcv_decoder_init(ddp_dec, ddp_dec->decoding_mode, ddp_dec->digital_raw, ddp_dec->is_pcmout_32bits);
     ALOGI("dcv_decoder_init decoding mode =%d, ddp_dec->digital_raw=%d ret =%d", ddp_dec->decoding_mode, ddp_dec->digital_raw, ret);
     if (ret < 0) {
         goto error;
@@ -631,6 +629,10 @@ static int  dcv_decoder_flush(aml_dec_t * aml_dec) {
 int dcv_decoder_release_patch(aml_dec_t * aml_dec)
 {
     struct dolby_ddp_dec *ddp_dec = (struct dolby_ddp_dec *)aml_dec;
+    struct dolby_ddp_dec *ddpDec = ddp_dec;
+    Func_decoder_cleanup    fCleanup = ddpDec->dcvHandle.dcv_cleanup;
+    Func_decoder_config     fConfig = ddpDec->dcvHandle.dcv_config;
+    void *pInstance = ddpDec->dcvHandle.Instance;
 
     if (aml_dec == NULL) {
         ALOGE("%s aml_dec NULL", __func__);
@@ -641,12 +643,9 @@ int dcv_decoder_release_patch(aml_dec_t * aml_dec)
     dec_data_info_t * dec_raw_data = &aml_dec->dec_raw_data;
     dec_data_info_t * raw_in_data  = &aml_dec->raw_in_data;
 
-    // switch movieplayer to hdmiin by HOME key, hdmiin init dcv decoder before movieplayer
-    // release dcv decoder, so handle would be NULL by movieplayer release, and hdmiin cause error
-    gDDPDecoderCount--;
-    if (ddp_decoder_cleanup != NULL && handle != NULL && (gDDPDecoderCount <= 0)) {
-        (*ddp_decoder_cleanup)(handle);
-        handle = NULL;
+    if (fCleanup) {
+        fCleanup(pInstance);
+        pInstance = NULL;
     }
 
     if (ddp_dec && ddp_dec->status == 1) {
@@ -685,6 +684,10 @@ int dcv_decoder_release_patch(aml_dec_t * aml_dec)
             raw_in_data->buf = NULL;
         }
 
+        if (aml_dec->decFunc) {
+            aml_audio_free(aml_dec->decFunc);
+            aml_dec->decFunc = NULL;
+        }
         aml_audio_free(ddp_dec);
     }
     ALOGI("%s exit", __func__);
@@ -784,38 +787,15 @@ int dcv_decoder_process_patch(aml_dec_t * aml_dec, unsigned char *buffer, int by
     dec_raw_data->data_len = 0;
     raw_in_data->data_len  = 0;
 
-    /* dual input is from dtv, and it is similar with MS12,
-     * main and associate is packaged with IEC61937
-     */
     if (ddp_dec->decoding_mode == DDP_DECODE_MODE_AD_DUAL) {
-        int dual_decoder_used_bytes = 0;
-        int dual_input_ret = 0;
-        void *main_frame_buffer = NULL;
-        int main_frame_size = 0;
-        void *associate_frame_buffer = NULL;
-        int associate_frame_size = 0;
-        dual_input_ret = scan_dolby_main_associate_frame(buffer
-                 , bytes
-                 , &dual_decoder_used_bytes
-                 , &main_frame_buffer
-                 , &main_frame_size
-                 , &associate_frame_buffer
-                 , &associate_frame_size);
-        if (dual_input_ret) {
-            ALOGE("%s used size %d don't find the iec61937 format header, re-scan next time!\n", __FUNCTION__, dual_decoder_used_bytes);
-            goto EXIT;
-        }
-        ALOGV("main frame size =%d ad frame size =%d", main_frame_size, associate_frame_size);
-        if ((main_frame_size + associate_frame_size) > ddp_dec->inbuf_size) {
-            ALOGE("too big frame size =%d %d", main_frame_size, associate_frame_size);
-            goto EXIT;
-        }
+        void *associate_frame_buffer = aml_dec->ad_data;
+        int associate_frame_size = aml_dec->ad_size;
         /* copy main data */
-        memcpy((char *)ddp_dec->inbuf, main_frame_buffer, main_frame_size);
+        memcpy((char *)ddp_dec->inbuf, buffer, bytes);
         /* copy ad data */
-        memcpy((char *)ddp_dec->inbuf + main_frame_size, associate_frame_buffer, associate_frame_size);
-        ddp_dec->remain_size = main_frame_size + associate_frame_size;
-        mFrame_size = main_frame_size + associate_frame_size;
+        memcpy((char *)ddp_dec->inbuf + bytes, associate_frame_buffer, associate_frame_size);
+        ddp_dec->remain_size = bytes + associate_frame_size;
+        mFrame_size = bytes + associate_frame_size;
         n_bytes_frame = mFrame_size; // not used currently
         read_pointer = ddp_dec->inbuf;
         read_offset = 0;
@@ -920,7 +900,7 @@ int dcv_decoder_process_patch(aml_dec_t * aml_dec, unsigned char *buffer, int by
         int current_size = 0;
         ALOGV("ddp_dec->outlen_pcm=%d raw len=%d in =%p dec_pcm_data->buf=%p dec_raw_data->buf=%p",
             ddp_dec->outlen_pcm, ddp_dec->outlen_raw, read_pointer, dec_pcm_data->buf, dec_raw_data->buf);
-        decoder_frame = current_size = dcv_decode_process((unsigned char*)read_pointer + used_size,
+        decoder_frame = current_size = dcv_decode_process(ddp_dec, (unsigned char*)read_pointer + used_size,
                                              mFrame_size,
                                              (unsigned char *)dec_pcm_data->buf + ddp_dec->outlen_pcm,
                                              &outPCMLen,
@@ -943,7 +923,7 @@ int dcv_decoder_process_patch(aml_dec_t * aml_dec, unsigned char *buffer, int by
 
     /* dump decoded pcm data */
     dump_ddp_data(dec_pcm_data->buf, ddp_dec->outlen_pcm,
-                  "vendor.audio.ddp.outputdump", "/data/audio/dolby_pcm.pcm");
+                  "vendor.audio.ddp.outputdump", "/data/vendor/audiohal/dolby_pcm.pcm");
 
     if (ddp_dec->decoding_mode != DDP_DECODE_MODE_AD_DUAL) {
         total_used_size += used_size;
@@ -1009,8 +989,11 @@ int dcv_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, a
 {
     int ret = -1;
     struct dolby_ddp_dec *ddp_dec = (struct dolby_ddp_dec *)aml_dec;
+    struct dolby_ddp_dec *ddpDec = ddp_dec;
+    Func_decoder_config     fConfig = ddpDec->dcvHandle.dcv_config;
+    void *pInstance = ddpDec->dcvHandle.Instance;
 
-    if (ddp_decoder_config == NULL || handle == NULL) {
+    if (fConfig == NULL || pInstance == NULL) {
         return ret;
     }
     switch (config_type) {
@@ -1019,13 +1002,13 @@ int dcv_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, a
         if (!dec_config->ad_mixing_enable && (ddp_dec->decoding_mode != DDP_DECODE_MODE_AD_SUBSTREAM))
             mixer_level = -32;
         ALOGI("dec_config->mixer_level %d", mixer_level);
-        ret = (*ddp_decoder_config)(handle, DDP_CONFIG_MIXER_LEVEL, (ddp_config_t *)&mixer_level);
+        ret = (*fConfig)(pInstance, DDP_CONFIG_MIXER_LEVEL, (ddp_config_t *)&mixer_level);
         break;
     }
     case AML_DEC_CONFIG_AD_VOL: {
         int  advol_level = dec_config->advol_level;
         ALOGI("advol_level %d",advol_level);
-        ret = (*ddp_decoder_config)(handle, DDP_CONFIG_AD_PCMSCALE, (ddp_config_t *)&advol_level);
+        ret = (*fConfig)(pInstance, DDP_CONFIG_AD_PCMSCALE, (ddp_config_t *)&advol_level);
         break;
     }
     case AML_DEC_CONFIG_MIXING_ENABLE: {
@@ -1033,13 +1016,12 @@ int dcv_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, a
         if (!dec_config->ad_mixing_enable && (ddp_dec->decoding_mode != DDP_DECODE_MODE_AD_SUBSTREAM))
             mixer_level = -32;
         ALOGI("dec_config->mixer_level %d",mixer_level);
-        ret = (*ddp_decoder_config)(handle, DDP_CONFIG_MIXER_LEVEL, (ddp_config_t *)&mixer_level);
+        ret = (*fConfig)(pInstance, DDP_CONFIG_MIXER_LEVEL, (ddp_config_t *)&mixer_level);
         break;
     }
     default:
         ALOGI("config_type %d not supported", config_type);
     }
-
     return ret;
 }
 
@@ -1236,6 +1218,26 @@ int parse_report_info_samplerate_channelnum (unsigned char *read_pointer, struct
 
 }
 
+
+aml_dec_func_t *get_ddp_dec_func_handle(void)
+{
+    aml_dec_func_t *amlDcvFunc = NULL;
+
+    amlDcvFunc = (struct aml_dec_func *)aml_audio_calloc(1, sizeof(struct aml_dec_func));
+    if (amlDcvFunc) {
+        amlDcvFunc->f_init       = dcv_decoder_init_patch;
+        amlDcvFunc->f_release    = dcv_decoder_release_patch;
+        amlDcvFunc->f_process    = dcv_decoder_process_patch;
+        amlDcvFunc->f_config     = dcv_decoder_config;
+        amlDcvFunc->f_info       = dcv_decoder_info;
+        amlDcvFunc->f_flush      = dcv_decoder_flush;
+    } else {
+        AM_LOGE(" calloc amlDcvFunc:%p failed", amlDcvFunc);
+        amlDcvFunc = NULL;
+    }
+
+    return amlDcvFunc;
+}
 
 aml_dec_func_t aml_dcv_func = {
     .f_init                 = dcv_decoder_init_patch,

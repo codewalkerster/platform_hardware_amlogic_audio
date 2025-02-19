@@ -53,7 +53,6 @@ typedef enum {
     DTSX_OUTPUT_MAX = 3
 } AML_DTSX_OUTPUT_TYPE;
 
-
 ///< Keep the members of dtsx_stream_info_t same as dtsxp1_bitstream_info_t in dtsx_aml_wrapper.h which is in dtx lib
 typedef struct dtsx_stream_info_s
 {
@@ -104,6 +103,62 @@ typedef enum {
     DTSX_PROCESS_HALF_FRAME = DTSX_BITS(1),
 } DTSX_DECODER_STATUS;
 
+typedef struct dtsx_config_params_s {
+    int core1_dec_out;
+    int core2_spkr_out;// core2 bus0 output speaker mask, this setting will only take effect when auto_config_out_for_vx is set to -1
+    int auto_config_out_for_vx;// Auto config output channel for Virtual X: -1:default without vx. 0:auto config output according to DecMode. 2:always downmix to stereo.
+    int dec_sink_dev_type;
+    int pp_sink_dev_type;
+    bool bPassthrough;
+    int limiter_type[DTSX_OUTPUT_MAX];
+    bool drc_enable[DTSX_OUTPUT_MAX];
+    int drc_profile[DTSX_OUTPUT_MAX];          // DTSX_DRC_PROFILE_E
+    int drc_default_curve[DTSX_OUTPUT_MAX];    // DTSX_DRC_DEFAULT_CURVE_E
+    int drc_cut_value[DTSX_OUTPUT_MAX];        // rang: 0 ~ 100
+    int drc_boost_value[DTSX_OUTPUT_MAX];      // rang: 0 ~ 100
+    bool loudness_enable[DTSX_OUTPUT_MAX];
+    int loudness_target[DTSX_OUTPUT_MAX];      // rang: -60 ~ -10
+    bool neuralx_up_mix;
+    bool neox_down_mix;
+    bool sink_support_multich_pcm;
+    bool type1_relable_enable;
+} dtsx_config_params_t;
+
+typedef int (*Func_dtsx_decoder_init)(void **ppDtsInstance, unsigned int init_argc, const char *init_argv[]);
+typedef int (*Func_dtsx_decoder_process)(void *pDtsInstance, const unsigned char *in_buf, unsigned int in_size, unsigned char **, unsigned int *);
+typedef int (*Func_dtsx_decoder_deinit)(void *pDtsInstance);
+typedef int (*Func_dtsx_decoder_get_output_info)(void *, int, int *, int *, int *);
+typedef int (*Func_dtsx_decoder_get_parameter)(void *pDtsInstance, dtsxParameterType_t nParamType, void *pValue);
+
+typedef int (*Func_dtsx_postprocess_init)(void **ppDtsPPInstance, unsigned int init_argc, const char *init_argv[]);
+typedef int (*Func_dtsx_postprocess_deinit)(void *pDtsPPInstance);
+typedef int (*Func_dtsx_postprocess_proc)(void *ppDtsPPInstance, const unsigned char *in_buf, unsigned int in_size, unsigned char **, unsigned int *);
+typedef int (*Func_dtsx_metadata_update)(void *pDtsInstance, void *pDtsPPInstance);
+typedef int (*Func_dtsx_postprocess_get_out_info)(void *, int , int *, int *, int *);
+typedef int (*Func_dtsx_postprocess_get_out_info2)(void *, int , int *, int *, int *, unsigned int *);
+typedef int (*Func_dtsx_postprocess_dynamic_parameter_set)(void *pDtsPPInstance, unsigned int init_argc, const char *init_argv[]);
+
+typedef struct dtsx_decoder_func {
+    //decoder functions.
+    Func_dtsx_decoder_init                  dec_init;
+    Func_dtsx_decoder_deinit                dec_deinit;
+    Func_dtsx_decoder_process               dec_process;
+    Func_dtsx_decoder_get_parameter         dec_getparameter;
+    Func_dtsx_decoder_get_output_info       dec_getinfo;
+    //post process functions.
+    Func_dtsx_postprocess_init                      postprocess_init;
+    Func_dtsx_postprocess_deinit                    postprocess_deinit;
+    Func_dtsx_postprocess_proc                      postprocess_proc;
+    Func_dtsx_metadata_update                       metadata_update;
+    Func_dtsx_postprocess_get_out_info              postprocess_get_out_info;
+    Func_dtsx_postprocess_get_out_info2             postprocess_get_out_info2;
+    Func_dtsx_postprocess_dynamic_parameter_set     postprocess_dynamic_parameter_set;
+    //dtsx lib handler
+    void *                                          dtsxLibHandler;
+    dtsx_config_params_t                            config_params;
+} dtsx_decoder_func_t;
+
+
 typedef struct dtsx_dec_s {
     ///< Control
     aml_dec_t aml_dec;
@@ -147,6 +202,7 @@ typedef struct dtsx_dec_s {
     int sample_convert_buf_size;
     int device_type;
     bool sink_support_multich_pcm;
+    dtsx_decoder_func_t dtsxHandle;
 } dtsx_dec_t;
 
 int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config);
@@ -174,6 +230,7 @@ int dtsx_set_out_ch_internal(dtsx_dec_t *dtsx_dec, int ch_num);
 int aml_dtsx_update_runtime_params(dtsx_dec_t *dtsx_dec, struct str_parms *parms);
 int aml_dtsx_get_runtime_params(dtsx_dec_t *dtsx_dec, const char *keys, char *keys_values);
 
+aml_dec_func_t *get_dtsx_dec_func_handle(void);
 extern aml_dec_func_t aml_dtsx_func;
 
 #endif

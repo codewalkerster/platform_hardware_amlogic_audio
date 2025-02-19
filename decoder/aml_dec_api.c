@@ -30,6 +30,8 @@
 #include <sys/prctl.h>
 #include <sys/time.h>
 #include <cutils/log.h>
+#include <audio_utils/format.h>
+
 
 #include "aml_dec_api.h"
 #include "aml_ddp_dec_api.h"
@@ -97,6 +99,9 @@ static aml_dec_func_t * get_decoder_function(audio_format_t format, int dts_lib_
     }
     case AUDIO_FORMAT_AAC:
     case AUDIO_FORMAT_AAC_LATM:
+    case AUDIO_FORMAT_AAC_LC:
+    case AUDIO_FORMAT_AAC_HE_V1:
+    case AUDIO_FORMAT_AAC_HE_V2:
     case AUDIO_FORMAT_HE_AAC_V2: {
         return  &aml_faad_func;
     }
@@ -120,6 +125,112 @@ static aml_dec_func_t * get_decoder_function(audio_format_t format, int dts_lib_
     return NULL;
 }
 
+
+static aml_dec_func_t *get_dynamic_decoder_function(aml_dec_t *aml_dec, audio_format_t format, int dts_lib_type)
+{
+    aml_dec_func_t *pFunc = NULL;
+    if (aml_dec && aml_dec->decFunc) {
+        return aml_dec->decFunc;
+    }
+
+    switch ((uint32_t)format) {
+    case AUDIO_FORMAT_AC3:
+    case AUDIO_FORMAT_E_AC3: {
+        pFunc = get_ddp_dec_func_handle();
+        return pFunc;
+    }
+    case AUDIO_FORMAT_DOLBY_TRUEHD:
+    case AUDIO_FORMAT_MAT:
+        pFunc = get_iec_dec_func_handle();
+        return pFunc;
+    case AUDIO_FORMAT_DTS: {
+        if (dts_lib_type == eDTSXLib) {
+            pFunc = get_dtsx_dec_func_handle();
+            return pFunc;
+        }
+        else {
+            pFunc = get_dca_dec_func_handle();
+            return pFunc;
+        }
+    }
+    case AUDIO_FORMAT_DTS_HD: {
+        if (dts_lib_type == eDTSXLib) {
+            pFunc = get_dtsx_dec_func_handle();
+            return pFunc;
+        }
+        else if (dts_lib_type == eDTSHDLib) {
+           pFunc = get_dca_dec_func_handle();
+           return pFunc;
+        }
+        else {
+            pFunc = get_iec_dec_func_handle();
+            return pFunc;
+        }
+    }
+    case AUDIO_FORMAT_PCM_16_BIT:
+    case AUDIO_FORMAT_PCM_32_BIT:
+    case AUDIO_FORMAT_PCM_8_BIT:
+    case AUDIO_FORMAT_PCM_8_24_BIT: {
+        pFunc = get_pcm_dec_func_handle();
+        return pFunc;
+    }
+    case AUDIO_FORMAT_MP3:
+    case AUDIO_FORMAT_MP2: {
+        pFunc = get_mad_dec_func_handle();
+        return pFunc;
+    }
+    case AUDIO_FORMAT_AAC:
+    case AUDIO_FORMAT_AAC_LATM:
+    case AUDIO_FORMAT_HE_AAC_V2: {
+        pFunc = get_faad_dec_func_handle();
+        return pFunc;
+    }
+    case AUDIO_FORMAT_MPEGH:
+    case AUDIO_FORMAT_MPEGH_BL_L3:
+    case AUDIO_FORMAT_MPEGH_BL_L4:
+    case AUDIO_FORMAT_MPEGH_LC_L3:
+    case AUDIO_FORMAT_MPEGH_LC_L4: {
+        pFunc = get_mpegh_dec_func_handle();
+        AM_LOGI("  aml_mpegh_func %p  pFunc:%p", (void *)&aml_mpegh_func, pFunc);
+        return pFunc;
+    }
+    case AUDIO_FORMAT_IEC61937: {
+        pFunc = get_iec_dec_func_handle();
+        return pFunc;
+    }
+    default:
+        if (format == AUDIO_FORMAT_DRA) {
+            pFunc = get_dra_dec_func_handle();
+            AM_LOGI("  aml_dra_func %p  pFunc:%p", (void *)&aml_dra_func, pFunc);
+            return pFunc;
+        }
+        ALOGE("[%s:%d] doesn't support decoder format:%#x", __func__, __LINE__, format);
+        return NULL;
+    }
+
+    return NULL;
+}
+
+int aml_decoder_get_output_format(audio_format_t output_format)
+{
+    int pcm_output_format;
+    switch (output_format) {
+        case AUDIO_FORMAT_PCM_16_BIT:
+            pcm_output_format = FMT_16BIT;
+            break;
+        case AUDIO_FORMAT_PCM_32_BIT:
+            pcm_output_format = FMT_32BIT;
+            break;
+        case AUDIO_FORMAT_PCM_FLOAT:
+            pcm_output_format = FMT_FLOAT;
+            break;
+        default:
+            pcm_output_format = FMT_16BIT;
+            break;
+    }
+    return pcm_output_format;
+}
+
 int aml_decoder_init(aml_dec_t **ppaml_dec, audio_format_t format, aml_dec_config_t * dec_config)
 {
     int ret = -1;
@@ -130,7 +241,7 @@ int aml_decoder_init(aml_dec_t **ppaml_dec, audio_format_t format, aml_dec_confi
         return -1;
     }
 
-    dec_fun = get_decoder_function(format, dec_config->dts_lib_type);
+    dec_fun = get_dynamic_decoder_function(NULL, format, dec_config->dts_lib_type);
     aml_dec_t *aml_dec_handle = NULL;
     if (dec_fun == NULL) {
         ALOGE("%s got dec_fun as NULL!\n", __func__);
@@ -163,6 +274,11 @@ int aml_decoder_init(aml_dec_t **ppaml_dec, audio_format_t format, aml_dec_confi
     aml_dec_handle->dts_lib_type = dec_config->dts_lib_type;
     aml_dec_handle->ad_data = NULL;
     aml_dec_handle->ad_size = 0;
+    aml_dec_handle->convert_buf_size = 0;
+    aml_dec_handle->sample_convert_buf = NULL;
+    aml_dec_handle->decFunc = dec_fun;
+    aml_dec_handle->output_format = aml_decoder_get_output_format(dec_config->output_format);
+    aml_dec_handle->dolby_lib_type = dec_config->dolby_lib_type;
 
     if (get_debug_value(AML_DEBUG_AUDIOHAL_SYNCPTS)) {
         aml_dec_handle->debug_synced_frame_pts_flag = true;
@@ -178,6 +294,7 @@ ERROR:
     return -1;
 
 }
+
 int aml_decoder_release(aml_dec_t *aml_dec)
 {
     int ret = -1;
@@ -187,7 +304,7 @@ int aml_decoder_release(aml_dec_t *aml_dec)
         return -1;
     }
 
-    dec_fun = get_decoder_function(aml_dec->format, aml_dec->dts_lib_type);
+    dec_fun = get_dynamic_decoder_function(aml_dec, aml_dec->format, aml_dec->dts_lib_type);
     if (dec_fun == NULL) {
         return -1;
     }
@@ -199,8 +316,6 @@ int aml_decoder_release(aml_dec_t *aml_dec)
     }
 
     return ret;
-
-
 }
 
 int aml_decoder_flush(aml_dec_t *aml_dec)
@@ -212,7 +327,7 @@ int aml_decoder_flush(aml_dec_t *aml_dec)
         return -1;
     }
 
-    dec_fun = get_decoder_function(aml_dec->format, aml_dec->dts_lib_type);
+    dec_fun = get_dynamic_decoder_function(aml_dec, aml_dec->format, aml_dec->dts_lib_type);
     if (dec_fun == NULL) {
         return -1;
     }
@@ -236,7 +351,7 @@ int aml_decoder_set_config(aml_dec_t *aml_dec, aml_dec_config_type_t config_type
         ALOGE("%s aml_dec is NULL\n", __func__);
         return -1;
     }
-    dec_fun = get_decoder_function(aml_dec->format, aml_dec->dts_lib_type);
+    dec_fun = get_dynamic_decoder_function(aml_dec, aml_dec->format, aml_dec->dts_lib_type);
     if (dec_fun == NULL) {
         return -1;
     }
@@ -256,7 +371,7 @@ int aml_decoder_get_info(aml_dec_t *aml_dec, aml_dec_info_type_t info_type, aml_
         ALOGE("%s aml_dec is NULL\n", __func__);
         return -1;
     }
-    dec_fun = get_decoder_function(aml_dec->format, aml_dec->dts_lib_type);
+    dec_fun = get_dynamic_decoder_function(aml_dec, aml_dec->format, aml_dec->dts_lib_type);
     if (dec_fun == NULL) {
         return -1;
     }
@@ -318,9 +433,9 @@ int aml_decoder_process(aml_dec_t *aml_dec, unsigned char*buffer, int bytes, int
         return -1;
     }
 
-    dec_fun = get_decoder_function(aml_dec->format, aml_dec->dts_lib_type);
+    dec_fun = get_dynamic_decoder_function(aml_dec, aml_dec->format, aml_dec->dts_lib_type);
     if (dec_fun == NULL) {
-        ALOGW("[%s:%d] get_decoder_function format:%#x is null", __func__, __LINE__, aml_dec->format);
+        ALOGW("[%s:%d] get_dynamic_decoder_function format:%#x is null", __func__, __LINE__, aml_dec->format);
         return -1;
     }
     /*if we have fragment size output*/
@@ -411,3 +526,40 @@ void aml_decoder_calc_coefficient(unsigned char ad_fade,float * mix_coefficient,
             *mix_coefficient = mixing_coefficient;
             *ad_coefficient = ad_mixing_coefficient;
 }
+
+void  aml_decoder_memcpy_by_audio_format(audio_format_t output_format, dec_data_info_t * dec_pcm_data) {
+
+    if (dec_pcm_data->data_len <= 0) {
+        ALOGV("invalid data size %d", dec_pcm_data->data_len);
+        return;
+    }
+    if (output_format == AUDIO_FORMAT_PCM_16_BIT) {
+        //do nothing
+    } else if (output_format == AUDIO_FORMAT_PCM_32_BIT) {
+          int samples = dec_pcm_data->data_len / audio_bytes_per_sample(AUDIO_FORMAT_PCM_16_BIT);
+          int data_size = samples * audio_bytes_per_sample(output_format);
+          if (dec_pcm_data->buf_size < data_size) {
+              dec_pcm_data->buf =  aml_audio_realloc(dec_pcm_data->buf, data_size);
+              if (!dec_pcm_data->buf) {
+                  ALOGE("dec_pcm_data->buf malloc failed size %d", data_size);
+                  return;
+              }
+          }
+          //system/media/audio_utils/primitives.c
+          /*
+          void memcpy_to_i32_from_i16(int32_t *dst, const int16_t *src, size_t count)
+         {
+             dst += count;
+             src += count;
+             for (; count > 0; --count) {
+                 *--dst = (int32_t)*--src << 16;
+             }
+          }
+          */
+          memcpy_by_audio_format(dec_pcm_data->buf, output_format,
+             (const void *)dec_pcm_data->buf, AUDIO_FORMAT_PCM_16_BIT,
+             samples);
+          dec_pcm_data->data_len = data_size;
+    }
+}
+

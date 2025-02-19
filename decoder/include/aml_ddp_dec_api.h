@@ -74,6 +74,21 @@ typedef union ddp_config {
     int  mixer_level;
 } ddp_config_t;
 
+//abstract interfaces for dcv decoder .
+typedef int (*Func_decoder_init)(int, int, void **);
+typedef int (*Func_decoder_cleanup)(void *);
+typedef int (*Func_decoder_process)(char *, int, int *, int, char *, int *, struct pcm_info *, char *, int *,void *);
+typedef int (*Func_decoder_config)(void *, ddp_config_type_t, ddp_config_t *);
+
+typedef struct dcv_decoder_func {
+    Func_decoder_init                  dcv_init;
+    Func_decoder_cleanup               dcv_cleanup;
+    Func_decoder_process               dcv_process;
+    Func_decoder_config                dcv_config;
+    void *                             dcvLibHandler;
+    void *                             Instance;
+} dcv_decoder_func_t;
+
 struct dolby_ddp_dec {
     aml_dec_t  aml_dec;
     unsigned char *inbuf;
@@ -115,7 +130,8 @@ struct dolby_ddp_dec {
     int Sample_Rate;
     int Same_ChNum_Count;
     int Same_SampleRate_Count;
-
+    int is_pcmout_32bits;
+    dcv_decoder_func_t dcvHandle;
 };
 
 int dcv_decoder_init_patch(aml_dec_t ** ppaml_dec, aml_dec_config_t * dec_config);
@@ -129,6 +145,7 @@ int parse_report_info_samplerate_channelnum (unsigned char *read_pointer, struct
 int IndependentFrame_Acmod_Lfeon_to_ChannelMask(short Acmod, short Lfeon);
 int DependentFrame_Chanmap_to_ChannelMask(short Chanmap);
 
+aml_dec_func_t *get_ddp_dec_func_handle(void);
 
 extern aml_dec_func_t aml_dcv_func;
 

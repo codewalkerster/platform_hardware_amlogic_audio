@@ -23,6 +23,7 @@
 #include <system/audio-base.h>
 #include "aml_audio_spdifdec.h"
 #include "audio_data_process.h"
+#include <aml_dump_debug.h>
 
 #define IEC61937_HEADER_PA_LITTLE  0xF872
 #define IEC61937_HEADER_PB_LITTLE  0x4E1F
@@ -121,6 +122,16 @@ int aml_spdif_decoder_reset(void *phandle)
         spdif_dec_handle->payload_size = 0;
     }
     ALOGE("%s exit", __func__);
+    return 0;
+}
+
+int aml_spdif_decoder_flush(void *parser_handle)
+{
+    struct aml_spdif_decoder *aml_parser_handle = (struct aml_spdif_decoder *)parser_handle;
+
+    //use reset to complete flush action.
+    aml_spdif_decoder_reset(parser_handle);
+    ALOGI("%s exit", __func__);
     return 0;
 }
 
@@ -648,6 +659,7 @@ int aml_spdif_decoder_getformat(void *phandle) {
         return -1;
     }
 
+    ALOGV("format=0x%x \n", spdif_dec_handle->format);
     return (int)spdif_dec_handle->format;
 }
 
@@ -661,3 +673,70 @@ int aml_spdif_decoder_get_iec61937_info(const void * buf, int32_t size, int32_t 
     *format = spdif_decoder.format;
     return ret;
 }
+
+int iec_parsing_data_process(void *phandle, const void *inABuffer, void *outABuffer, void *parser_callback)
+{
+    aml_audio_buffer_t *audioBuffer = (aml_audio_buffer_t *)inABuffer;
+    const void *inBuffer = audioBuffer->pData;
+    size_t inBytes = audioBuffer->size;
+    aml_audio_buffer_t *outAudioBuffer = (aml_audio_buffer_t *)outABuffer;
+    int retValue = 0;
+    void *outBuffer = NULL;
+    int32_t outBytes = 0;
+    int32_t leftBytes = inBytes;
+    int32_t usedBytes = 0, totalUsedBytes = 0;
+    int32_t inSize = (int32_t)inBytes;
+    char *inBuf = (char *)inBuffer;
+    //AM_LOGI("++++ phandle:%p inBuffer:%p inBytes:%zu parser_callback:%p", phandle, inBuffer, inBytes, parser_callback);
+
+    //keep parsing the inBuffer until parse finished.
+    do {
+        aml_spdif_decoder_process(phandle, inBuf, inSize, &usedBytes, &outBuffer, &outBytes);
+        totalUsedBytes += usedBytes;
+        if (leftBytes >= usedBytes) {
+            leftBytes -= usedBytes;
+            inSize = leftBytes;
+        }
+        inBuf = inBuf + usedBytes;
+
+        if (parser_callback && outBuffer && outBytes > 0) {
+            //audio_format_t output_format = aml_spdif_decoder_getformat(phandle);
+            aml_parser_data_callback_t *pCallback = (aml_parser_data_callback_t *)parser_callback;
+            Func_Write_CallBack __callback = pCallback->callback;
+            outAudioBuffer->pData = outBuffer;
+            outAudioBuffer->size = outBytes;
+            outAudioBuffer->apts = audioBuffer->apts;
+            memcpy(&outAudioBuffer->bufFormat, &audioBuffer->bufFormat, sizeof(buffer_data_format_t));
+            outAudioBuffer->bufFormat.format = aml_spdif_decoder_getformat(phandle);
+
+            retValue = (*__callback)(pCallback->common.pAmlParser, outAudioBuffer, phandle);
+        }
+        //AM_LOGI("phandle:%p inBuf:%p inSize(leftBytes):%d %d,  used_bytes:%d totalUsedBytes:%d outBuffer:%p out_frame_size:%d",
+        //    phandle, inBuf, inSize, leftBytes, usedBytes, totalUsedBytes, outBuffer, outBytes);
+    } while (inSize > 0);
+
+
+    return retValue;
+}
+
+aml_parser_func_t *get_iec_parser_func_handle(void)
+{
+    aml_parser_func_t *amlParserFunc = NULL;
+
+    amlParserFunc = (struct aml_parser_func *)aml_audio_calloc(1, sizeof(struct aml_parser_func));
+    if (amlParserFunc) {
+        amlParserFunc->f_init       = aml_spdif_decoder_open;
+        amlParserFunc->f_deinit     = aml_spdif_decoder_close;
+        amlParserFunc->f_process    = iec_parsing_data_process;
+        amlParserFunc->f_reset      = aml_spdif_decoder_reset;
+        amlParserFunc->f_get_format = aml_spdif_decoder_getformat;
+        amlParserFunc->f_flush      = aml_spdif_decoder_flush;
+    } else {
+        AM_LOGE(" calloc amlParserFunc:%p failed", amlParserFunc);
+        amlParserFunc = NULL;
+    }
+
+    return amlParserFunc;
+}
+
+

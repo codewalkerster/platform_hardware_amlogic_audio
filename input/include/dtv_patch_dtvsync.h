@@ -18,22 +18,55 @@
 #ifndef _DTV_PATCH_DTVSYNC_H_
 #define _DTV_PATCH_DTVSYNC_H_
 
-#ifdef ENABLE_DVB_PATCH
 
 #include <stdbool.h>
 
 #include "audio_hw_ms12.h"
 #include "audio_mediasync_wrap.h"
 #include "MediaSyncInterface.h"
-#include "dmx_audio_es.h"
-
-
-//#define SYSTIME_CORRECTION_THRESHOLD        (90000*10/100)
 
 typedef enum {
     DTVSYNC_AUDIO_DROP = 0,
     DTVSYNC_AUDIO_OUTPUT,
 } dtvsync_process_res;
+
+typedef enum {
+    DTVSYNC_AUDIO_UNKNOWN = 0,
+    DTVSYNC_AUDIO_NORMAL_OUTPUT,
+    DTVSYNC_AUDIO_DROP_PCM,
+    DTVSYNC_AUDIO_INSERT,
+    DTVSYNC_AUDIO_HOLD,
+    DTVSYNC_AUDIO_MUTE,
+    DTVSYNC_AUDIO_RESAMPLE,
+    DTVSYNC_AUDIO_ADJUST_CLOCK,
+} dtvsync_policy;
+
+typedef enum {
+    DTVSYNC_TSYNC = 0,
+    DTVSYNC_MEDIASYNC,
+} dtvsync_type_t;
+
+struct dtvsync_audio_policy {
+    dtvsync_policy audiopolicy;
+    int32_t  param1;
+    int32_t  param2;
+};
+
+typedef struct  aml_dtvsync {
+    void* mediasync;
+    int mediasync_id;
+    int64_t cur_outapts;
+    int64_t out_start_apts;
+    int64_t out_end_apts;
+    int64_t last_queue_apts;
+    int cur_speed;
+    struct dtvsync_audio_policy apolicy;
+    int pcm_dropping;
+    int duration;
+    pthread_mutex_t ms_lock;
+    uint64_t last_package_pts;
+    uint64_t last_lookup_apts;
+} aml_dtvsync_t;
 
 void* aml_dtvsync_create(aml_dtvsync_t *p_dtvsync);
 
@@ -63,7 +96,7 @@ bool aml_dtvsync_ms12_insert_pcm(void *priv_data, int time_ms, int pcm_type);
 
 bool aml_dtvsync_ms12_insertraw(void *priv_data, int time_ms, audio_format_t output_format);
 
-bool aml_dtvsync_adjustclock(struct audio_stream_out *stream, struct mediasync_audio_policy *p_policy);
+//bool aml_dtvsync_adjustclock(struct audio_stream_out *stream, struct mediasync_audio_policy *p_policy);
 
 dtvsync_process_res aml_dtvsync_nonms12_process(struct audio_stream_out *stream, int duration, bool *speed_enabled);
 
@@ -77,10 +110,10 @@ bool aml_dtvsync_reset(aml_dtvsync_t *p_dtvsync);
 
 void aml_dtvsync_release(aml_dtvsync_t *p_dtvsync);
 
-bool aml_dtvsync_ms12_adjust_clock(struct audio_stream_out *stream, int direct);
+//bool aml_dtvsync_ms12_adjust_clock(struct audio_stream_out *stream, int direct);
 
 int aml_dtvsync_ms12_process_resample(struct audio_stream_out *stream, struct dtvsync_audio_policy *p_policy);
+int aml_dtvsync_setPlaybackRate(aml_dtvsync_t *p_dtvsync,  float rate);
 
-#endif
 #endif /* _DTV_PATCH_DTVSYNC_H_ */
 

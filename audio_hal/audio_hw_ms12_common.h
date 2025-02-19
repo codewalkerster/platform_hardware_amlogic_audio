@@ -57,13 +57,6 @@ struct ms12_mesg_desc {
 };
 
 /*
- *@brief set dolby ms12 pause/resume
- */
-int set_dolby_ms12_runtime_pause(struct dolby_ms12_desc *ms12, int is_pause);
-int dolby_ms12_main_pause(struct audio_stream_out *stream);
-int dolby_ms12_main_resume(struct audio_stream_out *stream);
-
-/*
  *@brief send scheduler state to ms12
  */
 int aml_audiohal_sch_state_2_ms12(struct dolby_ms12_desc *ms12, int sch_state);
@@ -104,32 +97,10 @@ void set_ms12_full_dap_disable(struct dolby_ms12_desc *ms12, int full_dap_disabl
 /* @brief set ms12 multi_channel enable [0/1] */
 void set_ms12_mc_enable(struct dolby_ms12_desc *ms12, int mc_enable);
 
-
-//-lang               * <str> [ac4] 1st Preferred Language code (3 Letter ISO 639)
-void set_ms12_ac4_1st_preferred_language_code(struct dolby_ms12_desc *ms12, char *lang_iso639_code);
-//-lang2              * <str> [ac4] 2nd Preferred Language code (3 Letter ISO 639)
-void set_ms12_ac4_2nd_preferred_language_code(struct dolby_ms12_desc *ms12, char *lang_iso639_code);
-//-pat                * <int> [ac4] Prefer Presentation Selection by associated type over language.
-//                            0: Prefer selection by language
-//                            1: Prefer selection by associated type (default)
-#define PERFER_SELECTION_BY_LANGUAGE (0)
-#define PERFER_SELECTION_BY_AD_TYPE  (1)
-void set_ms12_ac4_prefer_presentation_selection_by_associated_type_over_language(struct dolby_ms12_desc *ms12, int prefer_selection_type);
-
-//-ac4_short_prog_id  * <int> [ac4] The short program identifier as an 16 bit unsigned value or -1 for no program ID (default)
-void set_ms12_ac4_short_prog_identifier(struct dolby_ms12_desc *ms12, int short_program_identifier);
-
 /*
  *@brief get the mat decoder delay
  */
 int get_ms12_mat_dec_delay(void);
-
-/*
- *@brief on non-TV device, dtv to set ms12 volume
- */
-void dtv_set_ms12_volume_on_non_TV_device(struct aml_stream_out *aml_out);
-
-
 void set_ms12_ext_pcm_acmod_lfe(struct dolby_ms12_desc *ms12, audio_channel_mask_t channel_mask);
 
 void set_ms12_sys_pcm_acmod_lfe(struct dolby_ms12_desc *ms12, audio_channel_mask_t channel_mask);

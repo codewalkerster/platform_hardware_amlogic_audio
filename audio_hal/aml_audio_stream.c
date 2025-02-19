@@ -740,15 +740,11 @@ void aml_stream_out_info_print(struct aml_stream_out *aml_out, uint64_t *frames,
 void aml_stream_out_dump(struct aml_stream_out *aml_out, int fd)
 {
     if (aml_out) {
-        dprintf(fd, "\t\t-usecase: %s\n", usecase2Str(aml_out->usecase));
+        dprintf(fd, "\t\t-usecase: %s\n", streamType2Str(aml_out->streamType));
         dprintf(fd, "\t\t-out device: %#x\n", aml_out->out_device);
         dprintf(fd, "\t\t-is tv source stream: %s\n", aml_out->is_tv_src_stream?"true":"false");
         dprintf(fd, "\t\t-stream status:%d %s\n", aml_out->stream_status, stream_status_2_string[aml_out->stream_status]);
         dprintf(fd, "\t\t-standby: %s\n", aml_out->standby?"true":"false");
-        if (aml_out->is_normal_pcm) {
-            dprintf(fd, "\t\t-normal pcm: %s\n",
-                write_func_to_str(aml_out->write_func));
-        }
 
         uint64_t frames;
         struct timespec timestamp;
@@ -759,9 +755,9 @@ void aml_stream_out_dump(struct aml_stream_out *aml_out, int fd)
 
 void aml_adev_stream_out_dump(struct aml_audio_device *aml_dev, int fd) {
     dprintf(fd, "\n-------------[AML_HAL] aml TV out stream -------------------------\n");
-    dprintf(fd, "[AML_HAL]    usecase_masks: %#x\n", aml_dev->usecase_masks);
+    dprintf(fd, "[AML_HAL]    streamCount: %#x\n", aml_dev->streamCount);
     dprintf(fd, "[AML_HAL]    stream outs:\n");
-    for (int i = 0; i < STREAM_USECASE_MAX ; i++) {
+    for (int i = 0; i < STREAM_TYPE_MAX ; i++) {
         struct aml_stream_out *aml_out = aml_dev->active_outputs[i];
         if (aml_out && aml_out->is_tv_src_stream) {
             dprintf(fd, "\tout: %d, pointer: %p\n", i, aml_out);
@@ -777,7 +773,7 @@ int aml_dev_dump_latency(struct aml_audio_device *aml_dev, int fd)
 
     dprintf(fd, "\n-------------[AML_HAL] audio patch Latency-----------------------\n");
 
-    if (patch) {
+    if (patch && patch->patch_src != SRC_DTV) {
         aml_dev_sample_audio_path_latency(aml_dev, NULL);
         dprintf(fd, "[AML_HAL]      audio patch latency         : %6d ms\n", patch->audio_latency.ringbuffer_latency);
         dprintf(fd, "[AML_HAL]      audio spk tuning latency    : %6d ms\n", patch->audio_latency.user_tune_latency);
@@ -1194,8 +1190,9 @@ static int update_audio_hal_info(struct aml_audio_device *adev, audio_format_t f
         }
 
         ALOGD("%s() audio hal format change to %x, atmos flag = %d, is_dolby_atmos = %d, dts_hp_x = %d, update_type = %d is_dolby_atmos_off = %d virtual_bass_enable %d\n",
-            __FUNCTION__, adev->audio_hal_info.format, adev->audio_hal_info.is_dolby_atmos, adev->ms12.is_dolby_atmos,
+            __FUNCTION__, adev->audio_hal_info.format, adev->audio_hal_info.is_dolby_atmos, adev->ms12.focus_is_dolby_atmos,
             is_headphone_x, adev->audio_hal_info.update_type, is_dolby_atmos_off, get_ms12_dap_virtual_bass_enable());
+
         ALOGD("%s() cur_out_devices %#x, dap_bypass_enable = %d, is_ms12_tuning_dat = %d, dolby_ms12_enable = %d, output_config = %#x\n",
             __FUNCTION__, adev->cur_out_devices, adev->ms12.dap_bypass_enable, adev->is_ms12_tuning_dat, ms12->dolby_ms12_enable, ms12->output_config);
 
@@ -1219,13 +1216,18 @@ void update_audio_format(struct aml_audio_device *adev, audio_format_t format)
     bool is_dolby_active = dolby_stream_active(adev);
     bool is_dolby_format = is_dolby_ms12_support_compression_format(format);
     bool is_dts_active = dts_stream_active(adev);
+    bool is_dolby_atmos = 0;
+
+    if (adev->ms12.focus_is_dolby_atmos) {
+        is_dolby_atmos = 1;
+    }
     /*
      *for dolby & pcm case or dolby case
      *to update the dolby stream's format
      */
     if (is_dolby_active && is_dolby_format) {
         if (eDolbyMS12Lib == adev->dolby_lib_type) {
-            atmos_flag = adev->ms12.is_dolby_atmos;
+            atmos_flag = is_dolby_atmos;
         }
 
 #ifdef MS12_V24_ENABLE
@@ -1314,6 +1316,25 @@ int update_sink_format_after_hotplug(struct aml_audio_device *adev)
     return 0;
 }
 
+bool is_dtv_stream_out(struct audio_stream_out *stream)
+{
+    struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
+    aml_audio_buffer_info_t *pBuffer = (aml_audio_buffer_info_t *)aml_out->audio_buffer;
+    aml_audio_buffer_t *audioBuffer = NULL;
+    if (pBuffer) {
+        audioBuffer = pBuffer->inBuffer;
+    }
+    if (audioBuffer) {
+        return aml_out->is_dtv_src_stream && audioBuffer->isDtv;
+    }
+    return false;
+}
+
+bool is_tv_stream_out(struct aml_stream_out *aml_out)
+{
+   bool is_tv_source = aml_out->is_tv_src_stream || aml_out->is_dtv_src_stream;
+   return is_tv_source;
+}
 
 uint32_t tv_in_write(struct audio_stream_out *stream, const void* buffer, size_t bytes)
 {
@@ -1325,19 +1346,6 @@ uint32_t tv_in_write(struct audio_stream_out *stream, const void* buffer, size_t
     R_CHECK_POINTER_LEGAL(bytes, patch, "");
     if (bytes == 0 || patch->tvin_buffer_inited != 1) {
         return bytes;
-    }
-
-    if (patch->is_dtv_src && patch->tvin_buffer_inited && patch->first_apts_lookup_over) {
-        /* dtv case: process drop and mute policy */
-        if (patch->need_drop_size > 0) {
-            ALOGI("%s, dtv avsync drop %d bytes, need_drop_size %d\n", __func__, (int)bytes, patch->need_drop_size);
-            return bytes;
-        }
-        if (is_dtv_discontinue_mute(adev) || is_dtv_start_mute(adev) || !patch->dtv_first_apts_flag) {
-            ALOGI("%s, dtv avsync mute %d bytes, start_mute %d, discontinue_mute %d", __func__, (int)bytes,
-                is_dtv_start_mute(adev), is_dtv_discontinue_mute(adev));
-            memset((char *)buffer, 0, bytes);
-        }
     }
 
     uint32_t bytes_written = 0;
@@ -1401,6 +1409,82 @@ uint32_t tv_in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
     return bytes;
 }
 
+int aml_deinit_audio_buffer(struct aml_stream_out *out)
+{
+    out->audio_buffer = aml_audio_calloc(1, sizeof(aml_audio_buffer_info_t));
+    if (out->audio_buffer) {
+        aml_audio_buffer_info_t *pBuffer = out->audio_buffer;
+        int index = -1;
+        for (index = 0; index < AUDIO_BUFFER_MAX; ++index) {
+            if (pBuffer->outBuffer[index]) {
+                aml_audio_free(pBuffer->outBuffer[index]);
+                pBuffer->outBuffer[index] = NULL;
+            }
+        }
+        if (out->parsedDataBuf) {
+            aml_audio_free(out->parsedDataBuf);
+            out->parsedDataBuf = NULL;
+        }
+        if (pBuffer->parsedBuffer) {
+            aml_audio_free(pBuffer->parsedBuffer);
+            pBuffer->parsedBuffer = NULL;
+        }
+        if (pBuffer->inBuffer) {
+            aml_audio_free(pBuffer->inBuffer);
+            pBuffer->inBuffer = NULL;
+        }
+        aml_audio_free(out->audio_buffer);
+        out->audio_buffer = NULL;
+    }
+    return 0;
+}
+
+int aml_init_audio_buffer(struct aml_stream_out *out)
+{
+    int ret = 0;
+
+    out->audio_buffer = aml_audio_calloc(1, sizeof(aml_audio_buffer_info_t));
+    if (out->audio_buffer == NULL) {
+        AM_LOGE("alloc audio_buffer failed, errno:%d %s\n", errno, strerror(errno));
+        ret = -1;
+        goto alloc_err;
+    } else {
+        aml_audio_buffer_info_t *pBuffer = (struct aml_audio_buffer_info *)out->audio_buffer;
+        pBuffer->inBuffer = (struct aml_audio_buffer *)aml_audio_calloc(1, sizeof(aml_audio_buffer_t));
+        if (pBuffer->inBuffer == NULL) {
+            AM_LOGE("alloc pBuffer->inBuffer failed, errno:%d %s\n", errno, strerror(errno));
+            ret = -1;
+            goto alloc_err;
+        }
+        pBuffer->parsedBuffer = (struct aml_audio_buffer *)aml_audio_calloc(1, sizeof(aml_audio_buffer_t));
+        if (pBuffer->parsedBuffer == NULL) {
+            AM_LOGE("alloc pBuffer->parsedBuffer failed, errno:%d %s\n", errno, strerror(errno));
+            ret = -1;
+            goto alloc_err;
+        } else {
+            out->parsedDataBuf = aml_audio_calloc(1, AUDIO_BUFFER_DATA_SIZE);
+            if (out->parsedDataBuf == NULL) {
+                AM_LOGE("alloc out->parsedDataBuf failed, errno:%d %s\n", errno, strerror(errno));
+                ret = -1;
+                goto alloc_err;
+            }
+        }
+        int index = -1;
+        for (index = 0; index < AUDIO_BUFFER_MAX; ++index) {
+            pBuffer->outBuffer[index] = (struct aml_audio_buffer *)aml_audio_calloc(1, sizeof(aml_audio_buffer_t));
+            if (pBuffer->outBuffer[index] == NULL) {
+                AM_LOGE("alloc pBuffer->outBuffer failed, errno:%d %s\n", errno, strerror(errno));
+                ret = -1;
+                goto alloc_err;
+            }
+        }
+    }
+
+    return ret;
+alloc_err:
+    aml_deinit_audio_buffer(out);
+    return ret;
+}
 
 int aml_audio_earctx_get_type(struct aml_audio_device *adev)
 {
@@ -1427,22 +1511,25 @@ int aml_audio_earc_get_latency(struct aml_audio_device *adev)
 }
 
 #define AML_DETECT_VALUE 1500
-void tv_do_ease_in(struct audio_stream_out *stream, void *write_buf, size_t write_bytes) {
 
-    struct aml_stream_out *out = (struct aml_stream_out *) stream;
+void tv_do_ease(struct aml_stream_out *out, void *write_buf, size_t write_bytes)
+{
     struct aml_audio_device *aml_dev = out->dev;
-    int fade_mode = property_get_int32("vendor.dtv.audio.fade_mode", DO_FADE_AT_HAL);
-    switch (fade_mode) {
+    int fade_at_where = property_get_int32("vendor.dtv.audio.fade_mode", DO_FADE_AT_HAL);
+    bool is_ms12_case = (eDolbyMS12Lib == aml_dev->dolby_lib_type);
+    switch (fade_at_where) {
         case DO_FADE_AT_ALSA:
-            if (aml_dev->mute_start) {
-                /* fade in start */
-                ALOGI("start fade in fade_mode %d", fade_mode);
-                set_output_device_mute(aml_dev, AUDIO_DEVICE_OUT_SPEAKER, false, true);
-                aml_dev->mute_start = false;
+            if (out->ease_config.ease_mode == EaseIn) {
+                 ALOGI("start fade in fade_mode %d", fade_at_where);
+                 set_output_device_mute(aml_dev, AUDIO_DEVICE_OUT_SPEAKER, false, true);
+            } else if (out->ease_config.ease_mode == EaseOut) {
+                 ALOGI("start fade out fade_mode %d", fade_at_where);
+                 set_output_device_mute(aml_dev, AUDIO_DEVICE_OUT_SPEAKER, true, true/*use fade*/);
             }
+            out->ease_config.ease_mode = Invalid;
             break;
         case DO_FADE_AT_HAL:
-            if (eDolbyMS12Lib == aml_dev->dolby_lib_type &&
+            if (is_ms12_case &&
                 is_dolby_ms12_support_compression_format(out->hal_internal_format)) {
                 ALOGV("dolby raw data, no need check ");
             } else {
@@ -1451,70 +1538,70 @@ void tv_do_ease_in(struct audio_stream_out *stream, void *write_buf, size_t writ
                     return;
                 }
             }
-            if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
-                struct dolby_ms12_desc *ms12 = &(aml_dev->ms12);
-                if (aml_dev->tv_mute) {
-                    if (!ms12->is_muted) {
-                        set_ms12_main_audio_mute(ms12, true, 0);
-                    }
-                } else {
-                    if (aml_dev->mute_start) {
-                         int fade_duration = MS12_AUDIO_FADEIN_TV_DURATION_US / 1000;
-                         ALOGI("ms12 render easing in using %d ms ",fade_duration);
-                         set_ms12_main_audio_mute(ms12, false, fade_duration);
-                         aml_dev->mute_start = false;
-                    }
+            if (is_ms12_case) {
+                if (out->ease_config.ease_mode == EaseOut) {
+                    set_ms12_decoder_mute(&out->stream, true, out->ease_config.duration_ms);
+                } else if (out->ease_config.ease_mode == EaseIn) {
+                    set_ms12_decoder_mute(&out->stream, false, out->ease_config.duration_ms);
                 }
             } else {
-                if (aml_dev->mute_start)  {
-                    /* fade in start */
-                    ALOGI("start fade in");
-                    start_ease_in(aml_dev->audio_ease);
-                    aml_dev->mute_start = false;
+                if (out->ease_config.ease_mode == EaseOut) {
+                    ALOGI("start fade out fade_mode %d", fade_at_where);
+                    start_ease_out(out->audio_stream_ease, is_TV(aml_dev), out->ease_config.duration_ms);
+                } else if (out->ease_config.ease_mode == EaseIn) {
+                    ALOGI("start fade in fade_mode %d", fade_at_where);
+                    start_ease_in(out->audio_stream_ease, is_TV(aml_dev), out->ease_config.duration_ms);
                 }
-                if (is_dev_patch_running(aml_dev)) {
-                      /*ease in or ease out*/
-                     aml_audio_ease_process(aml_dev->audio_ease, write_buf, write_bytes);
-                }
+                aml_audio_ease_process(out->audio_stream_ease, write_buf, write_bytes, false);
             }
+            out->ease_config.ease_mode = Invalid;
             break;
         default:
-            ALOGW("invalid fade mode %d", fade_mode);
+            ALOGW("invalid fade mode %d", fade_at_where);
     }
 
 }
 
-void tv_do_ease_out(struct aml_audio_device *aml_dev)
+void tv_set_ease(struct aml_stream_out *out, int ease_mode)
 {
 
-    int fade_mode = property_get_int32("vendor.dtv.audio.fade_mode", DO_FADE_AT_HAL);
+   if (!out) {
+        ALOGE("out stream NULL ,return");
+        return;
+    }
+    struct aml_audio_device *aml_dev = out->dev;
+    int fade_at_where = property_get_int32("vendor.dtv.audio.fade_mode", DO_FADE_AT_HAL);
     int duration_ms = 0;
+    bool need_do_fade = false;
+    bool is_ms12_case = (eDolbyMS12Lib == aml_dev->dolby_lib_type);
 
-    switch (fade_mode) {
+
+    switch (fade_at_where) {
         case DO_FADE_AT_ALSA:
-            if (aml_dev->mute_start == false) {
-                set_output_device_mute(aml_dev, AUDIO_DEVICE_OUT_SPEAKER, true, true/*use fade*/);
-                // Need time to fedaout
+            if (ease_mode == EaseOut) {
+                out->ease_config.ease_mode = EaseOut;
                 aml_audio_sleep(15000);
-                aml_dev->mute_start = true;
+            } else if (ease_mode == EaseIn){
+                out->ease_config.ease_mode = EaseIn;
             }
             break;
         case DO_FADE_AT_HAL:
 
-            if (aml_dev && aml_dev->audio_ease) {
-                bool need_do_fade = false;
-                if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
+            if (ease_mode == EaseOut) {
+                if (is_ms12_case) {
                     need_do_fade = !aml_dev->ms12.is_muted;
                 } else {
-                    float vol_now = aml_audio_ease_get_current_volume(aml_dev->audio_ease);
-                    need_do_fade = (vol_now != 0.0f);
+                    if (aml_dev->audio_ease) {
+                        float vol_now = aml_audio_ease_get_current_volume(out->audio_stream_ease);
+                        need_do_fade = (vol_now != 0.0f);
+                    }
                 }
                 if (!need_do_fade) {
                     ALOGI("%s()skip fade out", __func__);
+                    break;
                 } else {
-                    ALOGI("%s()do fade out fade_mode %d", __func__, fade_mode);
                     if (is_TV(aml_dev)) {
-                        if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
+                        if (is_ms12_case) {
                             duration_ms = property_get_int32("vendor.media.audio.dtv.fadeout.us", MS12_AUDIO_FADEOUT_TV_DURATION_US) / 1000;
                         } else {
                             duration_ms = property_get_int32("vendor.media.audio.dtv.fadeout.us", AUDIO_FADEOUT_TV_DURATION_US) / 1000;
@@ -1522,22 +1609,38 @@ void tv_do_ease_out(struct aml_audio_device *aml_dev)
                     } else {
                         duration_ms = property_get_int32("vendor.media.audio.dtv.fadeout.us", AUDIO_FADEOUT_STB_DURATION_US) / 1000;
                     }
-                    if (eDolbyMS12Lib == aml_dev->dolby_lib_type) {
-                        aml_dev->ms12.do_easing = true;
-                        ALOGI("%s()  %d ms doing easing out", __func__, duration_ms);
-                        set_ms12_main_audio_mute(&aml_dev->ms12, true, duration_ms);
-                        /*left 10ms for ms12 to do complete fade process*/
-                        usleep((duration_ms + 10) * 1000);
-                        aml_dev->ms12.do_easing = false;
-                    } else {
-                        start_ease_out(aml_dev->audio_ease, is_TV(aml_dev), duration_ms / 2);
-                        usleep(duration_ms * 1000);
+                    out->ease_config.ease_mode = EaseOut;
+                    out->ease_config.duration_ms = duration_ms;
+                    aml_audio_sleep((duration_ms + 10)* 1000);
+                }
+            } else if (ease_mode == EaseIn) {
+                if (is_ms12_case) {
+                    need_do_fade = aml_dev->ms12.is_muted;
+                } else {
+                    if (aml_dev->audio_ease) {
+                        float vol_now = aml_audio_ease_get_current_volume(out->audio_stream_ease);
+                        need_do_fade = (vol_now == 0.0f);
                     }
+                }
+                if (!need_do_fade) {
+                   ALOGI("%s()skip fade in", __func__);
+                } else {
+                     if (is_TV(aml_dev)) {
+                        if (is_ms12_case) {
+                            duration_ms = property_get_int32("vendor.media.audio.dtv.fadein.us", MS12_AUDIO_FADEOUT_TV_DURATION_US) / 1000;
+                        } else {
+                            duration_ms = property_get_int32("vendor.media.audio.dtv.fadein.us", NON_MS12_AUDIO_FADEIN_TV_DURATION_US) / 1000;
+                        }
+                    } else {
+                        duration_ms = property_get_int32("vendor.media.audio.dtv.fadein.us", AUDIO_FADEIN_STB_DURATION_US) / 1000;
+                    }
+                    out->ease_config.ease_mode = EaseIn;
+                    out->ease_config.duration_ms = duration_ms;
                 }
             }
             break;
         default:
-        ALOGW("invalid fade mode %d", fade_mode);
+        ALOGW("invalid fade mode %d", fade_at_where);
     }
 
 }
@@ -1631,3 +1734,20 @@ void aml_netflix_volume_correction(struct aml_stream_out *aml_out)
 #endif
 }
 
+void aml_stream_clear_speed_aux_info(struct aml_stream_out *aml_out)
+{
+    aml_stream_speed_info_t *speed_info = NULL;
+    aml_audio_speed_apts_gap_ease_t *gap_ease = NULL;
+    if (aml_out == NULL) {
+        return;
+    }
+    speed_info = &aml_out->speed_info;
+    gap_ease = &speed_info->apts_gap_ease;
+
+    aml_audio_speed_clear_start_ts(&speed_info->start_ts);
+    aml_audio_speed_reset_apts_gap(&speed_info->sync_apts_gap, AML_AUDIO_SPEED_DETECT_GAP_TIME_MS);
+    gap_ease->speed = speed_info->speed;
+    gap_ease->target_frames = 0;
+    gap_ease->current_frames = 0;
+    gap_ease->start = false;
+}

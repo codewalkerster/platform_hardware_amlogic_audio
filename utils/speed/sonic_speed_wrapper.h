@@ -11,8 +11,6 @@ typedef struct sonic_speed_handle {
     unsigned int input_sr;
     unsigned int format;
     unsigned int channels;
-    unsigned int ringbuf_size;
-    void *output_buf;
     sonicStream stream;
 } sonic_speed_handle_t;
 

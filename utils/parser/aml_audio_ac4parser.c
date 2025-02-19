@@ -23,6 +23,7 @@
 #include "aml_audio_ac4parser.h"
 #include "aml_audio_bitsparser.h"
 #include "aml_malloc_debug.h"
+#include "aml_dump_debug.h"
 
 /**
  *
@@ -106,6 +107,16 @@ int aml_ac4_parser_reset(void *parser_handle)
         aml_parser_handle->status = PARSER_SYNCING;
         aml_parser_handle->buf_remain = 0;
     }
+    ALOGI("%s exit", __func__);
+    return 0;
+}
+
+int aml_ac4_parser_flush(void *parser_handle)
+{
+    struct aml_ac4_parser *aml_parser_handle = (struct aml_ac4_parser *)parser_handle;
+
+    //use reset to complete flush action.
+    aml_ac4_parser_reset(parser_handle);
     ALOGI("%s exit", __func__);
     return 0;
 }
@@ -482,3 +493,66 @@ error:
     *used_size = numBytes;
     return 0;
 }
+
+int ac4_parsing_data_process(void *phandle, const void *inABuffer, void *outABuffer, void *parser_callback)
+{
+    aml_audio_buffer_t *audioBuffer = (aml_audio_buffer_t *)inABuffer;
+    const void *inBuffer = audioBuffer->pData;
+    size_t inBytes = audioBuffer->size;
+    aml_audio_buffer_t *outAudioBuffer = (aml_audio_buffer_t *)outABuffer;
+    int retValue = 0;
+    struct ac4_parser_info ac4_info = { 0 };
+    void *outBuffer = NULL;
+    int32_t outBytes = 0;
+    int32_t leftBytes = inBytes;
+    int32_t usedBytes = 0, totalUsedBytes = 0;
+    int32_t inSize = (int32_t)inBytes;
+    char *inBuf = (char *)inBuffer;
+    //AM_LOGI("phandle:%p inBuffer:%p inBytes:%zu parser_callback:%p", phandle, inBuffer, inBytes, parser_callback);
+
+    //keep parsing the inBuffer until parse finished.
+    do {
+        aml_ac4_parser_process(phandle, inBuf, inSize, &usedBytes, &outBuffer, &outBytes, &ac4_info);
+        totalUsedBytes += usedBytes;
+        if (leftBytes >= usedBytes) {
+            leftBytes -= usedBytes;
+            inSize = leftBytes;
+        }
+        inBuf = inBuf + usedBytes;
+
+        if (parser_callback && outBuffer && outBytes > 0) {
+            aml_parser_data_callback_t *pCallback = (aml_parser_data_callback_t *)parser_callback;
+            Func_Write_CallBack __callback = pCallback->callback;
+            outAudioBuffer->pData = outBuffer;
+            outAudioBuffer->size = outBytes;
+            outAudioBuffer->apts = audioBuffer->apts;
+            memcpy(&outAudioBuffer->bufFormat, &audioBuffer->bufFormat, sizeof(buffer_data_format_t));
+            retValue = (*__callback)(pCallback->common.pAmlParser, outAudioBuffer, phandle);
+        }
+        //AM_LOGI("phandle:%p inBuf:%p inSize(leftBytes):%d %d,  used_bytes:%d totalUsedBytes:%d outBuffer:%p out_frame_size:%d  ac4_info.frame_size:%d",
+        //    phandle, inBuf, inSize, leftBytes, usedBytes, totalUsedBytes, outBuffer, outBytes, ac4_info.frame_size);
+    } while (inSize > 0);
+
+
+    return retValue;
+}
+
+aml_parser_func_t *get_ac4_parser_func_handle(void)
+{
+    aml_parser_func_t *amlParserFunc = NULL;
+
+    amlParserFunc = (struct aml_parser_func *)aml_audio_calloc(1, sizeof(struct aml_parser_func));
+    if (amlParserFunc) {
+        amlParserFunc->f_init       = aml_ac4_parser_open;
+        amlParserFunc->f_deinit     = aml_ac4_parser_close;
+        amlParserFunc->f_process    = ac4_parsing_data_process;
+        amlParserFunc->f_reset      = aml_ac4_parser_reset;
+        amlParserFunc->f_flush      = aml_ac4_parser_flush;
+    } else {
+        AM_LOGE(" calloc amlParserFunc:%p failed", amlParserFunc);
+        amlParserFunc = NULL;
+    }
+
+    return amlParserFunc;
+}
+

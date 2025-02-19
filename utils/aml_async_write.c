@@ -30,13 +30,13 @@
 #include <inttypes.h>
 #include <cutils/list.h>
 #include <audio_utils/primitives.h>
+#include <sys/time.h>
 
-#include "audio_hw_utils.h"
-#include "aml_audio_timer.h"
+#include "aml_malloc_debug.h"
 #include "aml_ringbuffer.h"
 #include "aml_async_write.h"
 #include "aml_audio_spdifdec.h"
-
+#include "audio_data_process.h"
 #ifdef AML_ASYNC_WRITE_COMPRESS_ENABLE
 #include "zlib.h"
 #endif
@@ -69,44 +69,65 @@
 #define UNUSED(x) (void)(x)
 #endif
 
-struct buffer_item {
+typedef struct buffer_item {
     struct listnode  list_node;
     char             filename[FILENAME_MAX_LEN];
-    ring_buffer_t    ring_buffer;
-    int              to_remove;
-    int              is_writing;
-    uint64_t         last_update_ms;
-    int              file_error_count;
-    uint64_t         file_error_ms;
+    ring_buffer_t    stRingBuffer;
+    bool             bRemove;
+    bool             bWriting;
+    bool             bCompress;
+    int32_t          s32WriteErrCount;
+    uint64_t         u64LastUpdateMs;
+    uint64_t         u64WriteErrMs;
 
-    int              is_compress;
-    uint8_t          *compress_buf;
+    uint8_t          *pu8CompressBuf;
 #ifdef AML_ASYNC_WRITE_COMPRESS_ENABLE
-    int              compress_level;
-    z_stream         compress_stream;
-    int              compress_buflen;
+    int              s32CompressLevel;
+    int              s32CompressBufLen;
+    z_stream         stCompressStream;
 #endif
-};
+} buffer_item_st;
 
 
-struct aml_async_writer {
-    pthread_t        writer_threadID;
+typedef struct aml_async_writer {
+    pthread_t        threadID;
     struct listnode  buffer_list_head;
-    pthread_mutex_t  writer_mutex;
-    uint8_t          *temp_bufptr;
-    int              temp_buflen;
+    pthread_mutex_t  buffer_mutex;
+    uint8_t          *pu8TempBuf;
+    int32_t          s32TempBufLen;
 
-    pthread_mutex_t   wake_mutex;
-    pthread_cond_t    wake_cond;
-    int               is_standby;
-};
+    pthread_mutex_t  wake_mutex;
+    pthread_cond_t   wake_cond;
+    bool             bStandby;
+    bool             bRequestExit;
+    bool             bHasExited;
+    bool             bInitialize;
+} aml_async_writer_st;
 
 
-static struct aml_async_writer worker1;
+static struct aml_async_writer worker1 = {0};
+
+static int64_t _gettime(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return ((int64_t)(tv.tv_sec) * 1000000 + (int64_t)(tv.tv_usec));
+}
+
+static void _ts_wait_time_us(struct timespec *ts, uint32_t time_us)
+{
+    clock_gettime(CLOCK_REALTIME, ts);
+    ts->tv_sec += (time_us / 1000000);
+    ts->tv_nsec += (time_us * 1000);
+    if (ts->tv_nsec >= 1000000000) {
+        ts->tv_sec++;
+        ts->tv_nsec -= 1000000000;
+    }
+}
 
 
 #ifdef AML_ASYNC_WRITE_COMPRESS_ENABLE
-static int compress_init(struct buffer_item *buf_item)
+static int compress_init(buffer_item_st *buf_item)
 {
     int ret = 0;
     uint8_t *out_buf = NULL;
@@ -116,12 +137,12 @@ static int compress_init(struct buffer_item *buf_item)
         return -1;
     }
 
-    int level = buf_item->compress_level;
-    z_stream *p_stream = &buf_item->compress_stream;
+    int level = buf_item->s32CompressLevel;
+    z_stream *p_stream = &buf_item->stCompressStream;
 
     out_buf = (uint8_t *)aml_audio_calloc(1, out_buflen);
     if (out_buf == NULL) {
-        buf_item->compress_buf = NULL;
+        buf_item->pu8CompressBuf = NULL;
         ALOGE("%s : can not malloc %d bytes ! (%s)", __func__, out_buflen, strerror(errno));
         return -1;
     }
@@ -133,19 +154,19 @@ static int compress_init(struct buffer_item *buf_item)
     ret = deflateInit(p_stream, level);
     if (ret != Z_OK) {
         aml_audio_free(out_buf);
-        buf_item->compress_buf = NULL;
+        buf_item->pu8CompressBuf = NULL;
         ALOGE("%s failed with %d", __func__, ret);
         return -1;
     }
 
-    buf_item->compress_buf = out_buf;
-    buf_item->compress_buflen = out_buflen;
+    buf_item->pu8CompressBuf = out_buf;
+    buf_item->s32CompressBufLen = out_buflen;
     ALOGI("%s : %s successfully", __func__, buf_item->filename);
     return ret;
 }
 
 
-static int compress_and_save(struct buffer_item *buf_item, unsigned char *in, int in_bytes, int is_data_end, FILE *fp)
+static int compress_and_save(buffer_item_st *buf_item, unsigned char *in, int in_bytes, int is_data_end, FILE *fp)
 {
     int ret, flush;
     unsigned have;
@@ -157,9 +178,9 @@ static int compress_and_save(struct buffer_item *buf_item, unsigned char *in, in
         return -1;
     }
 
-    p_stream = &buf_item->compress_stream;
-    out_buf = buf_item->compress_buf;
-    out_buflen = buf_item->compress_buflen;
+    p_stream = &buf_item->stCompressStream;
+    out_buf = buf_item->pu8CompressBuf;
+    out_buflen = buf_item->s32CompressBufLen;
 
     if (in_bytes > out_buflen) {
         ALOGE("in_bytes(%d > %d) is too large!", in_bytes, out_buflen);
@@ -191,42 +212,42 @@ static int compress_and_save(struct buffer_item *buf_item, unsigned char *in, in
         /* clean up and return */
         (void)deflateEnd(p_stream);
 
-        aml_audio_free(buf_item->compress_buf);
-        buf_item->compress_buf = NULL;
-        buf_item->compress_buflen = 0;
+        aml_audio_free(buf_item->pu8CompressBuf);
+        buf_item->pu8CompressBuf = NULL;
+        buf_item->s32CompressBufLen = 0;
     }
     return Z_OK;
 }
 
 
-static void compress_deinit(struct buffer_item *buf_item)
+static void compress_deinit(buffer_item_st *buf_item)
 {
     if (buf_item == NULL) {
         return;
     }
 
     FILE *fp = fopen(buf_item->filename, "a+");
-    if (fp) {
+    if (fp && buf_item->pu8CompressBuf) {
         unsigned char zero_buf[32];
         compress_and_save(buf_item, zero_buf, sizeof(zero_buf), 1, fp);
-        fclose(fp);
     }
+    fclose(fp);
 
-    if (buf_item->compress_buf) {
-        (void)deflateEnd(&buf_item->compress_stream);
-        aml_audio_free(buf_item->compress_buf);
-        buf_item->compress_buf = NULL;
+    if (buf_item->pu8CompressBuf) {
+        (void)deflateEnd(&buf_item->stCompressStream);
+        aml_audio_free(buf_item->pu8CompressBuf);
+        buf_item->pu8CompressBuf = NULL;
     }
-    buf_item->compress_buflen = 0;
+    buf_item->s32CompressBufLen = 0;
 }
 #else
-static int compress_init(struct buffer_item *buf_item)
+static int compress_init(buffer_item_st *buf_item)
 {
     UNUSED(buf_item);
     return 0;
 }
 
-static int compress_and_save(struct buffer_item *buf_item, unsigned char *in, int in_bytes, int is_data_end, FILE *fp)
+static int compress_and_save(buffer_item_st *buf_item, unsigned char *in, int in_bytes, int is_data_end, FILE *fp)
 {
     UNUSED(buf_item);
     UNUSED(in);
@@ -236,18 +257,18 @@ static int compress_and_save(struct buffer_item *buf_item, unsigned char *in, in
     return 0;
 }
 
-static void compress_deinit(struct buffer_item *buf_item)
+static void compress_deinit(buffer_item_st *buf_item)
 {
     UNUSED(buf_item);
 }
 #endif
 
 
-static void handle_buffer_write(struct aml_async_writer *p_worker, struct buffer_item *buf_item, uint64_t system_ms)
+static void handle_buffer_write(aml_async_writer_st *p_worker, buffer_item_st *buf_item, uint64_t system_ms)
 {   if ((p_worker == NULL) || (buf_item == NULL)) {
         return;
     }
-    struct ring_buffer *rbuffer = &buf_item->ring_buffer;
+    ring_buffer_t *rbuffer = &buf_item->stRingBuffer;
     int bufsize = TEMP_BUFFER_SIZE;
     int handle_bytes = 0;
     int write_bytes = 0;
@@ -260,37 +281,37 @@ static void handle_buffer_write(struct aml_async_writer *p_worker, struct buffer
 
     FILE *fp = fopen(buf_item->filename, "a+");
     if (fp == NULL) {
-        if (buf_item->file_error_count == 0) {
-            buf_item->file_error_ms = system_ms;
+        if (buf_item->s32WriteErrCount == 0) {
+            buf_item->u64WriteErrMs = system_ms;
         }
-        buf_item->file_error_count++;
+        buf_item->s32WriteErrCount++;
 
-        if ((buf_item->file_error_count < 5) || (buf_item->file_error_count % 30 == 0)) {
+        if ((buf_item->s32WriteErrCount < 5) || (buf_item->s32WriteErrCount % 30 == 0)) {
             // reduce error message
             ALOGE("%s : open file %s failed ! (%s)", __func__, buf_item->filename, strerror(errno));
         }
         return;
     } else {
-        if (buf_item->file_error_count != 0) {
+        if (buf_item->s32WriteErrCount != 0) {
             ring_buffer_clear(rbuffer);
-            buf_item->file_error_count = 0;
-            buf_item->file_error_ms = 0;
+            buf_item->s32WriteErrCount = 0;
+            buf_item->u64WriteErrMs = 0;
             ALOGI("%s : open file %s success, clear the stale data", __func__, buf_item->filename);
             fclose(fp);
             return;
         }
     }
-    buf_item->last_update_ms = system_ms;
+    buf_item->u64LastUpdateMs = system_ms;
 
-    if (p_worker->temp_bufptr == NULL) {
+    if (p_worker->pu8TempBuf == NULL) {
         uint8_t *ptr = (uint8_t *)aml_audio_calloc(1, bufsize);
         if (ptr == NULL) {
             ALOGE("%s : can not malloc %d bytes ! (%s)", __func__, bufsize, strerror(errno));
             fclose(fp);
             return;
         }
-        p_worker->temp_bufptr = ptr;
-        p_worker->temp_buflen = bufsize;
+        p_worker->pu8TempBuf = ptr;
+        p_worker->s32TempBufLen = bufsize;
         ALOGI("%s : malloc temp_buf ok", __func__);
     }
 
@@ -299,21 +320,21 @@ static void handle_buffer_write(struct aml_async_writer *p_worker, struct buffer
         if (handle_bytes > bufsize) {
             handle_bytes = bufsize;
         }
-        if (ring_buffer_read(rbuffer, p_worker->temp_bufptr, handle_bytes) != handle_bytes) {
-            ALOGE("%s : %s ring_buffer_read error!", __func__, buf_item->filename);
+        if (ring_buffer_read(rbuffer, p_worker->pu8TempBuf, handle_bytes) != handle_bytes) {
+            ALOGE("%s : %s stRingBuffer_read error!", __func__, buf_item->filename);
             break;
         }
 
-        if (buf_item->is_compress) {
-            if (buf_item->compress_buf == NULL) {
+        if (buf_item->bCompress) {
+            if (buf_item->pu8CompressBuf == NULL) {
                 compress_init(buf_item);
             }
-            if (buf_item->compress_buf) {
-                compress_and_save(buf_item, p_worker->temp_bufptr, handle_bytes, 0, fp);
+            if (buf_item->pu8CompressBuf) {
+                compress_and_save(buf_item, p_worker->pu8TempBuf, handle_bytes, 0, fp);
                 ALOGV("%s : %s compress ....", __func__, buf_item->filename);
             }
         } else {
-            fwrite(p_worker->temp_bufptr, 1, handle_bytes, fp);
+            fwrite(p_worker->pu8TempBuf, 1, handle_bytes, fp);
         }
 
         write_bytes += handle_bytes;
@@ -323,7 +344,7 @@ static void handle_buffer_write(struct aml_async_writer *p_worker, struct buffer
 }
 
 
-static void aml_async_handle_remove_files(struct aml_async_writer *p_worker)
+static void aml_async_remove_buffer_item(aml_async_writer_st *p_worker)
 {
     int buf_num = 0;
     struct listnode *node = NULL, *tmp_node = NULL;
@@ -332,34 +353,34 @@ static void aml_async_handle_remove_files(struct aml_async_writer *p_worker)
         return;
     }
 
-    pthread_mutex_lock(&p_worker->writer_mutex);
+    pthread_mutex_lock(&p_worker->buffer_mutex);
 
     list_for_each_safe(node, tmp_node, &p_worker->buffer_list_head) {
-        struct buffer_item *buf_item = (struct buffer_item *)node;
-        if (buf_item->is_writing) {
-            buf_item->to_remove = 0;
+        buffer_item_st *buf_item = (buffer_item_st *)node;
+        if (buf_item->bWriting) {
+            buf_item->bRemove = false;
         }
-        if (buf_item->to_remove) {
+        if (buf_item->bRemove) {
             ALOGI("remove file resource %s", buf_item->filename);
             list_remove(node);
-            ring_buffer_release(&buf_item->ring_buffer);
+            ring_buffer_release(&buf_item->stRingBuffer);
             aml_audio_free(buf_item);
         }
         buf_num++;
     }
 
     // free temp_buf
-    if ((buf_num == 0) && p_worker->temp_bufptr) {
-        aml_audio_free(p_worker->temp_bufptr);
-        p_worker->temp_bufptr = NULL;
+    if ((buf_num == 0) && p_worker->pu8TempBuf) {
+        aml_audio_free(p_worker->pu8TempBuf);
+        p_worker->pu8TempBuf = NULL;
         ALOGI("%s : free temp_buf ok", __func__);
     }
 
-    pthread_mutex_unlock(&p_worker->writer_mutex);
+    pthread_mutex_unlock(&p_worker->buffer_mutex);
 }
 
 
-static int aml_async_buffer_is_inactive(struct buffer_item *buf_item, uint64_t curr_system_ms)
+static int aml_async_buffer_is_inactive(buffer_item_st *buf_item, uint64_t curr_system_ms)
 {
     int duration_ms = 0;
     if (buf_item == NULL) {
@@ -367,8 +388,8 @@ static int aml_async_buffer_is_inactive(struct buffer_item *buf_item, uint64_t c
     }
 
     // while file open error, don't remove/create buffer item frequently
-    if (buf_item->file_error_ms && (curr_system_ms > buf_item->file_error_ms)) {
-        duration_ms = curr_system_ms - buf_item->file_error_ms;
+    if (buf_item->u64WriteErrMs && (curr_system_ms > buf_item->u64WriteErrMs)) {
+        duration_ms = curr_system_ms - buf_item->u64WriteErrMs;
         if (duration_ms > BUFFER_EXPIRE_MS) {
             return 1;
         } else {
@@ -376,8 +397,8 @@ static int aml_async_buffer_is_inactive(struct buffer_item *buf_item, uint64_t c
         }
     }
 
-    if (curr_system_ms > buf_item->last_update_ms) {
-        duration_ms = curr_system_ms - buf_item->last_update_ms;
+    if (curr_system_ms > buf_item->u64LastUpdateMs) {
+        duration_ms = curr_system_ms - buf_item->u64LastUpdateMs;
         if (duration_ms > BUFFER_EXPIRE_MS) {
             return 1;
         }
@@ -388,7 +409,8 @@ static int aml_async_buffer_is_inactive(struct buffer_item *buf_item, uint64_t c
 
 static void *async_write_threadloop(void *data)
 {
-    struct aml_async_writer *p_worker = (struct aml_async_writer *)data;
+    int exit_check_count = 0;
+    aml_async_writer_st *p_worker = (aml_async_writer_st *)data;
 
     if (p_worker == NULL) {
         return NULL;
@@ -396,49 +418,73 @@ static void *async_write_threadloop(void *data)
     prctl(PR_SET_NAME, (unsigned long)"async_write_thread");
 
     while (1) {
-        uint64_t start_ms = aml_gettime()/1000;
+        uint64_t start_ms = _gettime()/1000;
         int delay_ms = 60;    // 60 ms
         int buf_num = 0;
         uint64_t cost_ms = 0;
         struct listnode *node = NULL;
+        struct listnode *tmp_node = NULL;
+        struct timespec sleep_ts = {0};
 
-        pthread_mutex_lock(&p_worker->writer_mutex);
+        pthread_mutex_lock(&p_worker->buffer_mutex);
         node = p_worker->buffer_list_head.next;
-        pthread_mutex_unlock(&p_worker->writer_mutex);
+        pthread_mutex_unlock(&p_worker->buffer_mutex);
 
         while (node != &p_worker->buffer_list_head) {
-            struct buffer_item *buf_item = (struct buffer_item *)node;
+            buffer_item_st *buf_item = (buffer_item_st *)node;
             handle_buffer_write(p_worker, buf_item, start_ms);
 
             if (aml_async_buffer_is_inactive(buf_item, start_ms)) {
-                buf_item->to_remove = 1;
-                if (buf_item->is_compress) {
+                buf_item->bRemove = 1;
+                if (buf_item->bCompress) {
                     compress_deinit(buf_item);
                 }
             }
             buf_num++;
 
-            pthread_mutex_lock(&p_worker->writer_mutex);
+            pthread_mutex_lock(&p_worker->buffer_mutex);
             node = node->next;
-            pthread_mutex_unlock(&p_worker->writer_mutex);
+            pthread_mutex_unlock(&p_worker->buffer_mutex);
         }
         ALOGV("%s buffer number %d", __func__, buf_num);
 
         // check if need to remove file resource
-        aml_async_handle_remove_files(p_worker);
+        aml_async_remove_buffer_item(p_worker);
+
+        if (p_worker->bRequestExit) {
+            list_for_each_safe(node, tmp_node, &p_worker->buffer_list_head) {
+                buffer_item_st *buf_item = (buffer_item_st *)node;
+                buf_item->bRemove = true;
+            }
+            aml_async_remove_buffer_item(p_worker);
+            if (buf_num <= 0) {
+                exit_check_count++;
+                if (exit_check_count >= 3) {
+                    p_worker->bHasExited = true;
+                    break;
+                }
+            } else {
+                exit_check_count = 0;
+            }
+            usleep(3 * 1000);
+            continue;
+        } else {
+            exit_check_count = 0;
+        }
 
         if (buf_num == 0) {
-            p_worker->is_standby = true;
+            p_worker->bStandby = true;
 
             ALOGI("%s enter standby", __func__);
             pthread_mutex_lock(&p_worker->wake_mutex);
+            /*coverity[dead_wait]*/
             pthread_cond_wait(&p_worker->wake_cond, &p_worker->wake_mutex);
             pthread_mutex_unlock(&p_worker->wake_mutex);
             ALOGI("%s leave standby", __func__);
         } else {
-            p_worker->is_standby = false;
+            p_worker->bStandby = false;
 
-            cost_ms = aml_gettime()/1000 - start_ms;
+            cost_ms = _gettime()/1000 - start_ms;
             if (cost_ms >= 30) {
                 ALOGI("%s use %"PRId64" ms", __func__, cost_ms);
                 delay_ms -= (cost_ms - 10);
@@ -446,9 +492,14 @@ static void *async_write_threadloop(void *data)
                     delay_ms = 10;
                 }
             }
-            aml_audio_sleep(delay_ms * 1000);
+            _ts_wait_time_us(&sleep_ts, delay_ms * 1000);
+            pthread_mutex_lock(&p_worker->wake_mutex);
+            /*coverity[dead_wait]*/
+            pthread_cond_timedwait(&p_worker->wake_cond, &p_worker->wake_mutex, &sleep_ts);
+            pthread_mutex_unlock(&p_worker->wake_mutex);
         }
     }
+    return NULL;
 }
 
 
@@ -457,9 +508,13 @@ int create_async_write_thread(void)
 {
     int ret = 0;
     int pcm_id = 0;
-    struct aml_async_writer *p_worker = &worker1;
+    aml_async_writer_st *p_worker = &worker1;
 
-    if (pthread_mutex_init (&p_worker->writer_mutex, NULL) != 0) {
+    if (p_worker->bInitialize) {
+        ALOGE("%s worker %p has been initialized !", __func__, p_worker);
+        return 0;
+    }
+    if (pthread_mutex_init (&p_worker->buffer_mutex, NULL) != 0) {
         ALOGE("%s  pthread_mutex_init fail, errno:%s", __func__, strerror(errno));
         return -1;
     }
@@ -473,83 +528,131 @@ int create_async_write_thread(void)
     }
 
     list_init(&p_worker->buffer_list_head);
-    p_worker->temp_bufptr = NULL;
-    p_worker->temp_buflen = 0;
-    p_worker->is_standby  = true;
+    p_worker->pu8TempBuf = NULL;
+    p_worker->s32TempBufLen = 0;
+    p_worker->bStandby  = true;
+    p_worker->bRequestExit = false;
+    p_worker->bHasExited = false;
 
-    ret = pthread_create(&p_worker->writer_threadID, NULL, &async_write_threadloop, p_worker);
+    ret = pthread_create(&p_worker->threadID, NULL, &async_write_threadloop, p_worker);
     if (ret != 0) {
         ALOGE("%s: Create output thread failed, errno:%s", __func__, strerror(errno));
         return ret;
     }
+    p_worker->bInitialize = true;
 
     ALOGI("%s successfully !", __func__);
     return ret;
 }
 
 
-static struct buffer_item* aml_async_get_buffer_item(const char *filename)
+int destroy_async_write_thread(void)
+{
+    int retry_count = 80;
+    aml_async_writer_st *p_worker = &worker1;
+
+    if (!p_worker->bInitialize) {
+        ALOGE("%s worker %p is not initialized !", __func__, p_worker);
+        return 0;
+    }
+
+    p_worker->bRequestExit = true;
+    while (retry_count > 0) {
+        pthread_mutex_lock(&p_worker->wake_mutex);
+        pthread_cond_signal(&p_worker->wake_cond);
+        pthread_mutex_unlock(&p_worker->wake_mutex);
+        usleep(5 * 1000);
+        if (p_worker->bHasExited) {
+            break;
+        }
+        retry_count--;
+    }
+    if (retry_count <= 0) {
+        ALOGE("%s failed", __func__);
+        return -1;
+    }
+    pthread_join(p_worker->threadID, NULL);
+
+    pthread_mutex_destroy(&p_worker->buffer_mutex);
+    pthread_mutex_destroy (&p_worker->wake_mutex);
+    pthread_cond_destroy(&p_worker->wake_cond);
+    p_worker->bStandby  = true;
+    p_worker->bInitialize = false;
+
+    ALOGI("%s ok !", __func__);
+    return 0;
+}
+
+
+static buffer_item_st* aml_async_get_buffer_item(const char *filename)
 {
     int ret = 0;
     int buffer_size = 0;
-    struct aml_async_writer *p_worker = &worker1;
+    aml_async_writer_st *p_worker = &worker1;
     struct listnode *node = NULL, *tmp_node = NULL;
 
     if ((filename == NULL) || (strlen(filename) >= FILENAME_MAX_LEN) || (strlen(filename) == 0)) {
         ALOGV("%s invalid filename(\'%s\')", __FUNCTION__, filename);
         return NULL;
     }
-    if (p_worker->is_standby) {
+    if (p_worker->bRequestExit || p_worker->bHasExited || !p_worker->bInitialize) {
+        ALOGE("%s : filename %s, worker %p, bRequestExit %d, bHasExited %d, bInitialize %d",
+            __func__, filename, p_worker, p_worker->bRequestExit, p_worker->bHasExited, p_worker->bInitialize);
+        return NULL;
+    }
+    if (p_worker->bStandby) {
+        pthread_mutex_lock(&p_worker->wake_mutex);
         pthread_cond_signal(&p_worker->wake_cond);
+        pthread_mutex_unlock(&p_worker->wake_mutex);
     }
 
-    pthread_mutex_lock(&p_worker->writer_mutex);
+    pthread_mutex_lock(&p_worker->buffer_mutex);
     list_for_each_safe(node, tmp_node, &p_worker->buffer_list_head) {
-        struct buffer_item *buf_item = (struct buffer_item *)node;
+        buffer_item_st *buf_item = (buffer_item_st *)node;
 
         if (strcmp(buf_item->filename, filename) == 0) {
-            buf_item->is_writing = true;
-            pthread_mutex_unlock(&p_worker->writer_mutex);
+            buf_item->bWriting = true;
+            pthread_mutex_unlock(&p_worker->buffer_mutex);
             return buf_item;
         }
     }
-    pthread_mutex_unlock(&p_worker->writer_mutex);
+    pthread_mutex_unlock(&p_worker->buffer_mutex);
 
     // insert a buffer item and initialized it
-    struct buffer_item *new_buf_item = (struct buffer_item *)aml_audio_calloc(1, sizeof(struct buffer_item));
+    buffer_item_st *new_buf_item = (buffer_item_st *)aml_audio_calloc(1, sizeof(buffer_item_st));
     if (new_buf_item == NULL) {
         ALOGE("%s  calloc a new buffer item failed !", __FUNCTION__);
         return NULL;
     }
     strcpy(new_buf_item->filename, filename);
-    new_buf_item->to_remove = 0;
     buffer_size = BUFFER_DEFAULT_SIZE;
 
-    ret = ring_buffer_alloc(&new_buf_item->ring_buffer, buffer_size);
+    ret = ring_buffer_alloc(&new_buf_item->stRingBuffer, buffer_size);
     if (ret < 0) {
-        ALOGE("%s  init audio ringbuffer failed (buffer_size = %d)!", __FUNCTION__, buffer_size);
+        ALOGE("%s  init ringbuffer failed (buffer_size = %d)!", __FUNCTION__, buffer_size);
         aml_audio_free(new_buf_item);
         return NULL;
     }
 
     list_init(&new_buf_item->list_node);
-    pthread_mutex_lock(&p_worker->writer_mutex);
+    pthread_mutex_lock(&p_worker->buffer_mutex);
     list_add_tail(&p_worker->buffer_list_head, &new_buf_item->list_node);
-    new_buf_item->is_writing = true;
-    pthread_mutex_unlock(&p_worker->writer_mutex);
+    new_buf_item->bWriting = true;
+    new_buf_item->bRemove = false;
+    pthread_mutex_unlock(&p_worker->buffer_mutex);
 
     ALOGI("%s : %s successfully", __func__, new_buf_item->filename);
     return new_buf_item;
 }
 
 
-static void _aml_async_dump_data(const void *buffer, int bytes, struct buffer_item* buf_item)
+static void _aml_async_dump_data(const void *buffer, int bytes, buffer_item_st* buf_item)
 {
     if ((buffer == NULL) || (bytes == 0) || (buf_item == NULL)) {
         return;
     }
-    if (buf_item->file_error_count) {
-        int error_count = buf_item->file_error_count;
+    if (buf_item->s32WriteErrCount) {
+        int error_count = buf_item->s32WriteErrCount;
         if ((error_count < 5) || (error_count % 30 == 0)) {
             // reduce error message
             ALOGE("%s(), %s open failed ! drop %d bytes!", __func__, buf_item->filename, bytes);
@@ -557,7 +660,7 @@ static void _aml_async_dump_data(const void *buffer, int bytes, struct buffer_it
         return;
     }
 
-    ring_buffer_t* ringbuf = &buf_item->ring_buffer;
+    ring_buffer_t* ringbuf = &buf_item->stRingBuffer;
     int avail_bytes = get_buffer_write_space(ringbuf);
     int buffer_size = ringbuf->size;
 
@@ -573,7 +676,7 @@ static void _aml_async_dump_data(const void *buffer, int bytes, struct buffer_it
             increase_size = ALIGN((bytes - avail_bytes), BUFFER_DEFAULT_SIZE);
         }
 
-        int new_buffer_size = buffer_size + increase_size;
+        int new_buffer_size = CLIPINT((int64_t)buffer_size + (int64_t)increase_size);
         if (new_buffer_size > BUFFER_MAX_SIZE) {
             new_buffer_size = BUFFER_MAX_SIZE;
         }
@@ -595,8 +698,8 @@ static void _aml_async_dump_data(const void *buffer, int bytes, struct buffer_it
 
             aml_spdif_decoder_get_iec61937_info(buffer, bytes, &package_size, &payload_size, &format);
             if ((format == AUDIO_FORMAT_MAT) || (format == AUDIO_FORMAT_E_AC3)) {
-                buf_item->is_compress = true;
-                buf_item->compress_level = Z_BEST_SPEED;
+                buf_item->bCompress = true;
+                buf_item->s32CompressLevel = Z_BEST_SPEED;
             }
         }
     }
@@ -615,11 +718,11 @@ static void _aml_async_dump_data(const void *buffer, int bytes, struct buffer_it
 
 void aml_async_dump_data(const void *data_ptr, int data_size, const char *file_name)
 {
-    struct buffer_item* buf_item = aml_async_get_buffer_item(file_name);
+    buffer_item_st* buf_item = aml_async_get_buffer_item(file_name);
 
     if (buf_item != NULL) {
         _aml_async_dump_data(data_ptr, data_size, buf_item);
-        buf_item->is_writing = false;
+        buf_item->bWriting = false;
     }
 }
 
@@ -627,25 +730,25 @@ void aml_async_dump_data(const void *data_ptr, int data_size, const char *file_n
 
 void aml_async_remove_file(const char *file_name)
 {
-    struct aml_async_writer *p_worker = &worker1;
+    aml_async_writer_st *p_worker = &worker1;
     if (file_name == NULL) {
         return;
     }
 
-    pthread_mutex_lock(&p_worker->writer_mutex);
+    pthread_mutex_lock(&p_worker->buffer_mutex);
 
     struct listnode *node = NULL, *tmp_node = NULL;
     list_for_each_safe(node, tmp_node, &p_worker->buffer_list_head) {
-        struct buffer_item *buf_item = (struct buffer_item *)node;
+        buffer_item_st *buf_item = (buffer_item_st *)node;
 
         if (strcmp(buf_item->filename, file_name) == 0) {
-            buf_item->to_remove = 1;
-            pthread_mutex_unlock(&p_worker->writer_mutex);
+            buf_item->bRemove = true;
+            pthread_mutex_unlock(&p_worker->buffer_mutex);
             return;
         }
     }
 
-    pthread_mutex_unlock(&p_worker->writer_mutex);
+    pthread_mutex_unlock(&p_worker->buffer_mutex);
 }
 
 
@@ -653,7 +756,7 @@ void aml_async_remove_file(const char *file_name)
  *  Just dump one channel PCM, to reduce file writing sizes.
 */
 static int _aml_async_dump_1ch_16bit_pcm(const void *data_ptr, int data_size, audio_format_t format,
-                                         int channel_num, int channel_select, struct buffer_item* buf_item)
+                                         int channel_num, int channel_select, buffer_item_st* buf_item)
 {
     int i = 0;
     short conv_buf[256];
@@ -736,11 +839,11 @@ static int _aml_async_dump_1ch_16bit_pcm(const void *data_ptr, int data_size, au
 void aml_async_dump_1ch_16bit_pcm(const void *data_ptr, int data_size, audio_format_t format,
                               int channel_num, int channel_select, const char *file_name)
 {
-    struct buffer_item* buf_item = aml_async_get_buffer_item(file_name);
+    buffer_item_st* buf_item = aml_async_get_buffer_item(file_name);
 
     if (buf_item != NULL) {
         _aml_async_dump_1ch_16bit_pcm(data_ptr, data_size, format, channel_num, channel_select, buf_item);
-        buf_item->is_writing = false;
+        buf_item->bWriting = false;
     }
 }
 

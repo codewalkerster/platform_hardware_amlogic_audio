@@ -17,6 +17,7 @@
 #ifndef _AML_MPEGH_DEC_API_H_
 #define _AML_MPEGH_DEC_API_H_
 
+aml_dec_func_t *get_mpegh_dec_func_handle(void);
 extern aml_dec_func_t aml_mpegh_func;
 
 #endif

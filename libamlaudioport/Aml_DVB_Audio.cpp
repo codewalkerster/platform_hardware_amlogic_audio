@@ -82,7 +82,7 @@ int dvb_audio_get_latencyms(int demux_id) {
     int latencyms = 0;
     int ret = 0;
     char temp_buf[64] = {0};
-    sprintf (temp_buf, "hal_param_dtv_demux_id=%d", demux_id);
+    sprintf (temp_buf, "hal_param_dtv_dmx_id=%d", demux_id);
     aml_audioport->setParameters(String8(temp_buf));
     String8 mString = aml_audioport->getParameters(String8("hal_param_dtv_latencyms"));
     if (!mString.isEmpty()) {
@@ -178,7 +178,7 @@ int dvb_audio_get_cmd_close_status(int demux_id) {
     int hal_param_dtv_cmd_close = 0;
     int ret = 0;
     char temp_buf[64] = {0};
-    sprintf (temp_buf, "hal_param_dtv_demux_id=%d", demux_id);
+    sprintf (temp_buf, "hal_param_dtv_dmx_id=%d", demux_id);
     aml_audioport->setParameters(String8(temp_buf));
 
     String8 mString = aml_audioport->getParameters(String8("hal_param_dtv_cmd_close"));

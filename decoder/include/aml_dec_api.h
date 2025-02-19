@@ -22,6 +22,7 @@
 #include "aml_ringbuffer.h"
 #include "aml_volume_utils.h"
 #include "aml_malloc_debug.h"
+#include "aml_dump_debug.h"
 
 #define ACODEC_FMT_NULL -1
 #define ACODEC_FMT_MPEG 0
@@ -84,8 +85,19 @@ typedef enum {
 } aml_dec_info_type_t;
 
 typedef enum {
+    //dca decoder only output pcm data for all kinds of types input data(dd/ddp).
     AML_DEC_CONTROL_DECODING            = 0,
+    /*
+    * if ddp input, dcv output pcm data and convert dd data.
+    * if dd input, dcv output pcm data and spdif dd (bypass dd) data.
+    * this convert control is default config in AudioHal dcv decoder.
+    */
     AML_DEC_CONTROL_CONVERT             = 1,
+    /*
+    * dcv decoder not open covert feature. Output pcm and spdif data.
+    * if ddp input, dcv output pcm data and spidf ddp data.
+    * if dd input, dcv output pcm data and spdif dd data.
+    */
     AML_DEC_CONTROL_RAW                 = 2,
 } aml_dec_control_type_t;
 
@@ -159,6 +171,9 @@ typedef struct aml_dec {
     int output_format;
     void* sample_convert_buf;
     size_t convert_buf_size;
+    void *decFunc;
+    int dolby_drc_mode;
+    int dolby_lib_type;
 } aml_dec_t;
 
 typedef struct aml_dcv_config {
@@ -198,11 +213,12 @@ typedef struct aml_dtsx_config {
 typedef struct aml_pcm_config {
     audio_format_t pcm_format;
     int samplerate;
-    int channel;
+    int input_channel;
     int lpcm_channel;
     int max_out_channels;
     int width;
     unsigned int lpcm_header;
+    int output_channel;
 } aml_pcm_config_t;
 
 
@@ -258,9 +274,14 @@ typedef struct aml_dec_config {
     int  mixer_level;   /* AML_DEC_CONFIG_MIXER_LEVEL */
     unsigned char ad_fade;
     unsigned char ad_pan;
+	int media_presentation_id;
+	int media_first_lang;
+    int media_second_lang;
 	unsigned char ad_placement;
     int dts_decode_enable;
     int dts_lib_type;   // #eDTSLibType_t
+    int dolby_lib_type;
+    int output_format;
 } aml_dec_config_t;
 
 
@@ -280,7 +301,6 @@ typedef struct _audio_info {
     unsigned int decode_num; //decode success frames
     unsigned int dual_mono_supported;
 } AudioInfo;
-
 
 typedef int (*F_Init)(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config);
 typedef int (*F_Release)(aml_dec_t *aml_dec);

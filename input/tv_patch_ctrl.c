@@ -54,6 +54,7 @@
 #include "device_patch_mgr.h"
 #include "component_picture_mode.h"
 #include "audio_data_process.h"
+#include "dolby_lib_api.h"
 
 #define INVALID_TYPE                -1
 #define MINUS_3_DB_IN_FLOAT M_SQRT1_2 // -3dB = 0.70710678
@@ -131,7 +132,7 @@ int input_stream_channels_adjust(struct audio_stream_in *stream, void* buffer, s
 
     ret = aml_alsa_input_read(stream, in->input_tmp_buffer, read_bytes);
     if (!ret && get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
-        aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/tv_read.raw", in->input_tmp_buffer, read_bytes);
+        aml_dump_audio_bitstreams("/data/vendor/audiohal/tv_read.raw", in->input_tmp_buffer, read_bytes);
     }
     if (in->config.format == PCM_FORMAT_S16_LE) {
         if (downmix) {
@@ -387,6 +388,7 @@ bool check_tv_stream_signal(struct audio_stream_in *stream)
                 patch->need_do_avsync = true;
             patch->input_signal_stable = false;
             adev->mute_start = true;
+            //tv_set_ease(aml_out, EaseIn);
             ALOGV("%s: audio is unstable, adev->mute_start %d patch->need_do_avsync %d", __func__, adev->mute_start, patch->need_do_avsync);
         }
         return false;

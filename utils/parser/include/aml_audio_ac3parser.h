@@ -17,6 +17,8 @@
 #ifndef _AML_AUDIO_AC3PARSER_H_
 #define _AML_AUDIO_AC3PARSER_H_
 
+#include "aml_parser_common.h"
+
 struct ac3_parser_info {
     int frame_size;
     int channel_num;
@@ -35,5 +37,6 @@ int aml_ac3_parser_process(void *parser_handle, const void *buffer, int32_t numB
 int aml_ac3_parser_reset(void *parser_handle);
 bool is_ddp_contain_six_block(const void *buffer, int32_t nBytes);
 
+aml_parser_func_t *get_ac3_parser_func_handle(void);
 
 #endif

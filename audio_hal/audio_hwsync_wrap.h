@@ -36,10 +36,14 @@ int aml_hwsync_wrap_set_start_pts64(audio_hwsync_t *p_hwsync,uint64_t pts);
 int aml_hwsync_wrap_get_pts(audio_hwsync_t *p_hwsync, uint64_t *pts);
 int aml_hwsync_wrap_reset_pcrscr(audio_hwsync_t *p_hwsync, uint64_t pts);
 int aml_hwsync_wrap_force_reset_pcrscr(audio_hwsync_t *p_hwsync, uint64_t pts);
+int aml_hwsync_wrap_reset_pcrscr_speed(audio_hwsync_t *p_hwsync, uint64_t pts, float speed, bool forceUpdate);
 bool aml_hwsync_wrap_get_id(void *mediasync, int32_t* id);
 bool aml_hwsync_wrap_set_id(audio_hwsync_t *p_hwsync, uint32_t id);
 bool aml_hwsync_wrap_set_static_id(audio_hwsync_t *p_hwsync, uint32_t id);
 bool aml_hwsync_wrap_release(audio_hwsync_t *p_hwsync);
+void aml_hwsync_wrap_set_playback_rate(audio_hwsync_t *p_hwsync, float rate);
+void aml_hwsync_wrap_get_playback_rate(audio_hwsync_t *p_hwsync, float *rate);
+
 
 void aml_hwsync_wrap_wait_video_start(audio_hwsync_t *p_hwsync, uint32_t wait_count);
 void aml_hwsync_wrap_wait_video_drop(audio_hwsync_t *p_hwsync, uint64_t cur_pts, uint32_t wait_count);

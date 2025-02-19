@@ -82,10 +82,7 @@ include $(BUILD_PREBUILT)
         ../vendor_process/aml_ai_audio.c \
         dolby_lib_api.c \
         amlAudioMixer.c \
-        hw_avsync.c \
-        hw_avsync_callbacks.c \
         audio_port.c \
-        sub_mixing_factory.c \
         aml_audio_timer.c \
         audio_virtual_buf.c \
         aml_audio_ease.c \
@@ -109,9 +106,11 @@ include $(BUILD_PREBUILT)
         aml_config_data.c \
         aml_audio_scaletempo.c \
         aml_audio_output.c \
-        aml_async_write.c \
         audio_dummy_streamout.c \
         audio_ms12_continuous_standby.c \
+        aml_stream_manager.c \
+        aml_parser_manager.c \
+        aml_volume_shaper.c
 
     LOCAL_C_INCLUDES += \
         system/media/audio_utils/include \
@@ -197,14 +196,10 @@ ifneq ($(BOARD_DISABLE_DVB_AUDIO), true)
                            ../input/dtv_patch_hal_avsync.c \
 
         LOCAL_C_INCLUDES += \
-                $(LOCAL_PATH)/../../LibAudio/amadec/include \
-                vendor/amlogic/common/prebuilt/dvb/include/am_adp \
                 hardware/amlogic/audio/dtv_audio_utils/sync \
                 hardware/amlogic/audio/dtv_audio_utils/audio_read_api \
 
         LOCAL_SHARED_LIBRARIES += \
-                libamadec \
-                libam_adp \
                 libdvbaudioutils
 endif
 

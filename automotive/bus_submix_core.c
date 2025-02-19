@@ -21,11 +21,11 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include "audio_hw.h"
 #include "bus_submix_core.h"
 #include "amlAudioMixer.h"
 #include "audio_port.h"
 #include "audio_hw_utils.h"
-#include "audio_hw.h"
 #include "aml_channel_index.h"
 
 input_port * create_mixer_port(BusSubMixCore *mixCore,
@@ -113,8 +113,8 @@ BusSubMixCore *get_bus_mix_core(struct aml_audio_device *adev)
         return adev->bus_mixer_core;
     }
 
-    if (!adev->sm) {
-        initHalSubMixing(&adev->sm, MIXER_LPCM, adev, false);
+    if (adev->useAudioMixer && !adev->mixerData) {
+        initHalSubMixing(MIXER_LPCM, adev, false);
     }
 
     BusSubMixCore *mixCore = aml_audio_calloc(1, sizeof(BusSubMixCore));
@@ -122,7 +122,7 @@ BusSubMixCore *get_bus_mix_core(struct aml_audio_device *adev)
         AM_LOGE("No memory, return!");
         return NULL;
     }
-    mixCore->audio_mixer = (struct amlAudioMixer*)adev->sm->mixerData;
+    mixCore->audio_mixer = (struct amlAudioMixer*)adev->mixerData;
     adev->bus_mixer_core = mixCore;
     return mixCore;
 }
@@ -133,8 +133,8 @@ void release_bus_mix_core(struct aml_audio_device *adev)
         return;
     }
 
-    if (adev->sm) {
-        deleteHalSubMixing(adev->sm);
+    if (adev->mixerData) {
+        deleteHalSubMixing(adev);
     }
 
     aml_audio_free(adev->bus_mixer_core);

@@ -39,19 +39,12 @@ void (*FuncDolbyMS12Release)(void *);
 
 /*this api will use params to config graph info*/
 int (*FuncDolbyMS12InitAllParams)(void *, int argc, char **pp_argv);
-/* main Decoder API */
-int (*FuncDolbyMs12DecoderOpen)(void *, int argc, char **pp_argv);
-int (*FuncDolbyMs12DecoderClose)(void *);
-int (*FuncDolbyMs12DecoderProcess)(void *);
-int (*FuncDolbyMS12InputMain)(void *, const void *, size_t, int, int, int);
-/* main Decoder API End*/
 
 /* ms12 Encoder API */
 int (*FuncDolbyMs12EncoderOpen)(void *, int argc, char **pp_argv);
 int (*FuncDolbyMs12EncoderClose)(void *);
 /* ms12 Encoder API End*/
 
-int (*FuncDolbyMS12InputAssociate)(void *, const void *, size_t, int, int, int);
 int (*FuncDolbyMS12InputSystem)(void *, const void *, size_t, int, int, int);
 int (*FuncDolbyMS12InputDeepBuffer)(void *, const void *, size_t, int, int, int);
 int (*FuncDolbyMS12InputApp)(void *, const void *, size_t, int, int, int);
@@ -63,26 +56,14 @@ int (*FuncDolbyMS12RegisterOutputCallback)(output_callback , void *);
 int (*FuncDolbyMS12Output)(void *, const void *, size_t);
 #endif
 
-int (*FuncDolbyMS12RegisterSyncCallback)(void *, ms12sync_callback , void *);
-int (*FuncDolbyMS12RegisterTempoCallback)(void *, ms12tempo_callback , void *);
-
-
 int (*FuncDolbyMS12UpdateRuntimeParams)(void *, int , char **);
 int (*FuncDolbyMS12UpdateRuntimeParamsNoLock)(void *, int , char **);
 int (*FuncDolbyMS12SchedulerRun)(void *);
 void (*FuncDolbyMS12SetQuitFlag)(int);
-void (*FuncDolbyMS12FlushInputBuffer)(void);
-void (*FuncDolbyMS12FlushMainInputBuffer)(void);
 void (*FuncDolbyMS12FlushAppInputBuffer)(void);
-void (*FuncDolbyMS12SetMainDummy)(int, int);
-unsigned long long (*FuncDolbyMS12GetNBytesConsumed)(void *, int, int);
-unsigned long long (*FuncDolbyMS12GetNFramesPCMOutput)(void *, int, int);
 unsigned long long (*FuncDolbyMS12GetContinuousNFramesPCMOutput)(void *, int);
-void (*FuncDolbyMS12GetPCMOutputSize)(unsigned long long *, unsigned long long *);
 void (*FuncDolbyMS12GetBitstreamOutputSize)(unsigned long long *, unsigned long long *);
 
-int (*FuncDolbyMS12GetMainBufferAvail)(int *);
-int (*FuncDolbyMS12GetAssociateBufferAvail)(void);
 int (*FuncDolbyMS12GetSystemBufferAvail)(int *);
 int (*FuncDolbyMS12GetDeepBufferAvailFrames)(int *);
 
@@ -97,9 +78,6 @@ unsigned long long (*FuncDolbyMS12GetNBytesConsumedSysSound)(void);
 unsigned long long (*FuncDolbyMS12GetFramesConsumedDeepBufferAudio)(void);
 int (*FuncDolbyMS12GetTotalNFramesDelay)(void *);
 int (*FuncDumpDolbyMS12Info)(int);
-int (*FuncDolbyMS12HWSyncInit)(void);
-int (*FuncDolbyMS12HWSyncRelease)(void);
-int (*FuncDolbyMS12HWSyncCheckinPTS)(int offset, int apts);
 char * (*FunDolbMS12GetVersion)(void);
 
 /* MAT Encoder API Begin */
@@ -109,8 +87,18 @@ int (*FuncDolbyMS12MATEncoderProcess)(void *, const unsigned char *, int, const 
 int (*FuncDolbyMS12MATEncoderConfig)(void *, mat_enc_config_type_t, mat_enc_config_t *);
 /* MAT Encoder API End */
 
-int (*FuncDolbyMS12RegisterScaletempoCallback)(scaletempo_callback , void *);
-
+int (*FuncMS12DeocderOpen)(void *, int *, void *);
+int (*FuncMS12DeocderClose)(void *, int);
+int (*FuncMS12DecoderProcess)(void *, int);
+int (*FuncMS12DeocderPause)(void *, int);
+int (*FuncMS12DeocderResume)(void *, int);
+int (*FuncMS12DeocderFlush)(void *, int);
+int (*FuncMS12DecoderMainWrite)(void *, int , void *, int , void *);
+int (*FuncMS12DecoderAssociateWrite)(void *, int , void *, int , void *);
+int (*FuncMS12DecoderSetparameter)(void *, int , int , void *, int);
+int (*FuncMS12DecoderGetparameter)(void *, int, int, void *, int);
+int (*FuncMS12DecoderRegisterCallback)(void *, int , int, void *, void *);
+int (*FuncMS12DecoderUnregisterCallback)(void *, int, int);
 
 DolbyMS12::DolbyMS12() :
     mDolbyMS12LibHandle(NULL)
@@ -164,36 +152,6 @@ int DolbyMS12::GetLibHandle(char *dolby_ms12_path)
         goto ERROR;
     }
 
-    FuncDolbyMs12DecoderOpen = (int (*)(void *, int argc, char **pp_argv)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_open");
-    if (!FuncDolbyMs12DecoderOpen) {
-        ALOGE("%s, dlsym ms12_decoder_open fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMs12DecoderClose = (int (*)(void *)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_close");
-    if (!FuncDolbyMs12DecoderClose) {
-        ALOGE("%s, dlsym ms12_decoder_close fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMs12DecoderProcess = (int (*)(void *)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_process");
-    if (!FuncDolbyMs12DecoderProcess) {
-        ALOGE("%s, dlsym ms12_decoder_process fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMS12InputMain = (int (*)(void *, const void *, size_t, int, int, int)) dlsym(mDolbyMS12LibHandle, "ms12_input_main");
-    if (!FuncDolbyMS12InputMain) {
-        ALOGE("%s, dlsym ms12_input_main fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMS12InputAssociate = (int (*)(void *, const void *, size_t, int, int, int)) dlsym(mDolbyMS12LibHandle, "ms12_input_associate");
-    if (!FuncDolbyMS12InputAssociate) {
-        ALOGE("%s, dlsym ms12_input_associate fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
     FuncDolbyMS12InputSystem = (int (*)(void *, const void *, size_t, int, int, int)) dlsym(mDolbyMS12LibHandle, "ms12_input_system");
     if (!FuncDolbyMS12InputSystem) {
         ALOGE("%s, dlsym ms12_input_system fail\n", __FUNCTION__);
@@ -237,17 +195,6 @@ int DolbyMS12::GetLibHandle(char *dolby_ms12_path)
     }
 #endif
 
-    FuncDolbyMS12RegisterSyncCallback = (int (*)(void *, ms12sync_callback , void *)) dlsym(mDolbyMS12LibHandle, "ms12_register_sync_callback");
-    if (!FuncDolbyMS12RegisterSyncCallback) {
-        ALOGE("%s, dlsym ms12_output_register_sync_callback fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMS12RegisterTempoCallback = (int (*)(void *, ms12tempo_callback , void *)) dlsym(mDolbyMS12LibHandle, "ms12_register_tempo_callback");
-    if (!FuncDolbyMS12RegisterTempoCallback) {
-        ALOGE("%s, dlsym ms12_register_tempo_callback fail\n", __FUNCTION__);
-    }
-
     FuncDolbyMS12UpdateRuntimeParams = (int (*)(void *, int , char **))  dlsym(mDolbyMS12LibHandle, "ms12_update_runtime_params");
     if (!FuncDolbyMS12UpdateRuntimeParams) {
         ALOGE("%s, dlsym ms12_update_runtime_params fail\n", __FUNCTION__);
@@ -272,54 +219,15 @@ int DolbyMS12::GetLibHandle(char *dolby_ms12_path)
         goto ERROR;
     }
 
-    FuncDolbyMS12FlushInputBuffer = (void (*)(void))  dlsym(mDolbyMS12LibHandle, "ms12_flush_input_buffer");
-    if (!FuncDolbyMS12FlushInputBuffer) {
-        ALOGE("%s, dlsym ms12_flush_input_buffer fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-    FuncDolbyMS12FlushMainInputBuffer = (void (*)(void))  dlsym(mDolbyMS12LibHandle, "ms12_flush_main_input_buffer");
-    if (!FuncDolbyMS12FlushInputBuffer) {
-        ALOGE("%s, dlsym ms12_flush_main_input_buffer fail\n", __FUNCTION__);
-        goto ERROR;
-    }
     FuncDolbyMS12FlushAppInputBuffer = (void (*)(void))  dlsym(mDolbyMS12LibHandle, "ms12_flush_app_input_buffer");
     if (!FuncDolbyMS12FlushAppInputBuffer) {
         ALOGE("%s, dlsym FuncDolbyMS12FlushAppInputBuffer fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-    FuncDolbyMS12SetMainDummy = (void (*)(int, int))  dlsym(mDolbyMS12LibHandle, "ms12_set_main_dummy");
-    if (!FuncDolbyMS12SetMainDummy) {
-        ALOGE("%s, dlsym ms12_set_main_dummy fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMS12GetNBytesConsumed = (unsigned long long (*)(void *, int, int))  dlsym(mDolbyMS12LibHandle, "get_decoder_n_bytes_consumed");
-    if (!FuncDolbyMS12GetNBytesConsumed) {
-        ALOGE("%s, dlsym get_decoder_n_bytes_consumed fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMS12GetPCMOutputSize = (void (*)(unsigned long long *, unsigned long long *))  dlsym(mDolbyMS12LibHandle, "get_pcm_output_size");
-    if (!FuncDolbyMS12GetPCMOutputSize) {
-        ALOGE("%s, dlsym get_pcm_output_size fail\n", __FUNCTION__);
         goto ERROR;
     }
 
     FuncDolbyMS12GetBitstreamOutputSize = (void (*)(unsigned long long *, unsigned long long *))  dlsym(mDolbyMS12LibHandle, "get_bitstream_output_size");
     if (!FuncDolbyMS12GetBitstreamOutputSize) {
         ALOGE("%s, dlsym get_bitstream_output_size fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMS12GetMainBufferAvail = (int (*)(int *))  dlsym(mDolbyMS12LibHandle, "get_main_buffer_avail");
-    if (!FuncDolbyMS12GetMainBufferAvail) {
-        ALOGE("%s, dlsym get_main_buffer_avail fail\n", __FUNCTION__);
-        goto ERROR;
-    }
-
-    FuncDolbyMS12GetAssociateBufferAvail = (int (*)(void))  dlsym(mDolbyMS12LibHandle, "get_associate_buffer_avail");
-    if (!FuncDolbyMS12GetAssociateBufferAvail) {
-        ALOGE("%s, dlsym get_associate_buffer_avail fail\n", __FUNCTION__);
         goto ERROR;
     }
 
@@ -361,12 +269,6 @@ int DolbyMS12::GetLibHandle(char *dolby_ms12_path)
         ALOGE("%s, dlsym get_mat_dec_delay fail\n", __FUNCTION__);
     }
 
-
-    FuncDolbyMS12GetNFramesPCMOutput = (unsigned long long (*)(void *, int, int))  dlsym(mDolbyMS12LibHandle, "get_decoder_n_frames_pcm_output");
-    if (!FuncDolbyMS12GetNFramesPCMOutput) {
-        ALOGE("%s, dlsym get_decoder_nframes_pcm_output fail\n", __FUNCTION__);
-    }
-
     FuncDolbyMS12GetContinuousNFramesPCMOutput = (unsigned long long (*)(void *, int))  dlsym(mDolbyMS12LibHandle, "get_continuous_n_frames_pcm_output");
     if (!FuncDolbyMS12GetContinuousNFramesPCMOutput) {
         ALOGE("%s, dlsym get_continuous_n_frames_pcm_output fail\n", __FUNCTION__);
@@ -389,21 +291,6 @@ int DolbyMS12::GetLibHandle(char *dolby_ms12_path)
     FuncDolbyMS12GetTotalNFramesDelay  = (int (*)(void *))  dlsym(mDolbyMS12LibHandle, "get_ms12_total_nframes_delay");
     if (!FuncDolbyMS12GetTotalNFramesDelay) {
         ALOGW("%s, dlsym get_ms12_total_delay fail, ignore it as version difference\n", __FUNCTION__);
-    }
-
-    FuncDolbyMS12HWSyncInit = (int (*)(void))  dlsym(mDolbyMS12LibHandle, "ms12_hwsync_init");
-    if (!FuncDolbyMS12HWSyncInit) {
-        ALOGW("%s, dlsym FuncDolbyMS12HWSyncInit fail,ignore it as version difference\n", __FUNCTION__);
-    }
-
-    FuncDolbyMS12HWSyncRelease = (int (*)(void))  dlsym(mDolbyMS12LibHandle, "ms12_hwsync_release");
-    if (!FuncDolbyMS12HWSyncRelease) {
-        ALOGW("%s, dlsym FuncDolbyMS12HWSyncRelease fail,ignore it as version difference\n", __FUNCTION__);
-    }
-
-    FuncDolbyMS12HWSyncCheckinPTS = (int (*)(int,  int))  dlsym(mDolbyMS12LibHandle, "ms12_hwsync_checkin_pts");
-    if (!FuncDolbyMS12HWSyncCheckinPTS) {
-        ALOGW("%s, dlsym FuncDolbyMS12HWSyncCheckinPTS fail,ignore it as version difference\n", __FUNCTION__);
     }
 
     /* MAT Encoder API Begin */
@@ -444,10 +331,18 @@ int DolbyMS12::GetLibHandle(char *dolby_ms12_path)
         ALOGW("%s, dlsym FunDolbMS12GetVersion fail, ignore it as version difference\n", __FUNCTION__);
     }
 
-    FuncDolbyMS12RegisterScaletempoCallback = (int (*)(scaletempo_callback , void *)) dlsym(mDolbyMS12LibHandle, "ms12_register_scaletempo_callback");
-    if (!FuncDolbyMS12RegisterScaletempoCallback) {
-        ALOGE("%s, dlsym ms12_output_register_output_callback fail\n", __FUNCTION__);
-    }
+    FuncMS12DeocderOpen = (int (*)(void *, int *, void *)) dlsym(mDolbyMS12LibHandle, "ms12_deocder_open");
+    FuncMS12DeocderClose = (int (*)(void *, int)) dlsym(mDolbyMS12LibHandle, "ms12_deocder_close");
+    FuncMS12DecoderProcess = (int (*)(void *, int)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_process");
+    FuncMS12DeocderPause = (int (*)(void *, int)) dlsym(mDolbyMS12LibHandle, "ms12_deocder_pause");
+    FuncMS12DeocderResume = (int (*)(void *, int)) dlsym(mDolbyMS12LibHandle, "ms12_deocder_resume");
+    FuncMS12DeocderFlush = (int (*)(void *, int)) dlsym(mDolbyMS12LibHandle, "ms12_deocder_flush");
+    FuncMS12DecoderMainWrite = (int (*)(void *, int , void *, int, void *)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_main_write");
+    FuncMS12DecoderAssociateWrite = (int (*)(void *, int , void *, int , void *)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_associate_write");
+    FuncMS12DecoderSetparameter = (int (*)(void *, int , int , void *, int)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_setparameter");
+    FuncMS12DecoderGetparameter = (int (*)(void *, int, int, void *, int)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_getparameter");
+    FuncMS12DecoderRegisterCallback = (int (*)(void *, int , int, void *, void *)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_register_callback");
+    FuncMS12DecoderUnregisterCallback = (int (*)(void *, int, int)) dlsym(mDolbyMS12LibHandle, "ms12_decoder_unregister_callback");
 
     ALOGD("-%s() line %d get libdolbyms12 success!", __FUNCTION__, __LINE__);
     return 0;
@@ -466,11 +361,6 @@ void DolbyMS12::ReleaseLibHandle(void)
     FuncDolbyMS12Init = NULL;
     FuncDolbyMS12Release = NULL;
     FuncDolbyMS12InitAllParams = NULL;
-    FuncDolbyMs12DecoderOpen = NULL;
-    FuncDolbyMs12DecoderClose = NULL;
-    FuncDolbyMs12DecoderProcess = NULL;
-    FuncDolbyMS12InputMain = NULL;
-    FuncDolbyMS12InputAssociate = NULL;
     FuncDolbyMS12InputSystem = NULL;
     FuncDolbyMS12InputDeepBuffer = NULL;
 #ifdef REPLACE_OUTPUT_BUFFER_WITH_CALLBACK
@@ -478,26 +368,16 @@ void DolbyMS12::ReleaseLibHandle(void)
 #else
     FuncDolbyMS12Output = NULL;
 #endif
-    FuncDolbyMS12RegisterSyncCallback = NULL;
-    FuncDolbyMS12RegisterTempoCallback = NULL;
     FuncDolbyMS12UpdateRuntimeParams = NULL;
     FuncDolbyMS12SchedulerRun = NULL;
     FuncDolbyMS12SetQuitFlag = NULL;
-    FuncDolbyMS12FlushInputBuffer = NULL;
-    FuncDolbyMS12GetNBytesConsumed = NULL;
-    FuncDolbyMS12GetPCMOutputSize = NULL;
     FuncDolbyMS12GetBitstreamOutputSize = NULL;
-    FuncDolbyMS12GetMainBufferAvail = NULL;
-    FuncDolbyMS12GetAssociateBufferAvail = NULL;
     FuncDolbyMS12GetSystemBufferAvail = NULL;
     FuncDolbyMS12GetDeepBufferAvailFrames = NULL;
-    FuncDolbyMS12SetMainDummy = NULL;
     FuncDolbyMS12Config = NULL;
     FuncDumpDolbyMS12Info = NULL;
     FuncDolbyMS12GetAudioInfo = NULL;
     FuncDolbyMS12GetMATDecLatency = NULL;
-    FunDolbMS12GetVersion = NULL;
-    FuncDolbyMS12GetNFramesPCMOutput = NULL;
     FuncDolbyMS12SetDebugLevel = NULL;
     FuncDolbyMS12GetNBytesConsumedSysSound = NULL;
     FuncDolbyMS12GetFramesConsumedDeepBufferAudio = NULL;
@@ -513,6 +393,19 @@ void DolbyMS12::ReleaseLibHandle(void)
     FuncDolbyMs12EncoderOpen = NULL;
     FuncDolbyMs12EncoderClose = NULL;
     FuncDolbyMS12GetContinuousNFramesPCMOutput = NULL;
+
+    FuncMS12DeocderOpen = NULL;
+    FuncMS12DeocderClose = NULL;
+    FuncMS12DecoderProcess = NULL;
+    FuncMS12DeocderPause = NULL;
+    FuncMS12DeocderResume = NULL;
+    FuncMS12DeocderFlush = NULL;
+    FuncMS12DecoderMainWrite = NULL;
+    FuncMS12DecoderAssociateWrite = NULL;
+    FuncMS12DecoderSetparameter = NULL;
+    FuncMS12DecoderGetparameter = NULL;
+    FuncMS12DecoderRegisterCallback = NULL;
+    FuncMS12DecoderUnregisterCallback = NULL;
     if (mDolbyMS12LibHandle != NULL) {
         dlclose(mDolbyMS12LibHandle);
         mDolbyMS12LibHandle = NULL;
@@ -590,51 +483,6 @@ int DolbyMS12::DolbyMS12InitAllParams(void *DolbyMS12Pointer, int configNum, cha
     return ret;
 }
 
-int DolbyMS12::DolbyMs12DecoderOpen(void *DolbyMS12Pointer, int configNum, char **configParams)
-{
-    ALOGV("+%s()", __FUNCTION__);
-    int ret = 0;
-
-    if (!FuncDolbyMs12DecoderOpen) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return -1;
-    }
-
-    ret = (*FuncDolbyMs12DecoderOpen)(DolbyMS12Pointer, configNum, configParams);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-int DolbyMS12::DolbyMs12DecoderClose(void *DolbyMS12Pointer)
-{
-    ALOGV("+%s()", __FUNCTION__);
-    int ret = 0;
-
-    if (!FuncDolbyMs12DecoderClose) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return -1;
-    }
-
-    ret = (*FuncDolbyMs12DecoderClose)(DolbyMS12Pointer);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-int DolbyMS12::DolbyMs12DecoderProcess(void *DolbyMS12Pointer)
-{
-    ALOGV("+%s()", __FUNCTION__);
-    int ret = 0;
-
-    if (!FuncDolbyMs12DecoderProcess) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return -1;
-    }
-
-    ret = (*FuncDolbyMs12DecoderProcess)(DolbyMS12Pointer);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
 int DolbyMS12::DolbyMs12EncoderOpen(void *DolbyMS12Pointer, int configNum, char **configParams)
 {
     ALOGV("+%s()", __FUNCTION__);
@@ -661,61 +509,6 @@ int DolbyMS12::DolbyMs12EncoderClose(void *DolbyMS12Pointer)
     }
 
     ret = (*FuncDolbyMs12EncoderClose)(DolbyMS12Pointer);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-
-int DolbyMS12::DolbyMS12InputMain(
-    void *DolbyMS12Pointer
-    , const void *audio_stream_out_buffer //ms12 input buffer
-    , size_t audio_stream_out_buffer_size //ms12 input buffer size
-    , int audio_stream_out_format
-    , int audio_stream_out_channel_num
-    , int audio_stream_out_sample_rate
-)
-{
-    ALOGV("+%s()", __FUNCTION__);
-    int ret = 0;
-
-    if (!FuncDolbyMS12InputMain) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return -1;
-    }
-
-    ret = (*FuncDolbyMS12InputMain)(DolbyMS12Pointer
-                                    , audio_stream_out_buffer //ms12 input buffer
-                                    , audio_stream_out_buffer_size //ms12 input buffer size
-                                    , audio_stream_out_format
-                                    , audio_stream_out_channel_num
-                                    , audio_stream_out_sample_rate);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-int DolbyMS12::DolbyMS12InputAssociate(
-    void *DolbyMS12Pointer
-    , const void *audio_stream_out_buffer //ms12 input buffer
-    , size_t audio_stream_out_buffer_size //ms12 input buffer size
-    , int audio_stream_out_format
-    , int audio_stream_out_channel_num
-    , int audio_stream_out_sample_rate
-)
-{
-    ALOGV("+%s()", __FUNCTION__);
-    int ret = 0;
-
-    if (!FuncDolbyMS12InputAssociate) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return -1;
-    }
-
-    ret = (*FuncDolbyMS12InputAssociate)(DolbyMS12Pointer
-                                         , audio_stream_out_buffer //ms12 input buffer
-                                         , audio_stream_out_buffer_size //ms12 input buffer size
-                                         , audio_stream_out_format
-                                         , audio_stream_out_channel_num
-                                         , audio_stream_out_sample_rate);
     ALOGV("-%s() ret %d", __FUNCTION__, ret);
     return ret;
 }
@@ -866,34 +659,6 @@ int DolbyMS12::DolbyMS12Output(
 }
 #endif
 
-int DolbyMS12::DolbyMS12RegisterSyncCallback(void *DolbyMS12Pointer, ms12sync_callback callback, void *priv_data)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12RegisterSyncCallback) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return -1;
-    }
-
-    ret = (*FuncDolbyMS12RegisterSyncCallback)(DolbyMS12Pointer, callback, priv_data);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-int DolbyMS12::DolbyMS12RegisterTempoCallback(void *DolbyMS12Pointer, ms12tempo_callback callback, void *priv_data)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12RegisterTempoCallback) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return -1;
-    }
-
-    ret = (*FuncDolbyMS12RegisterTempoCallback)(DolbyMS12Pointer, callback, priv_data);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
 int DolbyMS12::DolbyMS12UpdateRuntimeParams(void *DolbyMS12Pointer, int configNum, char **configParams)
 {
     int ret = 0;
@@ -950,33 +715,6 @@ void DolbyMS12::DolbyMS12SetQuitFlag(int is_quit)
     return ;
 }
 
-void DolbyMS12::DolbyMS12FlushInputBuffer(void)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12FlushInputBuffer) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ;
-    }
-
-    (*FuncDolbyMS12FlushInputBuffer)();
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ;
-}
-void DolbyMS12::DolbyMS12FlushMainInputBuffer(void)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12FlushMainInputBuffer) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ;
-    }
-
-    (*FuncDolbyMS12FlushMainInputBuffer)();
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ;
-}
-
 void DolbyMS12::DolbyMS12FlushAppInputBuffer(void)
 {
     int ret = 0;
@@ -989,34 +727,6 @@ void DolbyMS12::DolbyMS12FlushAppInputBuffer(void)
     (*FuncDolbyMS12FlushAppInputBuffer)();
     ALOGV("-%s() ret %d", __FUNCTION__, ret);
     return ;
-}
-
-void DolbyMS12::DolbyMS12SetMainDummy(int type, int dummy)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12SetMainDummy) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ;
-    }
-
-    (*FuncDolbyMS12SetMainDummy)(type, dummy);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ;
-}
-
-unsigned long long DolbyMS12::DolbyMS12GetDecoderNBytesConsumed(void *ms12_pointer, int format, int is_main)
-{
-    unsigned long long ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12GetNBytesConsumed) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ret;
-    }
-
-    ret = (*FuncDolbyMS12GetNBytesConsumed)(ms12_pointer, format, is_main);
-    ALOGV("-%s() ret %llu", __FUNCTION__, ret);
-    return ret;
 }
 
 /*
@@ -1038,20 +748,6 @@ int DolbyMS12::DolbyMS12GetGain(int idx)
     return ret;
 }
 
-void DolbyMS12::DolbyMS12GetPCMOutputSize(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size)
-{
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12GetPCMOutputSize) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ;
-    }
-
-    (*FuncDolbyMS12GetPCMOutputSize)(all_output_size, ms12_generate_zero_size);
-    ALOGV("-%s() *all_output_size %llu *ms12_generate_zero_size %llu", __FUNCTION__, *all_output_size,  *ms12_generate_zero_size);
-    return ;
-}
-
-
 void DolbyMS12::DolbyMS12GetBitstreamOutputSize(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size)
 {
     ALOGV("+%s()", __FUNCTION__);
@@ -1063,34 +759,6 @@ void DolbyMS12::DolbyMS12GetBitstreamOutputSize(unsigned long long *all_output_s
     (*FuncDolbyMS12GetBitstreamOutputSize)(all_output_size, ms12_generate_zero_size);
     ALOGV("-%s() *all_output_size %llu *ms12_generate_zero_size %llu", __FUNCTION__, *all_output_size,  *ms12_generate_zero_size);
     return ;
-}
-
-int DolbyMS12::DolbyMS12GetMainBufferAvail(int * max_size)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12GetMainBufferAvail) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ret;
-    }
-
-    ret = (*FuncDolbyMS12GetMainBufferAvail)(max_size);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-int DolbyMS12::DolbyMS12GetAssociateBufferAvail(void)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12GetAssociateBufferAvail) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ret;
-    }
-
-    ret = (*FuncDolbyMS12GetAssociateBufferAvail)();
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
 }
 
 int DolbyMS12::DolbyMS12GetSystemBufferAvail(int * max_size)
@@ -1205,6 +873,21 @@ int DolbyMS12::DolbyMS12GetInputISDolbyAtmos()
     return p_aml_audio_info.is_dolby_atmos;
 }
 
+unsigned int DolbyMS12::DolbyMS12GetAacProfile()
+{
+    int ret = 0;
+    struct aml_audio_info p_aml_audio_info = {0,0,0,0};
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12GetAudioInfo) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncDolbyMS12GetAudioInfo)(&p_aml_audio_info);
+    ALOGV("-%s() ret %d aac profile = %d (0:AAC 1:HEAAC_v1 2:HEAAC_V2)", __FUNCTION__, ret, p_aml_audio_info.aac_profile);
+    return p_aml_audio_info.aac_profile;
+}
+
 int DolbyMS12::DolbyMS12GetMATDecLatency()
 {
     int ret = 0;
@@ -1258,20 +941,6 @@ int DolbyMS12::DolbyMS12SetSchedulerState(int sch_state)
 
     ret = (*FuncDolbyMS12Config)(MS12_CONFIG_SCHEDULER_STATE, (ms12_config_t *)&sch_state);
     ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-unsigned long long DolbyMS12::DolbyMS12GetDecoderNFramesPcmOutput(void *ms12_pointer, int format, int is_main)
-{
-    uint64_t ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12GetNFramesPCMOutput) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ret;
-    }
-
-    ret = (*FuncDolbyMS12GetNFramesPCMOutput)(ms12_pointer, format, is_main);
-    ALOGV("-%s() ret %" PRId64 "", __FUNCTION__, ret);
     return ret;
 }
 
@@ -1336,48 +1005,6 @@ int DolbyMS12::DolbyMS12GetTotalNFramesDelay(void *ms12_pointer)
     }
 
     ret = (*FuncDolbyMS12GetTotalNFramesDelay)(ms12_pointer);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-int DolbyMS12::DolbyMS12HWSyncInit(void)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12HWSyncInit) {
-        //ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ret;
-    }
-
-    ret = (*FuncDolbyMS12HWSyncInit)();
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-int DolbyMS12::DolbyMS12HWSyncRelease(void)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12HWSyncRelease) {
-        //ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ret;
-    }
-
-    ret = (*FuncDolbyMS12HWSyncRelease)();
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
-int DolbyMS12::DolbyMS12HWSyncCheckinPTS(int offset, int apts)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12HWSyncRelease) {
-        //ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return ret;
-    }
-
-    ret = (*FuncDolbyMS12HWSyncCheckinPTS)(offset, apts);
     ALOGV("-%s() ret %d", __FUNCTION__, ret);
     return ret;
 }
@@ -1594,20 +1221,6 @@ int DolbyMS12::DolbyMS12SetAlsaDelayFrame(int delay_frame)
     return ret;
 }
 
-int DolbyMS12::DolbyMS12RegisterScaletempoCallback(scaletempo_callback callback, void *priv_data)
-{
-    int ret = 0;
-    ALOGV("+%s()", __FUNCTION__);
-    if (!FuncDolbyMS12RegisterScaletempoCallback) {
-        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
-        return -1;
-    }
-
-    ret = (*FuncDolbyMS12RegisterScaletempoCallback)(callback, priv_data);
-    ALOGV("-%s() ret %d", __FUNCTION__, ret);
-    return ret;
-}
-
 int DolbyMS12::DolbyMS12SetAlsaLimitFrame(int limit_frame)
 {
     int ret = 0;
@@ -1632,6 +1245,151 @@ int DolbyMS12::DolbyMS12SetSchedulerSleep(int enable_sleep)
     }
 
     ret = (*FuncDolbyMS12Config)(MS12_CONFIG_SCHEDULER_SLEEP, (ms12_config_t *)&enable_sleep);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+
+int DolbyMS12::MS12DeocderOpen(void *dolbyMS12_pointer, int *ms12_decid, void *codec_info) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DeocderOpen)(dolbyMS12_pointer, ms12_decid, codec_info);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DeocderClose(void *dolbyMS12_pointer, int ms12_decid) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DeocderClose)(dolbyMS12_pointer, ms12_decid);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DecoderProcess(void *dolbyMS12_pointer, int ms12_decid) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DecoderProcess)(dolbyMS12_pointer, ms12_decid);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DeocderPause(void *dolbyMS12_pointer, int ms12_decid) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DeocderPause)(dolbyMS12_pointer, ms12_decid);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DeocderResume(void *dolbyMS12_pointer, int  ms12_decid) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DeocderResume)(dolbyMS12_pointer, ms12_decid);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DeocderFlush(void *dolbyMS12_pointer, int ms12_decid) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DeocderFlush)(dolbyMS12_pointer, ms12_decid);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DecoderMainWrite(void *dolbyMS12_pointer, int ms12_decid, void *buffer, int size, void *pcm_info) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DecoderMainWrite)(dolbyMS12_pointer, ms12_decid, buffer, size, pcm_info);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DecoderAssociateWrite(void *dolbyMS12_pointer, int ms12_decid, void *buffer, int size, void *pcm_info) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DecoderAssociateWrite)(dolbyMS12_pointer, ms12_decid, buffer, size, pcm_info);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DecoderSetparameter(void *dolbyMS12_pointer, int ms12_decid, int parameter_type, void *parameter, int size) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DecoderSetparameter)(dolbyMS12_pointer, ms12_decid, parameter_type, parameter, size);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DecoderGetparameter(void *dolbyMS12_pointer, int ms12_decid, int parameter_type, void *parameter, int size) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DecoderGetparameter)(dolbyMS12_pointer, ms12_decid, parameter_type, parameter, size);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DecoderRegisterCallback(void *dolbyMS12_pointer, int ms12_decid, int callback_type, void *callback, void *priv_data) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DecoderRegisterCallback)(dolbyMS12_pointer, ms12_decid, callback_type, callback, priv_data);
+    ALOGV("-%s() ret %d", __FUNCTION__, ret);
+    return ret;
+}
+int DolbyMS12::MS12DecoderUnregisterCallback(void *dolbyMS12_pointer, int ms12_decid, int callback_type) {
+    int ret = 0;
+    ALOGV("+%s()", __FUNCTION__);
+    if (!FuncDolbyMS12Config) {
+        ALOGE("%s(), pls load lib first.\n", __FUNCTION__);
+        return ret;
+    }
+
+    ret = (*FuncMS12DecoderUnregisterCallback)(dolbyMS12_pointer, ms12_decid, callback_type);
     ALOGV("-%s() ret %d", __FUNCTION__, ret);
     return ret;
 }

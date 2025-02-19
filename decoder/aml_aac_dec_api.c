@@ -23,7 +23,7 @@
 #include "aml_dec_api.h"
 #include "audio_data_process.h"
 #include "aml_malloc_debug.h"
-
+#include "aml_dump_debug.h"
 
 #define FAAD_LIB_PATH "/vendor/lib/libfaad.so"
 #define FAAD_LIB_64BIT_PATH "/vendor/lib64/libfaad.so"
@@ -54,6 +54,8 @@ typedef struct faad_decoder_operations {
     char extradata[4096];
     int NchOriginal;
     int lfepresent;
+    int output_format;
+    int dolby_lib_type;
 }faad_decoder_operations_t;
 
 struct aac_dec_t {
@@ -321,6 +323,10 @@ static int faad_decoder_release(aml_dec_t * aml_dec)
         ad_faad_op->release((void *)ad_faad_op);
 
         unload_faad_decoder_lib(aac_dec);
+        if (aml_dec->decFunc) {
+            aml_audio_free(aml_dec->decFunc);
+            aml_dec->decFunc = NULL;
+        }
         aml_audio_free(aml_dec);
     }
     ALOGI("%s success", __func__);
@@ -328,14 +334,9 @@ static int faad_decoder_release(aml_dec_t * aml_dec)
 }
 static void dump_faad_data(void *buffer, int size, char *file_name)
 {
-   if (property_get_bool("vendor.audio.faad.outdump",false)) {
-        FILE *fp1 = fopen(file_name, "a+");
-        if (fp1) {
-            int flen = fwrite((char *)buffer, 1, size, fp1);
-            ALOGI("%s buffer %p size %d flen %d\n", __FUNCTION__, buffer, size,flen);
-            fclose(fp1);
-        }
-    }
+    if (get_debug_value(AML_DUMP_AUDIOHAL_DECODER)) {
+        aml_dump_audio_bitstreams(file_name, buffer, size);
+     }
 }
 
 
@@ -355,6 +356,8 @@ static int faad_decoder_process(aml_dec_t *aml_dec, unsigned char *buffer, int b
     faad_decoder_operations_t *ad_faad_op = &aac_dec->ad_faad_op;
     dec_data_info_t * dec_pcm_data = &aml_dec->dec_pcm_data;
     dec_data_info_t * ad_dec_pcm_data = &aml_dec->ad_dec_pcm_data;
+    faad_op->output_format = aml_dec->output_format;
+    faad_op->dolby_lib_type = aml_dec->dolby_lib_type;
 
     int used_size = 0;
     int used_size_return = 0;
@@ -418,7 +421,7 @@ static int faad_decoder_process(aml_dec_t *aml_dec, unsigned char *buffer, int b
       }
     }
     if (dec_pcm_data->data_len) {
-        dump_faad_data(dec_pcm_data->buf, dec_pcm_data->data_len, "/data/faad_main.pcm");
+        dump_faad_data(dec_pcm_data->buf, dec_pcm_data->data_len, "/data/vendor/audiohal/faad_main.pcm");
     }
     aac_dec->total_raw_size += used_size_return;
     aac_dec->total_pcm_size += dec_pcm_data->data_len;
@@ -476,7 +479,7 @@ static int faad_decoder_process(aml_dec_t *aml_dec, unsigned char *buffer, int b
             ALOGV("ad decode_len %d in %d pcm_len %d used_size %d", decode_len,  aac_dec->ad_remain_size, pcm_len, used_size);
             if (decode_len > 0) {
                 used_size += decode_len;
-                dump_faad_data(ad_dec_pcm_data->buf + ad_dec_pcm_data->data_len, pcm_len, "/data/faad_ad.pcm");
+                dump_faad_data(ad_dec_pcm_data->buf + ad_dec_pcm_data->data_len, pcm_len, "/data/vendor/audiohal/faad_ad.pcm");
                 ad_dec_pcm_data->data_len += pcm_len;
                 if (ad_dec_pcm_data->data_len > ad_dec_pcm_data->buf_size) {
                     ALOGV("ad decode len %d  > ad_dec_pcm_data->buf_size %d ", ad_dec_pcm_data->data_len, ad_dec_pcm_data->buf_size);
@@ -611,8 +614,11 @@ static int faad_decoder_process(aml_dec_t *aml_dec, unsigned char *buffer, int b
     if (dec_pcm_data->data_len != ad_dec_pcm_data->data_len ) {
         ALOGV("dec_pcm_data->data_len %d ad_dec_pcm_data->data_len %d",dec_pcm_data->data_len ,ad_dec_pcm_data->data_len);
     }
-    dump_faad_data(dec_pcm_data->buf, dec_pcm_data->data_len, "/data/faad_output.pcm");
+    downmix_channel_layout_swap(dec_pcm_data->buf, dec_pcm_data->data_ch, dec_pcm_data->data_len / (int)(audio_bytes_per_sample(aml_dec->output_format) * dec_pcm_data->data_ch), aml_dec->output_format);
+    dump_faad_data(dec_pcm_data->buf, dec_pcm_data->data_len, "/data/vendor/audiohal/faad_output.pcm");
+    dump_faad_data(dec_pcm_data->buf, dec_pcm_data->data_len, "/data/vendor/audiohal/faad_output.pcm");
     ALOGV("decode len %d buffer len %d used_size_return %d", dec_pcm_data->data_len, dec_pcm_data->buf_size,used_size_return);
+
     return used_size_return;
 }
 
@@ -694,6 +700,25 @@ int faad_decoder_config(aml_dec_t * aml_dec, aml_dec_config_type_t config_type, 
     return ret;
 }
 
+aml_dec_func_t *get_faad_dec_func_handle(void)
+{
+    aml_dec_func_t *amlDcvFunc = NULL;
+
+    amlDcvFunc = (struct aml_dec_func *)aml_audio_calloc(1, sizeof(struct aml_dec_func));
+    if (amlDcvFunc) {
+        amlDcvFunc->f_init       = faad_decoder_init;
+        amlDcvFunc->f_release    = faad_decoder_release;
+        amlDcvFunc->f_process    = faad_decoder_process;
+        amlDcvFunc->f_config     = faad_decoder_config;
+        amlDcvFunc->f_info       = faad_decoder_getinfo;
+        amlDcvFunc->f_flush      = faad_decoder_flush;
+    } else {
+        AM_LOGE(" calloc amlDcvFunc:%p failed", amlDcvFunc);
+        amlDcvFunc = NULL;
+    }
+
+    return amlDcvFunc;
+}
 
 aml_dec_func_t aml_faad_func = {
     .f_init                 = faad_decoder_init,

@@ -24,21 +24,8 @@
 #include "device_patch_mgr.h"
 
 #ifdef ENABLE_DVB_PATCH
-#include "dmx_audio_es.h"
+#include "dtv_patch.h"
 #endif
-
-
-int get_dtv_aformat(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->dtv_aformat;
-}
-
-void set_dtv_aformat(struct aml_audio_device *adev, int format)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->dtv_aformat = format;
-}
 
 uint32_t get_dtv_i2s_clock(struct aml_audio_device *adev)
 {
@@ -64,23 +51,13 @@ void set_dtv_spdif_clock(struct aml_audio_device *adev, uint32_t spdif_clock)
     dtv_obj->dtv_spdif_clock = spdif_clock;
 }
 
-uint32_t get_dtv_droppcm_size(struct aml_audio_device *adev)
+#ifdef ENABLE_DVB_PATCH
+aml_dtv_audio_context_t *get_dtv_audio_context(struct aml_audio_device *adev)
 {
     struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->dtv_droppcm_size;
+    return dtv_obj->aml_dtv_audio_context;
 }
-
-void set_dtv_droppcm_size(struct aml_audio_device *adev, uint32_t drop_size)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->dtv_droppcm_size = drop_size;
-}
-
-struct aml_dtv_audio_instances * get_dtv_audio_instance(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->aml_dtv_audio_instances;
-}
+#endif
 
 int get_dtv_sound_mode(struct aml_audio_device *adev)
 {
@@ -117,134 +94,6 @@ bool is_dtv_multi_demux(struct aml_audio_device *adev)
     struct dtv_private_object *dtv_obj = get_dtv_object(adev);
     return dtv_obj->is_multi_demux;
 }
-
-void enable_dtv_discontinue_mute(struct aml_audio_device *adev, bool enable)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->discontinue_mute_flag = enable;
-}
-
-bool is_dtv_discontinue_mute(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->discontinue_mute_flag;
-}
-
-void enable_dtv_audio_discontinue(struct aml_audio_device *adev, bool enable)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->audio_discontinue = enable;
-}
-
-bool is_dtv_audio_discontinue(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->audio_discontinue;
-}
-
-int get_dtv_no_underrun_count(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->no_underrun_count;
-}
-
-void set_dtv_no_underrun_count(struct aml_audio_device *adev, int count)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->no_underrun_count = count;
-}
-
-int inc_dtv_no_underrun_count(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    int temp = dtv_obj->no_underrun_count++;
-    return temp;
-}
-
-int get_dtv_no_underrun_max(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->no_underrun_max;
-}
-
-void set_dtv_no_underrun_max(struct aml_audio_device *adev, int max)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->no_underrun_max = max;
-}
-
-void enable_dtv_underrun_mute(struct aml_audio_device *adev, bool enable)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->underrun_mute_flag = enable;
-}
-
-bool is_dtv_underrun_mute(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->underrun_mute_flag;
-}
-
-void enable_dtv_start_mute_flag(struct aml_audio_device *adev, bool enable)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->start_mute_flag = enable;
-}
-
-bool is_dtv_start_mute(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->start_mute_flag;
-}
-
-int get_dtv_start_mute_count(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->start_mute_count;
-}
-
-void set_dtv_start_mute_count(struct aml_audio_device *adev, int mute_count)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->start_mute_count = mute_count;
-}
-
-int get_dtv_start_mute_max(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->start_mute_max;
-}
-
-void set_dtv_start_mute_max(struct aml_audio_device *adev, int max)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->start_mute_max = max;
-}
-
-void enable_dtv_ad_start(struct aml_audio_device *adev, bool enable)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->ad_start_enable = enable;
-}
-
-bool is_dtv_ad_start(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->ad_start_enable;
-}
-
-void enable_dtv_insert_mute(struct aml_audio_device *adev, bool enable)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    dtv_obj->insert_mute_flag = enable;
-}
-
-bool is_dtv_insert_mute(struct aml_audio_device *adev)
-{
-    struct dtv_private_object *dtv_obj = get_dtv_object(adev);
-    return dtv_obj->insert_mute_flag;
-}
-
 void acquire_dtv_mutex_lock(struct aml_audio_device *adev)
 {
     struct dtv_private_object *dtv_obj = get_dtv_object(adev);
@@ -292,16 +141,22 @@ int init_dtv_object(struct aml_audio_device *adev)
     enable_dtv_multi_demux(adev, is_multi_demux());
 
 #if ENABLE_DVB_PATCH
-    dtv_obj->aml_dtv_audio_instances = aml_audio_calloc(1, sizeof(aml_dtv_audio_instances_t));
-    if (dtv_obj->aml_dtv_audio_instances == NULL) {
+    dtv_obj->aml_dtv_audio_context = aml_audio_calloc(1, sizeof(aml_dtv_audio_context_t));
+    if (dtv_obj->aml_dtv_audio_context == NULL) {
         ALOGE("malloc aml_dtv_audio_instances failed");
         ret = -ENOMEM;
         return ret;
     } else {
-        aml_dtv_audio_instances_t *dtv_audio_instances = (aml_dtv_audio_instances_t *)dtv_obj->aml_dtv_audio_instances;
+        aml_dtv_audio_context_t *dtv_audio_context = (aml_dtv_audio_context_t *)dtv_obj->aml_dtv_audio_context;
+        create_dtv_cmd_process_thread(dtv_audio_context);
         for (int index = 0; index < DVB_DEMUX_SUPPORT_MAX_NUM; index ++) {
-            aml_dtvsync_t *dtvsync =  &dtv_audio_instances->dtvsync[index];
+            aml_dtvsync_t *dtvsync = &dtv_audio_context->instances[index].dtvsync;
             pthread_mutex_init(&dtvsync->ms_lock, NULL);
+            dtv_audio_context->instances[index].dtv_audio_state = AUDIO_DTV_PATCH_DECODER_STATE_IDLE;
+            dtv_audio_context->instances[index].dtv_scene = DTV_AUDIO_PATCH;
+            dtv_audio_context->instances[index].dtv_audio_info.playback_mode = NORMAL_MODE;
+            dtv_audio_context->instances[index].dtv_audio_info.volume = 1.0f;
+            dtv_audio_context->instances[index].dtv_audio_info.tv_mute = 0;
         }
     }
 
@@ -311,7 +166,6 @@ int init_dtv_object(struct aml_audio_device *adev)
     dtv_obj->dtv_sound_mode = 0;
     /* dtv_volume init , range [0, 1]*/
     dtv_obj->dtv_volume = 1.0;
-    dtv_obj->insert_mute_flag = false;
     return ret;
 }
 
@@ -324,16 +178,17 @@ int destroy_dtv_object(struct aml_audio_device *adev)
     }
 
     //free aml_dtv_audio_instances
-    if (dtv_obj->aml_dtv_audio_instances) {
+    if (dtv_obj->aml_dtv_audio_context) {
 #if ENABLE_DVB_PATCH
-        aml_dtv_audio_instances_t *dtv_audio_instances = (aml_dtv_audio_instances_t *)dtv_obj->aml_dtv_audio_instances;
+        aml_dtv_audio_context_t *dtv_audio_context = (aml_dtv_audio_context_t *)dtv_obj->aml_dtv_audio_context;
         for (int index = 0; index < DVB_DEMUX_SUPPORT_MAX_NUM; index ++) {
-            aml_dtvsync_t *dtvsync =  &dtv_audio_instances->dtvsync[index];
+            aml_dtvsync_t *dtvsync = &dtv_audio_context->instances[index].dtvsync;
             pthread_mutex_destroy(&dtvsync->ms_lock);
         }
-        aml_audio_free(dtv_obj->aml_dtv_audio_instances);
+        release_dtv_cmd_process_thread(dtv_audio_context);
+        aml_audio_free(dtv_obj->aml_dtv_audio_context);
         pthread_mutex_destroy(&dtv_obj->dtv_lock);
-        dtv_obj->aml_dtv_audio_instances = NULL;
+        dtv_obj->aml_dtv_audio_context = NULL;
 #endif
     }
 

@@ -319,7 +319,7 @@ static void ms12_spdif_encoder(void * in_buf, int in_size, audio_format_t output
  */
 static void dump_ms12_output_data(void *buffer, int size, char *file_name)
 {
-    aml_audio_dump_audio_bitstreams(file_name, buffer, size);
+    aml_dump_audio_bitstreams(file_name, buffer, size);
 }
 
 int dolby_ms12_register_callback(struct aml_stream_out *aml_out)
@@ -874,8 +874,6 @@ int get_the_dolby_ms12_prepared(
         goto Err;
     }
 
-    aml_ac3_parser_open(&ms12->ac3_parser_handle);
-    aml_spdif_decoder_open(&ms12->spdif_dec_handle);
     aml_ms12_bypass_open(&ms12->ms12_bypass_handle);
     ring_buffer_init(&ms12->spdif_ring_buffer, ms12->dolby_ms12_out_max_size);
     ms12->lpcm_temp_buffer = (unsigned char*)aml_audio_malloc(ms12->dolby_ms12_out_max_size);

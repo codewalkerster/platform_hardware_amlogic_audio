@@ -32,6 +32,12 @@
 #include "aml_alsa_mixer.h"
 #include "audio_hw_resource_mgr.h"
 
+#include "amlAudioMixer.h"
+#include "audio_port.h"
+
+#include "tv_patch_ctrl.h"
+#include "audio_hw_ms12_v2.h"
+
 #define  ONE_DD_FRAME_TIME     32
 #define  ONE_MAT_FRAME_TIME    20
 
@@ -732,7 +738,6 @@ int aml_dev_try_avsync(struct aml_audio_patch *patch)
                  seek_duration_ret = ringbuffer_seek(patch, seek_duration);
             }
         }
-
         tune_val -= seek_duration_ret;
 
         vltcy = aml_dev_sample_video_path_latency(patch);

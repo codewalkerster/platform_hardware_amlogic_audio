@@ -52,6 +52,7 @@
 #include "dtv_private_object.h"
 #include "audio_hw_resource_mgr.h"
 #include "aml_mmap_audio.h"
+#include "aml_stream_manager.h"
 
 /*
  *@brief
@@ -91,104 +92,6 @@ const char *scheduler_state_2_string[MS12_SCHEDULER_MAX] = {
     "SCHEDULER_RUNNING",
     "SCHEDULER_STANDBY",
 };
-
-/*****************************************************************************
-*   Function Name:  set_dolby_ms12_runtime_pause
-*   Description:    set pause or resume to dolby ms12.
-*   Parameters:     struct dolby_ms12_desc: ms12 variable pointer
-*                   int: state pause or resume
-*   Return value:   0: success, or else fail
-******************************************************************************/
-int set_dolby_ms12_runtime_pause(struct dolby_ms12_desc *ms12, int is_pause)
-{
-    char parm[12] = "";
-    int ret = -1;
-
-    sprintf(parm, "%s %d", "-pause", is_pause);
-    if ((strlen(parm) > 0) && ms12) {
-        ret = aml_ms12_update_runtime_params(ms12, parm);
-    } else {
-        ALOGE("%s ms12 is NULL or strlen(parm) is zero", __func__);
-        ret = -1;
-    }
-    return ret;
-}
-
-int dolby_ms12_main_pause(struct audio_stream_out *stream)
-{
-    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
-    struct aml_audio_device *adev = aml_out->dev;
-    struct dolby_ms12_desc *ms12 = &(adev->ms12);
-    int ms12_runtime_update_ret = 0;
-
-    pthread_mutex_lock(&ms12->main_lock);
-    dolby_ms12_set_pause_flag(true);
-    //ms12_runtime_update_ret = aml_ms12_update_runtime_params(ms12);
-    ms12_runtime_update_ret = set_dolby_ms12_runtime_pause(ms12, true);
-    ms12->is_continuous_paused = true;
-
-    ALOGV("%s  ms12_runtime_update_ret:%d", __func__, ms12_runtime_update_ret);
-
-    //1.audio easing duration is 32ms,
-    //2.one loop for schedule_run cost about 32ms(contains the hardware costing),
-    //3.if [pause, flush] too short, means it need more time to do audio easing
-    //so, the delay time for 32ms(pause is completed after audio easing is done) is enough.
-    aml_audio_sleep(32000);
-    ALOGI("%s  sleep 32ms finished", __func__);
-
-    if (aml_out->hw_sync_mode && aml_out->tsync_status != TSYNC_STATUS_PAUSED && aml_out->hwsync) {
-        ALOGI("%s end of frame =%d", __func__, aml_out->hwsync->end_of_hwsync_frame);
-        /*if we are end of frame now, we don't need to pause pcr*/
-        if (!aml_out->hwsync->end_of_hwsync_frame) {
-            aml_hwsync_wrap_set_pause(aml_out->hwsync);
-            aml_out->tsync_status = TSYNC_STATUS_PAUSED;
-        }
-
-        aml_out->hwsync->first_apts_flag = false;
-        aml_out->hwsync->wait_video_done = false;
-        // prepare for the next wait_video_drop function
-        if (aml_out->restore_vmaster) {
-            aml_out->restore_vmaster = false;
-            aml_hwsync_wrap_set_amaster(aml_out->hwsync, false);
-        }
-
-
-        ALOGD("%s tsync pause finished", __func__);
-    }
-    pthread_mutex_unlock(&ms12->main_lock);
-
-    return 0;
-}
-
-int dolby_ms12_main_resume(struct audio_stream_out *stream)
-{
-    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
-    struct aml_audio_device *adev = aml_out->dev;
-    struct dolby_ms12_desc *ms12 = &(adev->ms12);
-    int ms12_runtime_update_ret = 0;
-
-    /*fly audio of NTS appear freeze ~1.5s fail, as send the resume
-    **message to ms12 in flush/close_stream interface when exit stream.
-    **here do tsync resume, this lead to video pcr not pause.
-    **so add ms12_resume_state to distinguish resume/flush/close resume message.
-    **In addition, just only do tsync resume from resume interface message.
-    */
-    /*coverity[missing_lock]*/
-    if (aml_out->hw_sync_mode
-        && (ms12->ms12_resume_state == MS12_RESUME_FROM_RESUME)) {
-        aml_hwsync_wrap_set_resume(aml_out->hwsync);
-        aml_out->tsync_status = TSYNC_STATUS_RUNNING;
-        ALOGV("%s(), tsync resume finished", __func__);
-    }
-
-    dolby_ms12_set_pause_flag(false);
-    //ms12_runtime_update_ret = aml_ms12_update_runtime_params(ms12);
-    ms12_runtime_update_ret = set_dolby_ms12_runtime_pause(ms12, false);
-    ms12->is_continuous_paused = false;
-    ALOGI("%s  ms12_runtime_update_ret:%d", __func__, ms12_runtime_update_ret);
-
-    return 0;
-}
 
 /*****************************************************************************
 *   Function Name:  ms12_msg_list_is_empty
@@ -295,20 +198,13 @@ Repop_Mesg:
         if (ms12->CommThread_ExitFlag) {
             goto Error;
         }
-        ALOGV("%s  ms12_out:%p, ==> ms12_main_stream_out:%p", __func__,adev->ms12_out,ms12->ms12_main_stream_out);
         /*coverity[missing_lock]*/
         switch (mesg_p->mesg_type) {
             case MS12_MESG_TYPE_FLUSH:
-                if (ms12->ms12_main_stream_out != NULL)
-                    dolby_ms12_main_flush(&ms12->ms12_main_stream_out->stream);//&adev->ms12_out->stream
                 break;
             case MS12_MESG_TYPE_PAUSE:
-                if (ms12->ms12_main_stream_out != NULL)
-                    dolby_ms12_main_pause(&ms12->ms12_main_stream_out->stream);
                 break;
             case MS12_MESG_TYPE_RESUME:
-                if (ms12->ms12_main_stream_out != NULL)
-                    dolby_ms12_main_resume(&ms12->ms12_main_stream_out->stream);
                 break;
             case MS12_MESG_TYPE_SET_MAIN_DUMMY:
                 break;
@@ -452,13 +348,14 @@ int aml_set_ms12_scheduler_state(struct dolby_ms12_desc *ms12)
 {
     struct aml_audio_device *adev = aml_adev_get_handle();
     int sch_state = ms12->ms12_scheduler_state;
-    bool is_arc_connecting = is_HDMI_connected(adev);/*(adev->active_outport == OUTPORT_HDMI_ARC);*/
+    bool is_hdmi_connecting = is_HDMI_connected(adev);/*(adev->active_outport == OUTPORT_HDMI_ARC);*/
     bool is_netflix = adev->is_netflix;
     unsigned int remaining_time = 0;
+    bool need_schedule = !is_hdmi_connecting || adev->low_power;
 
     if (sch_state == MS12_SCHEDULER_STANDBY) {
         /*If there are other streams present, the ms12 status to running*/
-        if (adev->usecase_masks != 0 || mmap_audio_has_active_client(adev->mmap_audio_manager)) {
+        if (aml_get_is_exist_active_stream() || !(!is_TV(adev) || need_schedule) || mmap_audio_has_active_client(adev->mmap_audio_manager)) {
             sch_state = MS12_SCHEDULER_RUNNING;
         }
     }
@@ -469,7 +366,8 @@ int aml_set_ms12_scheduler_state(struct dolby_ms12_desc *ms12)
        ALOGW("%s  sch_state:%d %s, ms12 scheduler state not changed.", __func__, sch_state, scheduler_state_2_string[sch_state]);
        return 0;
     }
-    if ((!is_TV(adev) || !is_arc_connecting) && !is_netflix) {
+
+    if ((!is_TV(adev) || need_schedule) && !is_netflix) {
         remaining_time = audio_timer_remaining_time(ms12->ms12_timer_id);
         if (remaining_time > 0) {
             audio_timer_stop(ms12->ms12_timer_id);
@@ -493,7 +391,7 @@ int aml_set_ms12_scheduler_state(struct dolby_ms12_desc *ms12)
         sch_state = MS12_SCHEDULER_RUNNING;
         set_dolby_ms12_continuous_state(ms12, sch_state);
         ALOGI("%s  is_arc_connecting:%d, is_netflix:%d, sch_state:%d %s is sent to ms12", __func__,
-            is_arc_connecting, is_netflix, sch_state, scheduler_state_2_string[sch_state]);
+            is_hdmi_connecting, is_netflix, sch_state, scheduler_state_2_string[sch_state]);
     }
     ms12->last_scheduler_state = sch_state;
 
@@ -602,78 +500,6 @@ void set_ms12_mc_enable(struct dolby_ms12_desc *ms12, int mc_enable)
     sprintf(parm, "%s %d", "-mc", mc_enable);
     if ((strlen(parm)) > 0 )
         aml_ms12_update_runtime_params(ms12, parm);
-}
-
-void set_ms12_ac4_1st_preferred_language_code(struct dolby_ms12_desc *ms12, char *lang_iso639_code)
-{
-    char parm[64] = "";
-    sprintf(parm, "%s %s", "-lang", lang_iso639_code);
-    ALOGI("%s line %d %c%c%C\n", __func__, __LINE__, lang_iso639_code[0], lang_iso639_code[1], lang_iso639_code[2]);
-    if ((strlen(parm)) > 0 && ms12)
-        aml_ms12_update_runtime_params(ms12, parm);
-}
-
-void set_ms12_ac4_2nd_preferred_language_code(struct dolby_ms12_desc *ms12, char *lang_iso639_code)
-{
-    char parm[64] = "";
-    sprintf(parm, "%s %s", "-lang2", lang_iso639_code);
-    ALOGI("%s line %d %c%c%C\n", __func__, __LINE__, lang_iso639_code[0], lang_iso639_code[1], lang_iso639_code[2]);
-    if ((strlen(parm)) > 0 && ms12)
-        aml_ms12_update_runtime_params(ms12, parm);
-}
-
-void set_ms12_ac4_prefer_presentation_selection_by_associated_type_over_language(struct dolby_ms12_desc *ms12, int prefer_selection_type)
-{
-    char parm[64] = "";
-    sprintf(parm, "%s %d", "-pat", prefer_selection_type);
-    ALOGI("%s line %d prefer_selection_type %d\n", __func__, __LINE__, prefer_selection_type);
-    if ((strlen(parm)) > 0 && ms12)
-        aml_ms12_update_runtime_params(ms12, parm);
-}
-
-void set_ms12_ac4_short_prog_identifier(struct dolby_ms12_desc *ms12, int short_program_identifier)
-{
-    char parm[64] = "";
-    sprintf(parm, "%s %d", "-ac4_short_prog_id", short_program_identifier);
-    if ((strlen(parm)) > 0 && ms12)
-        aml_ms12_update_runtime_params(ms12, parm);
-}
-
-
-void dtv_set_ms12_volume_on_non_TV_device(struct aml_stream_out *aml_out)
-{
-    struct aml_audio_device *adev = aml_out->dev;
-
-    float out_gain = 1.0f;
-
-    /* For dev->mix case, eg: dtv -> usb card. We control the volume in in_read function. */
-    if (!adev->dev2mix_patch) {
-        out_gain = adev->sink_gain[get_output_by_devices(adev->cur_out_devices)];
-    }
-    if (adev->tv_mute && is_dev_patch_exist(adev)) {
-        out_gain = 0.0f;
-    }
-    /*
-    for tv case, volume control it in audio_hal_data_processing
-    for non tv case, dtv stream vol control in dolby_ms12_set_main_volume
-    */
-    if (!is_TV(adev) && !adev->enable_soundbar_mode) {
-        if (is_dev_patch_exist(adev) && is_same_patch_src(adev, SRC_DTV)) {
-            //when Dolby MS12 use not 1.0 volume "-sys_prim_mixgain <3 int>
-            //the PCM Render can not output at a same volume for both DDP and AC4.
-            //AC4 should use the 1.0 volume and control the volume through the PCM output.
-            //After add this patch, the Bitstream output volume will always 1.0,
-            //its volume should be controled by the Sink Device.
-            if (!is_AC4_stream_with_pcm_sink_on_stb(aml_out)) {
-                out_gain *= get_dtv_volume(adev);
-            }
-            else {
-                out_gain = 1.0f;
-            }
-            set_ms12_main_volume(&adev->ms12, out_gain);
-            aml_out->ms12_vol_ctrl = true;
-        }
-    }
 }
 
 void set_ms12_ext_pcm_acmod_lfe(struct dolby_ms12_desc *ms12, audio_channel_mask_t channel_mask)
@@ -832,8 +658,7 @@ void dynamic_get_dolby_ms12_drc_parameters(struct aml_audio_device *adev, struct
     int dolby_ms12_drc_mode = DOLBY_DRC_RF_MODE;
     int dolby_ms12_dap_drc_mode = DOLBY_DRC_RF_MODE;
 
-    struct aml_audio_patch *patch = get_dev_patch(adev);
-    bool is_dtv_patch = (get_dev_patch(adev) && is_same_patch_src(adev, SRC_DTV));
+    bool is_dtv_patch = is_dtv_patch_exist(adev);
     bool is_local_out_bitstream = !get_dev_patch(adev) && (adev->sink_format > AUDIO_FORMAT_PCM_16_BIT);
 
     if (!ms12) {

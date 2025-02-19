@@ -31,14 +31,12 @@
 #include "dolby_lib_api.h"
 #include "aml_audio_stream.h"
 #include "alsa_config_parameters.h"
-#include "dtv_patch.h"
 #include "aml_audio_timer.h"
 #include "audio_hwsync_wrap.h"
 #include "aml_hfp.h"
 #include "audio_hw_ms12_common.h"
 #include "aml_config_data.h"
 #include "tv_patch_ctrl.h"
-#include "dtv_private_object.h"
 #include "audio_hal_debug.h"
 #include "audio_hw_resource_mgr.h"
 
@@ -425,8 +423,6 @@ size_t aml_alsa_output_write(struct audio_stream_out *stream,
     struct pcm_config *config = &aml_out->config;
     size_t frame_size = audio_stream_out_frame_size(stream);
     bool need_trigger = false;
-    bool is_dtv = is_same_patch_src(adev, SRC_DTV);
-    bool is_dtv_live = 1;
     bool has_video = adev->is_has_video;
     unsigned int first_apts = 0;
     unsigned int first_vpts = 0;
@@ -452,7 +448,7 @@ size_t aml_alsa_output_write(struct audio_stream_out *stream,
     }
 
     // pre-check
-    if (!has_video || !is_dtv) {
+    if (!has_video) {
         goto write;
     }
     if (!adev->first_apts_flag) {
@@ -570,37 +566,6 @@ write:
         ALOGE("%s: pcm is null", __func__);
         return bytes;
     }
-    /*+[SE][BUG][SWPL-14811] add drop ac3 pcm function*/
-    audio_patch = get_dev_patch(adev);
-    if (is_same_patch_src(adev, SRC_DTV)
-        && is_dev_patch_exist(adev) &&
-        audio_patch->need_drop_size > 0) {
-        if (audio_patch->need_drop_size >= (int)bytes) {
-            audio_patch->need_drop_size -= bytes;
-            if (audio_patch->last_apts >= audio_patch->last_pcrpts) {
-                audio_patch->need_drop_size = 0;
-            } else
-                return bytes;
-        } else {
-            ALOGI("bytes:%zu, need_drop_size=%d\n", bytes, audio_patch->need_drop_size);
-            if (is_dtv_discontinue_mute(adev)) {
-                memset(audio_data + audio_patch->need_drop_size, 0x0,
-                        bytes - audio_patch->need_drop_size);
-            }
-            ret = pcm_write(aml_out->pcm, audio_data + audio_patch->need_drop_size,
-                    bytes - audio_patch->need_drop_size);
-            if (ret < 0) {
-                const char *err_str = pcm_get_error(aml_out->pcm);
-                ALOGE("%s alsa write fail when drop ac3, err=%s", __func__, err_str);
-                /* if pcm is in suspend status, we should prepare then write */
-                if (strstr(err_str, "pipe") > 0)
-                    pcm_ioctl(aml_out->pcm, SNDRV_PCM_IOCTL_PREPARE);
-            }
-            audio_patch->need_drop_size = 0;
-            ALOGI("drop finish\n");
-            return bytes;
-        }
-    }
 
     {
         struct snd_pcm_status status;
@@ -612,38 +577,9 @@ write:
             aml_out->alsa_running_status = alsa_status;
             aml_out->alsa_status_changed = true;
         }
-        if (status.state == PCM_STATE_XRUN) {
-            ALOGW("[%s:%d] alsa underrun", __func__, __LINE__);
-            if (is_dtv_audio_discontinue(adev)) {
-                enable_dtv_discontinue_mute(adev, 1);
-                set_dtv_no_underrun_count(adev, 0);
-            }
-        } else if (is_dtv_discontinue_mute(adev) && is_same_patch_src(adev, SRC_DTV)) {
-            if (is_dev_patch_exist(adev) && !is_dtv_audio_discontinue(adev) &&
-                audio_patch->dtv_audio_tune == AUDIO_RUNNING) {
-                enable_dtv_discontinue_mute(adev, 0);
-                set_dtv_no_underrun_count(adev, 0);
-            } else if (inc_dtv_no_underrun_count(adev) >= get_dtv_no_underrun_max(adev)) {
-                enable_dtv_discontinue_mute(adev, 0);
-                set_dtv_no_underrun_count(adev, 0);;
-            }
-        }
 
-        /* add mute after insert policy */
-        /* add mute when start_mute_flag is true in single demux */
-        if (is_same_patch_src(adev, SRC_DTV) && (is_dtv_discontinue_mute(adev) ||
-            is_dtv_underrun_mute(adev) || is_dtv_insert_mute(adev) ||
-            (!is_dtv_multi_demux(adev) && is_dtv_start_mute(adev)))) {
-            memset(buffer, 0x0, bytes);
-            if (debug_enable) {
-                ALOGI("[%s:%d] mute audio, discontinue_mute:%d, underrun_mute:%d, insert_mute:%d, is_multi:%d, start_mute:%d",
-                    __func__, __LINE__,
-                    is_dtv_discontinue_mute(adev), is_dtv_underrun_mute(adev), is_dtv_insert_mute(adev),
-                    is_dtv_multi_demux(adev), is_dtv_start_mute(adev));
-            }
-        }
-        if (get_debug_value(AML_DUMP_AUDIOHAL_ALSA)) {
-            aml_audio_dump_audio_bitstreams(ALSA_OUTPUT_PCM_FILE, buffer, bytes);
+        if (get_debug_value(AML_DUMP_AUDIOHAL_OUT)) {
+            aml_dump_audio_bitstreams(ALSA_OUTPUT_PCM_FILE, buffer, bytes);
         }
 
         if (!adev->continuous_audio_mode && !audio_is_linear_pcm(aml_out->alsa_output_format)) {
@@ -655,7 +591,6 @@ write:
                 memset(buffer, 0,bytes);
             }
         }
-
     }
 
     /*
@@ -701,7 +636,7 @@ write:
         const char *err_str = pcm_get_error(aml_out->pcm);
         ALOGE("%s write failed,pcm handle %p err=%s, stream %p, %s",
             __func__, aml_out->pcm, err_str,
-            aml_out, usecase2Str(aml_out->usecase));
+            aml_out, streamType2Str(aml_out->streamType));
         /* if pcm is in suspend status, we should prepare then write */
         if (strstr(err_str, "pipe") > 0)
             pcm_ioctl(aml_out->pcm, SNDRV_PCM_IOCTL_PREPARE);
@@ -1214,7 +1149,7 @@ size_t aml_alsa_output_write_new(void *handle, const void *buffer, size_t bytes)
             aml_audio_trace_int("bitstream_underrun", 0);
         }
     }
-    if (get_debug_value(AML_DUMP_AUDIOHAL_ALSA) ||
+    if (get_debug_value(AML_DUMP_AUDIOHAL_OUT) ||
         get_debug_value(AML_DEBUG_AUDIOHAL_LEVEL_DETECT)) {
         if (alsa_handle->format == AUDIO_FORMAT_AC3) {
             snprintf(audio_type, 32, "%s", "dd");
@@ -1230,9 +1165,8 @@ size_t aml_alsa_output_write_new(void *handle, const void *buffer, size_t bytes)
         snprintf(file_name, 128, "%s.%s", ALSA_OUTPUT_SPDIF_FILE, audio_type);
     }
 
-    if (get_debug_value(AML_DUMP_AUDIOHAL_ALSA)) {
-
-        aml_audio_dump_audio_bitstreams(file_name, buffer, bytes);
+    if (get_debug_value(AML_DUMP_AUDIOHAL_OUT)) {
+        aml_dump_audio_bitstreams(file_name, buffer, bytes);
     }
 
     alsa_handle->write_cnt++;

@@ -53,6 +53,7 @@
 #include "tv_private_object.h"
 #include "dolby_lib_api.h"
 #include "spdif_encoder_api.h"
+#include "audio_port.h"
 
 void audio_digital_input_format_check(struct aml_audio_patch *patch)
 {
@@ -474,7 +475,7 @@ void *audio_patch_input_threadloop(void *data)
                     continue;
                 }
                 if (get_debug_value(AML_DUMP_AUDIOHAL_TV)) {
-                    aml_audio_dump_audio_bitstreams("/data/vendor/audiohal/tv_read.raw", patch->in_buf, read_bytes);
+                    aml_dump_audio_bitstreams("/data/vendor/audiohal/tv_read.raw", patch->in_buf, read_bytes);
                 }
 
                 if (IS_DIGITAL_IN_HW(patch->input_src) && !check_digital_in_stream_signal(&in->stream)) {
@@ -684,7 +685,7 @@ void *audio_patch_output_threadloop(void *data)
     pthread_mutex_lock(&aml_dev->lock);
     aml_out = direct_active(aml_dev);
     if (aml_out) {
-        ALOGI("%s stream %p active,need standby aml_out->usecase:%s ", __func__, aml_out, usecase2Str(aml_out->usecase));
+        ALOGI("%s stream %p active,need standby aml_out->streamType:%s ", __func__, aml_out, streamType2Str(aml_out->streamType));
         pthread_mutex_lock(&aml_out->lock);
         do_output_standby_l((struct audio_stream *)aml_out);
         pthread_mutex_unlock(&aml_out->lock);
@@ -848,62 +849,62 @@ void *audio_patch_output_threadloop(void *data)
     return (void *)0;
 }
 
-int create_tv_patch(struct aml_audio_device *aml_dev,
+int create_tv_patch(struct aml_audio_patch **patch,
                         audio_devices_t input,
                         audio_devices_t output __unused)
 {
-    struct aml_audio_patch *patch;
+    struct aml_audio_patch *tv_patch;
     int play_buffer_size = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
     pthread_attr_t attr;
     struct sched_param param;
     int ret = 0;
+    struct aml_audio_device *aml_dev = aml_adev_get_handle();
     audio_format_t primaryOutFormat = get_primary_out_format(aml_dev);
 
     ALOGD("%s: enter primaryOutFormat:0x%x", __func__, primaryOutFormat);
 
-    patch = aml_audio_calloc(1, sizeof(*patch));
-    if (!patch) {
+    tv_patch = aml_audio_calloc(1, sizeof(struct aml_audio_patch));
+    if (!tv_patch) {
         return -ENOMEM;
     }
-
+    *patch = tv_patch;
     //using audio policy config to judge PCM16 or PCM32
-
-    patch->dev = (struct audio_hw_device *)aml_dev;
-    patch->input_src = input;
-    patch->is_dtv_src = false;
-    patch->aformat = primaryOutFormat;
-    set_dev_patch(aml_dev, patch);
+    tv_patch->dev = (struct audio_hw_device *)aml_dev;
+    tv_patch->input_src = input;
+    tv_patch->is_dtv_src = false;
+    tv_patch->aformat = primaryOutFormat;
+    //set_dev_patch(aml_dev, patch);
     aml_dev->foreground_stream_type = FG_STREAM_TYPE_PATCH;
-    pthread_mutex_init(&patch->mutex, NULL);
-    pthread_cond_init(&patch->cond, NULL);
+    pthread_mutex_init(&tv_patch->mutex, NULL);
+    pthread_cond_init(&tv_patch->cond, NULL);
 
-    patch->in_sample_rate = 48000;
-    patch->in_chanmask = AUDIO_CHANNEL_IN_STEREO;
-    patch->output_src = aml_dev->cur_out_devices;
-    patch->out_sample_rate = 48000;
-    patch->out_chanmask = AUDIO_CHANNEL_OUT_STEREO;
-    patch->in_format = primaryOutFormat;
-    patch->out_format = primaryOutFormat;
+    tv_patch->in_sample_rate = 48000;
+    tv_patch->in_chanmask = AUDIO_CHANNEL_IN_STEREO;
+    tv_patch->output_src = aml_dev->cur_out_devices;
+    tv_patch->out_sample_rate = 48000;
+    tv_patch->out_chanmask = AUDIO_CHANNEL_OUT_STEREO;
+    tv_patch->in_format = primaryOutFormat;
+    tv_patch->out_format = primaryOutFormat;
 
     /* when audio patch start, signal is unstable or
      * patch signal is unstable, it need do avsync
      * except the arcin and spdifin input src
      */
-    if (patch->input_src != AUDIO_DEVICE_IN_HDMI_ARC && patch->input_src != AUDIO_DEVICE_IN_SPDIF)
-        patch->need_do_avsync = true;
+    if (tv_patch->input_src != AUDIO_DEVICE_IN_HDMI_ARC && tv_patch->input_src != AUDIO_DEVICE_IN_SPDIF)
+        tv_patch->need_do_avsync = true;
 
-    if (patch->out_format == AUDIO_FORMAT_PCM_16_BIT) {
+    if (tv_patch->out_format == AUDIO_FORMAT_PCM_16_BIT) {
         ALOGE("%s: init audio ringbuffer game %d", __func__, is_game_mode(aml_dev));
         if (!is_game_mode(aml_dev))
-            ret = ring_buffer_init(&patch->aml_ringbuffer, 4 * 2 * play_buffer_size * PATCH_PERIOD_COUNT);
+            ret = ring_buffer_init(&tv_patch->aml_ringbuffer, 4 * 2 * play_buffer_size * PATCH_PERIOD_COUNT);
         else
-            ret = ring_buffer_init(&patch->aml_ringbuffer, 2 * 4 * LOW_LATENCY_PLAYBACK_PERIOD_SIZE);
+            ret = ring_buffer_init(&tv_patch->aml_ringbuffer, 2 * 4 * LOW_LATENCY_PLAYBACK_PERIOD_SIZE);
     } else {
-        ret = ring_buffer_init(&patch->aml_ringbuffer, 4 * 4 * play_buffer_size * PATCH_PERIOD_COUNT);
+        ret = ring_buffer_init(&tv_patch->aml_ringbuffer, 4 * 4 * play_buffer_size * PATCH_PERIOD_COUNT);
     }
 
     if (aml_dev->dev2mix_patch) {
-        create_tvin_buffer(patch);
+        create_tvin_buffer(tv_patch);
     }
 
     if (ret < 0) {
@@ -911,37 +912,37 @@ int create_tv_patch(struct aml_audio_device *aml_dev,
         goto err_ring_buf;
     }
 
-    if (IS_DIGITAL_IN_HW(patch->input_src)) {
+    if (IS_DIGITAL_IN_HW(tv_patch->input_src)) {
         //TODO add sample rate and channel information
-        ret = create_pthread_for_audio_type_parse(&patch->audio_parse_threadID,
-                &patch->audio_parse_para, &aml_dev->alsa_mixer, patch->input_src);
+        ret = create_pthread_for_audio_type_parse(&tv_patch->audio_parse_threadID,
+                &tv_patch->audio_parse_para, &aml_dev->alsa_mixer, tv_patch->input_src);
         if (ret !=  0) {
             ALOGE("%s: create format parse thread failed", __func__);
             goto err_parse_thread;
         }
     }
 
-    ret = pthread_create(&patch->audio_input_threadID, NULL,
-                          &audio_patch_input_threadloop, patch);
+    ret = pthread_create(&tv_patch->audio_input_threadID, NULL,
+                          &audio_patch_input_threadloop, tv_patch);
 
     if (ret != 0) {
         ALOGE("%s: Create input thread failed", __func__);
         goto err_in_thread;
     }
-    ret = pthread_create(&patch->audio_output_threadID, NULL,
-                          &audio_patch_output_threadloop, patch);
+    ret = pthread_create(&tv_patch->audio_output_threadID, NULL,
+                          &audio_patch_output_threadloop, tv_patch);
     if (ret != 0) {
         ALOGE("%s: Create output thread failed", __func__);
         goto err_out_thread;
     }
 
-    if (aml_dev->useSubMix) {
+    if (aml_dev->useAudioMixer) {
         float src_gain = aml_audio_get_s_gain_by_src(aml_dev, get_dev_patch_src(aml_dev));
 
         subMixingSetSrcGain(aml_dev, src_gain);
     }
 
-    set_dev_patch(aml_dev, patch);
+    //set_dev_patch(aml_dev, patch);
     /* Use flag to indicate that patch struct is ready.  TBD */
     validate_dev_patch(aml_dev);
     ALOGD("%s: exit", __func__);
@@ -949,30 +950,31 @@ int create_tv_patch(struct aml_audio_device *aml_dev,
     return 0;
 
 err_out_thread:
-    patch->input_thread_exit = 1;
-    pthread_join(patch->audio_input_threadID, NULL);
+    tv_patch->input_thread_exit = 1;
+    pthread_join(tv_patch->audio_input_threadID, NULL);
 err_in_thread:
-    if (IS_DIGITAL_IN_HW(patch->input_src))
-        exit_pthread_for_audio_type_parse(patch->audio_parse_threadID,&patch->audio_parse_para);
+    if (IS_DIGITAL_IN_HW(tv_patch->input_src))
+        exit_pthread_for_audio_type_parse(tv_patch->audio_parse_threadID,&tv_patch->audio_parse_para);
 err_parse_thread:
-    ring_buffer_release(&patch->aml_ringbuffer);
+    ring_buffer_release(&tv_patch->aml_ringbuffer);
 err_ring_buf:
-    aml_audio_free(patch);
+    aml_audio_free(tv_patch);
     return ret;
 }
 
-int release_tv_patch(struct aml_audio_device *aml_dev)
+int release_tv_patch(struct aml_audio_patch *patch)
 {
-    struct aml_audio_patch *patch = get_dev_patch(aml_dev);
 
     ALOGD("%s: enter", __func__);
-    if (!is_dev_patch_exist(aml_dev)) {
+    struct aml_audio_device *aml_dev = aml_adev_get_handle();
+    if (!patch) {
         ALOGD("%s(), no patch to release", __func__);
         goto exit;
     }
     /* Use flag to indicate that it will start to free patch struct.  TBD */
     invalidate_dev_patch(aml_dev);
-    tv_do_ease_out(aml_dev);
+    //tv_do_ease_out(aml_dev);
+    //tv_set_ease(aml_out, EaseOut);
 
     patch->input_thread_exit = 1;
     pthread_join(patch->audio_input_threadID, NULL);
@@ -984,12 +986,12 @@ int release_tv_patch(struct aml_audio_device *aml_dev)
     release_tvin_buffer(patch);
     set_output_device_mute(aml_dev, AUDIO_DEVICE_OUT_SPEAKER, false, true);
     aml_audio_free(patch);
-    set_dev_patch(aml_dev, NULL);
+    //set_dev_patch(aml_dev, NULL);
     aml_dev->audio_patch_2_af_stream = true;
     stop_dtv_patch(aml_dev);
     set_dev_patch_src(aml_dev, SRC_INVAL);
     /* when exit audio HAL patch, set src gain to default: media */
-    if (aml_dev->useSubMix) {
+    if (aml_dev->useAudioMixer) {
         float src_gain = aml_audio_get_s_gain_by_src(aml_dev, SRC_OTHER);
 
         subMixingSetSrcGain(aml_dev, src_gain);

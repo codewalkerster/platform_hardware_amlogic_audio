@@ -53,52 +53,8 @@ void * dolby_ms12_init(int argc, char **argv);
 void dolby_ms12_release(void *dolby_mS12_pointer);
 
 int dolby_ms12_init_all_params(void *dolbyMS12_pointer, int configNum, char **configParams);
-int dolby_ms12_main_decoder_open(void *dolbyMS12_pointer, int configNum, char **configParams);
-int dolby_ms12_main_decoder_close(void *dolbyMS12_pointer);
-int dolby_ms12_main_decoder_process(void *dolbyMS12_pointer);
 int dolby_ms12_encoder_open(void *dolbyMS12_pointer, int configNum, char **configParams);
 int dolby_ms12_encoder_close(void *dolbyMS12_pointer);
-
-
-
-/*@@
-    @brief Input main[dolby/he-aac/pcm]
-    @if single input as pcm, use this api
-    @if dual input such as "multi-pcm + stereo&16bites pcm", we choose multi-pcm through this api
-
-    @void *dolby_mS12_pointer //dolby ms12 handle
-    @const void *audio_stream_out_buffer //main input buffer address
-    @size_t audio_stream_out_buffer_size //main input buffer size
-    @int audio_stream_out_format //main format
-    @int audio_stream_out_channel_num //main channel num
-    @int audio_stream_out_sample_rate //main sample rate
-*/
-int dolby_ms12_input_main(void *dolby_mS12_pointer
-                          , const void *input_main_buffer
-                          , size_t audio_stream_out_buffer_size
-                          , int audio_stream_out_format
-                          , int audio_stream_out_channel_num
-                          , int audio_stream_out_sample_rate);
-
-
-/*@@
-    @brief input associate data, format contains [dolby/he-aac], and here the input main format is same as the associate format
-
-    @void *dolby_mS12_pointer //dolby ms12 handle
-    @const void *audio_stream_out_buffer //associate input buffer address
-    @size_t audio_stream_out_buffer_size //associate input buffer size
-    @int audio_stream_out_format //associate format
-    @int audio_stream_out_channel_num //associate channel num
-    @int audio_stream_out_sample_rate //associate sample rate
-*/
-int dolby_ms12_input_associate(void *dolby_mS12_pointer
-                               , const void *audio_stream_out_buffer
-                               , size_t audio_stream_out_buffer_size
-                               , int audio_stream_out_format
-                               , int audio_stream_out_channel_num
-                               , int audio_stream_out_sample_rate
-                              );
-
 
 /*@@
     @brief Input system data, format is stereo-16bits PCM.
@@ -164,22 +120,6 @@ int dolby_ms12_output(void *dolby_mS12_pointer
 #endif
 
 /*@@
-    @brief register the sync callback
-    @void *dolby_mS12_pointer //dolby ms12 handle
-    @void *callback //sync callback handle
-    @void *priv_data //priv data
-*/
-int dolby_ms12_register_ms12sync_callback(void *dolby_mS12_pointer, void *callback, void *priv_data);
-
-/*@@
-    @brief register the sync callback
-    @void *dolby_ms12_pointer //dolby ms12 handle
-    @void *callback //tempo callback handle
-    @void *priv_data //priv data
-*/
-int dolby_ms12_register_ms12tempo_callback(void *dolby_mS12_pointer, void *callback, void *priv_data);
-
-/*@@
     @brief get all the runtime config params, as the style of "int argc, char **argv"
 
     @void *dolby_mS12_pointer //dolby ms12 handle
@@ -212,28 +152,7 @@ int dolby_ms12_scheduler_run(void *dolbyMS12_pointer);
 */
 int dolby_ms12_set_quit_flag(int is_quit);
 
-/*@@
-    @brief flush ms12 input buffer(main/associate)
-*/
-void dolby_ms12_flush_input_buffer(void);
-
-void dolby_ms12_flush_main_input_buffer(void);
-
 void dolby_ms12_flush_app_input_buffer(void);
-
-/*@@
-    @brief get the n bytes consumed by ms12 decoder
-*/
-unsigned long long dolby_ms12_get_decoder_n_bytes_consumed(void *ms12_pointer, int format, int is_main);
-
-
-/*@@
-    @brief get the pcm output size
-
-    @*all_output_size, all the data from ms12
-    @*ms12_generate_zero_size, all the ms12 generate zero size
-*/
-void dolby_ms12_get_pcm_output_size(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size);
 
 /*@@
     @brief get the bitstream output size
@@ -244,23 +163,11 @@ void dolby_ms12_get_pcm_output_size(unsigned long long *all_output_size, unsigne
 void dolby_ms12_get_bitstream_output_size(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size);
 
 /*@@
-    @brief get main buffer avail
-*/
-int dolby_ms12_get_main_buffer_avail(int *max_size);
-
-/*@@
-    @brief get associate buffer avail
-*/
-int dolby_ms12_get_associate_buffer_avail(void);
-
-/*@@
     @brief get system buffer avail
 */
 int dolby_ms12_get_system_buffer_avail(int * max_size);
 
 int dolby_ms12_get_deep_buffer_avail_frames(int * max_size);
-
-void dolby_ms12_set_main_dummy(int type, int dummy);
 
 int dolby_ms12_get_gain(int idx);
 
@@ -321,11 +228,6 @@ int dolby_ms12_set_dolby_compression_format(int compression_format);
 */
 int dolby_ms12_set_scheduler_state(int sch_state);
 
-/*@@
-    @brief get PCM's nframes which outputed by decoder
-*/
-unsigned long long dolby_ms12_get_decoder_nframes_pcm_output(void *ms12_pointer, int format, int is_main);
-
 unsigned long long dolby_ms12_get_continuous_nframes_pcm_output(void *ms12_pointer, int index);
 
 
@@ -345,12 +247,6 @@ unsigned long long dolby_ms12_get_consumed_deep_buffer_audio();
     @brief get the total delay(which means frame nums)
 */
 int dolby_ms12_get_total_nframes_delay(void *ms12_pointer);
-
-int dolby_ms12_hwsync_init_internal(void);
-
-int dolby_ms12_hwsync_release_internal(void);
-
-int dolby_ms12_hwsync_checkin_pts_internal(int offset, int apts);
 
 /*@@
     @brief get the total delay for stereo out
@@ -439,11 +335,22 @@ int dolby_ms12_ac4dec_check_the_pgi_is_present(int presentation_group_index);
 
 int dolby_ms12_set_alsa_delay_frame(int delay_frame);
 
-int dolby_ms12_register_scaletempo_callback(void *callback, void *priv_data);
-
 int dolby_ms12_set_alsa_limit_frame(int limit_frame);
 
 int dolby_ms12_set_scheduler_sleep(int enable_sleep);
+
+int dolby_ms12_deocder_open(void *dolbyMS12_pointer, int *ms12_decid, void *codec_info);
+int dolby_ms12_deocder_close(void *dolbyMS12_pointer, int ms12_decid);
+int dolby_ms12_decoder_process(void *dolbyMS12_pointer, int ms12_decid);
+int dolby_ms12_deocder_pause(void *dolbyMS12_pointer, int ms12_decid);
+int dolby_ms12_deocder_resume(void *dolbyMS12_pointer, int  ms12_decid);
+int dolby_ms12_deocder_flush(void *dolbyMS12_pointer, int ms12_decid);
+int dolby_ms12_decoder_main_write(void *dolbyMS12_pointer, int ms12_decid, void *buffer, int size, void *pcm_info);
+int dolby_ms12_decoder_associate_write(void *dolbyMS12_pointer, int ms12_decid, void *buffer, int size, void *pcm_info);
+int dolby_ms12_decoder_setparameter(void *dolbyMS12_pointer, int ms12_decid, int parameter_type, void *parameter, int size);
+int dolby_ms12_decoder_getparameter(void *dolbyMS12_pointer, int ms12_decid, int parameter_type, void *parameter, int size);
+int dolby_ms12_decoder_register_callback(void *dolbyMS12_pointer, int ms12_decid, int callback_type, void *callback, void *priv_data);
+int dolby_ms12_decoder_unregister_callback(void *dolbyMS12_pointer, int ms12_decid, int callback_type);
 
 #ifdef __cplusplus
 }

@@ -28,6 +28,7 @@ struct component_noise_gate;
 struct component_picture_mode;
 struct dtv_private_object;
 struct tv_private_object;
+typedef int aml_audio_patch_handle_t;
 
 //get components defined in patch manager
 struct component_noise_gate *get_noise_gate_instance(struct aml_audio_device *adev);
@@ -47,11 +48,11 @@ bool is_dev_patch_running(struct aml_audio_device *adev);
 
 void set_dev_patch_running(struct aml_audio_device *adev, bool enable);
 
-void set_dev_patch_src(struct aml_audio_device *adev, enum patch_src_assortion patch_src);
+void set_dev_patch_src(struct aml_audio_device *adev, enum patch_src_assort patch_src);
 
 int get_dev_patch_src(struct aml_audio_device *adev);
 
-bool is_same_patch_src(struct aml_audio_device *adev, enum patch_src_assortion patch_src);
+bool is_same_patch_src(struct aml_audio_device *adev, enum patch_src_assort patch_src);
 
 bool is_dev_patch_valid(struct aml_audio_device *adev);
 
@@ -79,7 +80,11 @@ void acquire_dev_patch_lock(struct aml_audio_device *adev);
 
 void release_dev_patch_lock(struct aml_audio_device *adev);
 
-enum patch_src_assortion get_patch_source(struct aml_audio_device *adev, audio_devices_t src_device, int route_type __unused);
+enum patch_src_assort get_patch_source(struct aml_audio_device *adev, audio_devices_t src_device, int route_type __unused);
+struct listnode *get_patch_list_from_mgr( struct aml_audio_device *aml_dev);
+
+void audio_patch_list_dump(struct patch_manager *patch_manager, int fd);
+
 
 int set_tv_source_switch_parameters(struct audio_hw_device *dev, struct str_parms *parms);
 
@@ -94,16 +99,20 @@ int set_tv_source_switch_parameters(struct audio_hw_device *dev, struct str_parm
    - type: patch type
 */
 int patch_mgr_create_patch(struct aml_audio_device *adev,
-                           int patch_source,
-                           audio_devices_t input,
-                           audio_devices_t output,
-                           int type);
+                           unsigned int num_sources,
+                           const struct audio_port_config *sources,
+                           unsigned int num_sinks,
+                           const struct audio_port_config *sinks,
+                           audio_patch_handle_t *handle);
 
 // Function: destroy a device to device audio patch
-int patch_mgr_release_patch(struct aml_audio_device *adev, int type);
+int patch_mgr_release_patch(struct aml_audio_device *adev, aml_audio_patch_handle_t handle __unused);
 
 // Function: get patch_manger instance
 struct patch_manager *get_patch_manager(struct aml_audio_device *adev);
+
+//// Function: get patch instance by patch handle
+struct aml_audio_patch *get_patch_by_handle(struct patch_manager *patch_mgr,aml_audio_patch_handle_t handle);
 
 // Function: create & init atch manger at adev_open
 int init_patch_manager(struct aml_audio_device *adev);

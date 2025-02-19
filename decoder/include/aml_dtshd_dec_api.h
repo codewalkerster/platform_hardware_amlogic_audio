@@ -85,11 +85,31 @@ typedef enum {
     DCA_PROCESS_HALF_FRAME = DCA_BITS(1),
 } DCA_DECODER_STATUS;
 
+
+///static struct pcm_info pcm_out_info;
+/*dts decoder lib function*/
+typedef int (*Func_dts_decoder_init)(int, int);
+typedef int (*Func_dts_decoder_deinit)();
+typedef int (*Func_dts_decoder_process)(char * , int , int *, char *, int *, struct pcm_info *, char *, int *);
+typedef int (*Func_dts_decoder_config)(dca_config_type_e, union dca_config_s *);
+typedef int (*Func_dts_decoder_getinfo)(dca_info_type_e, union dca_info_s *);
+//void *gDtsDecoderLibHandler = NULL;
+
+typedef struct dca_decoder_func {
+    Func_dts_decoder_init                  dca_init;
+    Func_dts_decoder_deinit                dca_deinit;
+    Func_dts_decoder_process               dca_process;
+    Func_dts_decoder_config                dca_config;
+    Func_dts_decoder_getinfo               dca_getinfo;
+    void *                                 dcaLibHandler;
+} dca_decoder_func_t;
+
+
 struct dca_dts_dec {
     ///< Control
     aml_dec_t  aml_dec;
     //int (*get_parameters) (void *, int *, int *, int *);
-    int (*decoder_process)(unsigned char*, int, unsigned char *, int *, unsigned char *, int *, struct pcm_info *);
+    int (*decoder_process)(struct dca_dts_dec *, unsigned char*, int, unsigned char *, int *, unsigned char *, int *, struct pcm_info *);
 
     ///< Information
     int status;
@@ -111,6 +131,7 @@ struct dca_dts_dec {
     ring_buffer_t input_ring_buf;
     unsigned char *sample_convert_buf;
     int sample_convert_buf_size;
+    dca_decoder_func_t dcaHandle;
 };
 
 int dca_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config);
@@ -142,6 +163,17 @@ int dtshd_get_out_ch_internal(void);
 */
 int dtshd_set_out_ch_internal(int ch_num);
 
+
+/**
+* @brief Get dtshd decoder output channel mask(internal use).
+* @param None
+* @return [success]: 0 decoder not init.
+*         [success]: Output channel mask, see #AmlDtsSpeakerMask.
+*            [fail]: -1 get output channel mask fail.
+*/
+uint32_t dtshd_get_out_chmask_internal(void);
+
+aml_dec_func_t *get_dca_dec_func_handle(void);
 extern aml_dec_func_t aml_dca_func;
 
 #endif

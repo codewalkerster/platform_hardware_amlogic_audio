@@ -65,8 +65,8 @@ typedef union mat_config {
 
 struct aml_audio_info{
     int is_dolby_atmos;
-    int reserved_a;
-    int reserved_b;
+    unsigned int decoded_err_count;
+    int aac_profile;
     int reserved_c;
 };
 
@@ -93,27 +93,8 @@ public:
     virtual void *  DolbyMS12Init(int configNum, char **configParams);
     virtual void    DolbyMS12Release(void *dolbyMS12_pointer);
     virtual int     DolbyMS12InitAllParams(void *DolbyMS12Pointer, int configNum, char **configParams);
-    virtual int     DolbyMs12DecoderOpen(void *DolbyMS12Pointer, int configNum, char **configParams);
-    virtual int     DolbyMs12DecoderClose(void *DolbyMS12Pointer);
-    virtual int     DolbyMs12DecoderProcess(void *DolbyMS12Pointer);
     virtual int     DolbyMs12EncoderOpen(void *DolbyMS12Pointer, int configNum, char **configParams);
     virtual int     DolbyMs12EncoderClose(void *DolbyMS12Pointer);
-    virtual int     DolbyMS12InputMain(
-        void *dolbyMS12_pointer
-        , const void *audio_stream_out_buffer //ms12 input buffer
-        , size_t audio_stream_out_buffer_size //ms12 input buffer size
-        , int audio_stream_out_format
-        , int audio_stream_out_channel_num
-        , int audio_stream_out_sample_rate
-    );
-    virtual int     DolbyMS12InputAssociate(
-        void *dolbyMS12_pointer
-        , const void *audio_stream_out_buffer //ms12 input buffer
-        , size_t audio_stream_out_buffer_size //ms12 input buffer size
-        , int audio_stream_out_format
-        , int audio_stream_out_channel_num
-        , int audio_stream_out_sample_rate
-    );
     virtual int     DolbyMS12InputSystem(
         void *dolbyMS12_pointer
         , const void *audio_stream_out_buffer //ms12 input buffer
@@ -161,10 +142,6 @@ public:
     );
 
 #endif
-
-    virtual int DolbyMS12RegisterSyncCallback(void *DolbyMS12Pointer, ms12sync_callback callback, void *priv_data);
-    virtual int DolbyMS12RegisterTempoCallback(void *DolbyMS12Pointer, ms12tempo_callback callback, void *priv_data);
-
     virtual int     DolbyMS12UpdateRuntimeParams(
         void *DolbyMS12Pointer
         , int configNum
@@ -179,23 +156,9 @@ public:
 
     virtual void    DolbyMS12SetQuitFlag(int is_quit);
 
-    virtual void    DolbyMS12FlushInputBuffer(void);
-
-    virtual void    DolbyMS12FlushMainInputBuffer(void);
-
     virtual void    DolbyMS12FlushAppInputBuffer(void);
 
-    virtual void    DolbyMS12SetMainDummy(int type, int dummy);
-
-    virtual unsigned long long DolbyMS12GetDecoderNBytesConsumed(void *ms12_pointer, int format, int is_main);
-
-    virtual void    DolbyMS12GetPCMOutputSize(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size);
-
     virtual void    DolbyMS12GetBitstreamOutputSize(unsigned long long *all_output_size, unsigned long long *ms12_generate_zero_size);
-
-    virtual int     DolbyMS12GetMainBufferAvail(int * max_size);
-
-    virtual int     DolbyMS12GetAssociateBufferAvail(void);
 
     virtual int     DolbyMS12GetSystemBufferAvail(int * max_size);
     virtual int     DolbyMS12GetDeepBufferAvailFrames(int * max_size);
@@ -211,7 +174,7 @@ public:
     virtual int     DolbyMS12SetCompressionFormat(int compression_format);
     virtual int     DolbyMS12SetSchedulerState(int sch_state);
 
-    virtual unsigned long long DolbyMS12GetDecoderNFramesPcmOutput(void *ms12_pointer, int format, int is_main);
+    virtual unsigned int       DolbyMS12GetAacProfile();
 
     virtual unsigned long long DolbyMS12GetContinuousNFramesPcmOutput(void *ms12_pointer, int index);
 
@@ -224,9 +187,6 @@ public:
 
     virtual int DolbyMS12GetTotalNFramesDelay(void *);
 
-    virtual int     DolbyMS12HWSyncInit(void);
-    virtual int     DolbyMS12HWSyncRelease(void);
-    virtual int     DolbyMS12HWSyncCheckinPTS(int offset, int apts);
     virtual int     DolbyMS12GetLatencyForStereoOut(int *latency);
     virtual int     DolbyMS12GetLatencyForMultiChannelOut(int *latency);
     virtual int     DolbyMS12GetLatencyForDAPSpeakerOut(int *latency);
@@ -270,12 +230,22 @@ public:
 
     virtual int DolbyMS12SetAlsaDelayFrame(int delay_frame);
 
-    virtual int     DolbyMS12RegisterScaletempoCallback(scaletempo_callback callback, void *priv_data);
-
     virtual int DolbyMS12SetAlsaLimitFrame(int limit_frame);
 
     virtual int DolbyMS12SetSchedulerSleep(int enable_sleep);
 
+    virtual int MS12DeocderOpen(void *dolbyMS12_pointer, int *ms12_decid, void *codec_info);
+    virtual int MS12DeocderClose(void *dolbyMS12_pointer, int ms12_decid);
+    virtual int MS12DecoderProcess(void *dolbyMS12_pointer, int ms12_decid);
+    virtual int MS12DeocderPause(void *dolbyMS12_pointer, int ms12_decid);
+    virtual int MS12DeocderResume(void *dolbyMS12_pointer, int  ms12_decid);
+    virtual int MS12DeocderFlush(void *dolbyMS12_pointer, int ms12_decid);
+    virtual int MS12DecoderMainWrite(void *dolbyMS12_pointer, int ms12_decid, void *buffer, int size, void *pcm_info);
+    virtual int MS12DecoderAssociateWrite(void *dolbyMS12_pointer, int ms12_decid, void *buffer, int size, void *pcm_info);
+    virtual int MS12DecoderSetparameter(void *dolbyMS12_pointer, int ms12_decid, int parameter_type, void *parameter, int size);
+    virtual int MS12DecoderGetparameter(void *dolbyMS12_pointer, int ms12_decid, int parameter_type, void *parameter, int size);
+    virtual int MS12DecoderRegisterCallback(void *dolbyMS12_pointer, int ms12_decid, int callback_type, void *callback, void *priv_data);
+    virtual int MS12DecoderUnregisterCallback(void *dolbyMS12_pointer, int ms12_decid, int callback_type);
     virtual int DolbyMS12SetFadeInMaxDetectTimeMs(int time_ms);
 
     // protected:
