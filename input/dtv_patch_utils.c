@@ -190,13 +190,19 @@ void init_cmd_list(struct cmd_node *dtv_cmd_list)
 
 void deinit_cmd_list(struct cmd_node *dtv_cmd_list)
 {
-    struct cmd_node *cmd_list = dtv_cmd_list;
-    pthread_mutex_destroy(&dtv_cmd_list->dtv_cmd_mutex);
-    while (cmd_list != NULL) {
+    struct cmd_node *dtv_cmd = NULL;
+    pthread_mutex_lock(&dtv_cmd_list->dtv_cmd_mutex);
+    while (dtv_cmd_list->next) {
+        dtv_cmd = dtv_cmd_list->next;
+        if (dtv_cmd != NULL) {
+            dtv_cmd_list->next = dtv_cmd->next;
+            dtv_cmd_list->cmd_num--;
+        }
         dtv_cmd_list = dtv_cmd_list->next;
-        aml_audio_free(cmd_list);
-        cmd_list = dtv_cmd_list;
+        aml_audio_free(dtv_cmd);
     }
+    pthread_mutex_unlock(&dtv_cmd_list->dtv_cmd_mutex);
+    pthread_mutex_destroy(&dtv_cmd_list->dtv_cmd_mutex);
 }
 
 int dtv_audio_add_cmd(struct cmd_node *dtv_cmd_list,int cmd, int path_id)
