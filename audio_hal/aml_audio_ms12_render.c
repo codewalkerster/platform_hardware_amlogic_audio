@@ -113,7 +113,14 @@ re_write:
         if (dtv_stream_flag && is_ms12_passthrough(stream)) {
             aml_dtvsync_t *aml_dtvsync = (aml_dtvsync_t *)aml_out->hwsync->mediasync;
             struct dtvsync_audio_policy *async_policy = NULL;
-            if (aml_dtvsync != NULL) {
+            // JIRA:SWPL-202326
+            // Description:enter dtv under bypass, ddp stream always mute on ARC.
+            // Solution:Because switch from AUTO to passthrough, DTV output to the AVR is normal.
+            // So, when enter DTV under passthrough directly,
+            // it should check is_ms12_main_decoder is true,
+            // make sure that the ms12_dec handle is built and is_focus is true,
+            // then dolby_ms12_bypass_process() can be triggered noramlly.
+            if (aml_dtvsync != NULL && aml_out->is_ms12_main_decoder) {
                 async_policy = &(aml_dtvsync->apolicy);
                 if (async_policy->audiopolicy == DTVSYNC_AUDIO_DROP_PCM) {
                    ALOGI("%s %s", __func__, "DROP_PCM");
