@@ -2077,6 +2077,7 @@ int start_input_stream(struct aml_stream_in *in)
     if (!pcm_is_ready(in->pcm)) {
         ALOGE("%s: cannot open pcm_in driver: %s", __func__, pcm_get_error(in->pcm));
         pcm_close (in->pcm);
+        in->pcm = NULL;
         adev->active_input = NULL;
         return -ENOMEM;
     }
@@ -2085,6 +2086,7 @@ int start_input_stream(struct aml_stream_in *in)
         ret = add_in_stream_resampler(in);
         if (ret < 0) {
             pcm_close (in->pcm);
+            in->pcm = NULL;
             adev->active_input = NULL;
             return -EINVAL;
         }
@@ -2171,7 +2173,9 @@ int do_input_standby(struct aml_stream_in *in)
     struct aml_audio_device *adev = in->dev;
 
     if (!in->standby) {
-        pcm_close (in->pcm);
+        if (in->pcm != NULL) {
+            pcm_close (in->pcm);
+        }
         in->pcm = NULL;
 
         adev->active_input = NULL;
