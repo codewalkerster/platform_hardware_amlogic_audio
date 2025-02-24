@@ -1910,7 +1910,7 @@ MAIN_INPUT:
             aml_ms12_main_decoder_process(ms12, ms12_dec);
             aml_ms12_decoder_getparameter(ms12, ms12_dec, MS12_CODEC_PARAMETER_MAIN_CONSUMED, &ms12_dec->ms12_main_consume_bytes, sizeof(uint64_t));
             if (adev->debug_flag >= 2) {
-                ALOGD("ms12_main_consume_bytes %llu, dolby_ms12_input_bytes %d", ms12_dec->ms12_main_consume_bytes, dolby_ms12_input_bytes);
+                ALOGD("ms12_main_consume_bytes %"PRIu64", dolby_ms12_input_bytes %d", ms12_dec->ms12_main_consume_bytes, dolby_ms12_input_bytes);
             }
             if (dolby_ms12_input_bytes > 0) {
                 /* Passthrough Mode, only get the MAIN data as the single input */
@@ -3715,7 +3715,7 @@ static Aml_MS12_SyncPolicy_t update_ms12_position(void *priv_data, unsigned long
     if  (adev->debug_flag) {
         ALOGI("%s ms12 jitter out cur pos: %"PRIu64", last pos info: %"PRIu64", sec = %ld, nanosec = %ld\n",__func__, current_frames_positions, main_dec_handle->last_frames_position,
             main_dec_handle->timestamp.tv_sec, main_dec_handle->timestamp.tv_nsec);
-        ALOGI("%s jitter  system time diff %"PRIu64" ms, position diff %"PRId64" ms, jitter %"PRId64" ms \n",
+        ALOGI("%s jitter  system time diff %lld ms, position diff %lld ms, jitter %lld ms \n",
             __func__,system_time_us / MICRO_SECOND_PER_MILLISECOND,frame_diff_us / MICRO_SECOND_PER_MILLISECOND,jitter_diff_us / MICRO_SECOND_PER_MILLISECOND);
     }
 
@@ -3727,7 +3727,7 @@ static Aml_MS12_SyncPolicy_t update_ms12_position(void *priv_data, unsigned long
 
         ALOGI("%s ms12 jitter out cur pos: %"PRIu64", last pos info: %"PRIu64", sec = %ld, nanosec = %ld\n",__func__, current_frames_positions, main_dec_handle->last_frames_position,
                        main_dec_handle->timestamp.tv_sec, main_dec_handle->timestamp.tv_nsec);
-        ALOGI("%s jitter  system time diff %"PRIu64" ms, position diff %"PRId64" ms, jitter %"PRId64" ms \n",
+        ALOGI("%s jitter  system time diff %lld ms, position diff %lld ms, jitter %lld ms \n",
                        __func__,system_time_us / MICRO_SECOND_PER_MILLISECOND,frame_diff_us / MICRO_SECOND_PER_MILLISECOND,jitter_diff_us / MICRO_SECOND_PER_MILLISECOND);
     }
     /*currently the position is not accurate, we need compensate it*/
@@ -5995,7 +5995,7 @@ static bool ms12_audio_data_detect_is_zero(const void *in_data, int samples, aud
     } else {
         ret = false;
     }
-    ALOGD("%s ret:%d, samples:%zu buf_value:%d", __func__, ret, samples, buf_max);
+    ALOGD("%s ret:%d, samples:%d buf_value:%d", __func__, ret, samples, buf_max);
     return ret;
 }
 
