@@ -152,8 +152,11 @@ int dvb_audio_get_sound_mode(int demux_id) {
 
 int dvb_audio_get_es_pts_dts_flag(int demux_id) {
     ALOGV("demux_id %d",demux_id);
-    int dtv_es_pts_dts_flag = 0;
     int ret = 0;
+    char temp_buf[64] = {0};
+    sprintf (temp_buf, "hal_param_dtv_dmx_id=%d", demux_id);
+    aml_audioport->setParameters(String8(temp_buf));
+    int dtv_es_pts_dts_flag = 0;
     struct str_parms *parms;
     String8 mString = aml_audioport->getParameters(String8("hal_param_dtv_es_pts_dts_flag"));
     if (!mString.isEmpty()) {

@@ -834,7 +834,7 @@ dtvsync_queue:
         }
         Dtvsync->last_queue_apts = dtv_package->pts;
         if (is_multi_demux) {
-            if ((dtv_package->pts_dts_flag & 0x0F) == DVB_AUDIO_ES_PTS_VALID) {
+            if ((dtv_package->pts_dts_flag & 0x0F) != DVB_AUDIO_ES_PTS_INVALID) {
                 audio_queue_info.apts = dtv_package->pts;
                 audio_queue_info.duration = Dtvsync->duration;
             } else {
@@ -1194,7 +1194,7 @@ int dtv_audio_check_package(struct aml_dtv_audio_instance *instance, struct pack
     data_arrive_jitter_ms = calc_time_interval_us(package_get_ts, &current_ts) / 1000;
     package_get_ts->tv_sec = current_ts.tv_sec;
     package_get_ts->tv_nsec = current_ts.tv_nsec;
-    if ((p_package->pts_dts_flag & 0x0F) == DVB_AUDIO_ES_PTS_VALID) {
+    if ((p_package->pts_dts_flag & 0x0F) != DVB_AUDIO_ES_PTS_INVALID) {
         data_pts_jitter_ms = DIFF_ABS(instance->dtvsync.last_package_pts,p_package->pts)/90;
     } else {
         data_pts_jitter_ms = 0;
