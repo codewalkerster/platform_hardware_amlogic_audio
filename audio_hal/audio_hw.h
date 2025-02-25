@@ -85,6 +85,10 @@
 #define DEFAULT_CAPTURE_PERIOD_SIZE  1024
 #define DEFAULT_PLAYBACK_PERIOD_CNT 6
 
+// Base on : audioflinger fast mixer enable threshold, netflix ninja11 vsp-al1-23fps-heaac issue
+// static const uint32_t kMinNormalSinkBufferSizeMs = 20;
+#define NORMAL_MIXER_MIN_BUFFER_FRAMES (20 * 48)
+
 #define LOW_LATENCY_PLAYBACK_PERIOD_SIZE 256
 #define LOW_LATENCY_CAPTURE_PERIOD_SIZE  512
 

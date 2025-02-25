@@ -672,7 +672,7 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
             } else {
                 /* Framework sonic position jitter is related with hal buffer size. Hal buffer is smaller, position jitter is less */
                 if (out->is_normal_pcm && (out->hal_ch == 2)) {
-                    return DEFAULT_PLAYBACK_PERIOD_SIZE * audio_stream_out_frame_size ( (struct audio_stream_out *) stream);
+                    return NORMAL_MIXER_MIN_BUFFER_FRAMES * audio_stream_out_frame_size ( (struct audio_stream_out *) stream);
                 }
                 /* roll back the change for SWPL-15974 to pass the gts failure SWPL-20926*/
                 return DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT* audio_stream_out_frame_size ( (struct audio_stream_out *) stream);
@@ -683,7 +683,7 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
             size = DEFAULT_PLAYBACK_PERIOD_SIZE * 2;
         } else if (audio_is_linear_pcm(out->hal_internal_format) && out->is_normal_pcm && (out->hal_ch == 2) && !(out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC)) {
             /* Framework sonic position jitter is related with hal buffer size. Hal buffer is smaller, position jitter is less */
-            size = DEFAULT_PLAYBACK_PERIOD_SIZE;
+            size = NORMAL_MIXER_MIN_BUFFER_FRAMES;
         } else {
             size = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT;
         }
