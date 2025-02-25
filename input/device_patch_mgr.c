@@ -645,7 +645,8 @@ static bool is_contain_d2d_patch(struct aml_audio_device *adev, struct audio_pat
     list_for_each(node, &pm_tmp->patch_list) {
         patch_set_tmp = node_to_item(node, struct audio_patch_set, list_node);
         patch_tmp = &patch_set_tmp->audio_patch;
-        if (unused_patch != NULL && unused_patch == patch_tmp) {
+        if ((unused_patch != NULL && unused_patch == patch_tmp) ||
+            (patch_tmp->sources[0].ext.device.type == AUDIO_DEVICE_IN_TV_TUNER_DTV)) {
             continue;
         }
         if (patch_tmp->sources[0].type == AUDIO_PORT_TYPE_DEVICE &&

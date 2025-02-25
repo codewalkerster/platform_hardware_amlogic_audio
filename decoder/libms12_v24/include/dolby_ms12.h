@@ -182,6 +182,11 @@ int dolby_ms12_info_dump(int fd);
 int dolby_ms12_get_input_atmos_info();
 
 /*@@
+    @brief get aac profile
+*/
+int dolby_ms12_get_aac_profile();
+
+/*@@
     @brief get dolby mat dec latency
 */
 int dolby_ms12_get_mat_dec_latency();

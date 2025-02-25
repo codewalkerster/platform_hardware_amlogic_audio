@@ -153,22 +153,23 @@ struct dmx_sct_filter_params
 typedef enum dmx_input_source {
 	INPUT_DEMOD,
 	INPUT_LOCAL,
-	INPUT_LOCAL_SEC
+    INPUT_LOCAL_SEC
 } dmx_input_source_t;
 
 /**
  * struct dmx_non_sec_es_header - non-sec Elementary Stream (ES) Header
  *
  * @pts_dts_flag:[1:0], 01:pts valid, 10:dts valid
- * @pts:	pts value
- * @dts:	dts value
- * @len:	data len
+ * @pts_dts_flag:[3:2], 10:scb is scrambled, 01:pscp invalid
+ * @pts:    pts value
+ * @dts:    dts value
+ * @len:    data len
  */
 struct dmx_non_sec_es_header {
-	__u8 pts_dts_flag;
-	__u64 pts;
-	__u64 dts;
-	__u32 len;
+    __u8 pts_dts_flag;
+    __u64 pts;
+    __u64 dts;
+    __u32 len;
 };
 
 /**

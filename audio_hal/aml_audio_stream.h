@@ -32,6 +32,11 @@
 #define AUDIO_FADEIN_STB_DURATION_US 40 * 1000
 
 
+#define KEY_SAMPLE_RATE     "sample-rate"
+#define KEY_AUDIO_ENCODING  "audio-encoding"
+#define KEY_CHANNEL_MASK    "channel-mask"
+
+
 enum {
     DO_FADE_AT_HAL,
     DO_FADE_AT_ALSA,
@@ -199,9 +204,11 @@ typedef enum {
     ENCODING_MPEGH_BL_L4                  = 24,
     ENCODING_MPEGH_LC_L3                  = 25,
     ENCODING_MPEGH_LC_L4                  = 26,
-    ENCODING_DTS_UHD                      = 27,
+    ENCODING_DTS_UHD_P1                   = 27,
     ENCODING_DRA                          = 28,
+    ENCODING_DTS_HD_MA                    = 29,
     ENCODING_DTS_UHD_P2                   = 30,
+    ENCODING_DSD                          = 31,
 } AUDIO_ENCODING_FORMAT_E;
 
 static inline audio_format_t encodingFormat2AudioFormat(AUDIO_ENCODING_FORMAT_E audioFormat)
@@ -259,12 +266,92 @@ static inline audio_format_t encodingFormat2AudioFormat(AUDIO_ENCODING_FORMAT_E 
         return AUDIO_FORMAT_MPEGH_LC_L3;
     case ENCODING_MPEGH_LC_L4:
         return AUDIO_FORMAT_MPEGH_LC_L4;
-    case ENCODING_DTS_UHD:
+    case ENCODING_DTS_UHD_P1:
         return AUDIO_FORMAT_DTS_UHD;
     case ENCODING_DRA:
         return AUDIO_FORMAT_DRA;
     default:
         return AUDIO_FORMAT_INVALID;
+    }
+}
+static inline int audioFormat2EncodingFormat(audio_format_t audioFormat)
+{
+    switch (audioFormat) {
+    case AUDIO_FORMAT_PCM_16_BIT:
+        return ENCODING_PCM_16BIT;
+    case AUDIO_FORMAT_PCM_8_BIT:
+        return ENCODING_PCM_8BIT;
+    case AUDIO_FORMAT_PCM_FLOAT:
+        return ENCODING_PCM_FLOAT;
+
+    // As of S, these extend integer precision formats now return more specific values
+    // than ENCODING_PCM_FLOAT.
+    case AUDIO_FORMAT_PCM_24_BIT_PACKED:
+        return ENCODING_PCM_24BIT_PACKED;
+    case AUDIO_FORMAT_PCM_32_BIT:
+        return ENCODING_PCM_32BIT;
+
+    // map this to ENCODING_PCM_FLOAT
+    case AUDIO_FORMAT_PCM_8_24_BIT:
+        return ENCODING_PCM_FLOAT;
+
+    case AUDIO_FORMAT_AC3:
+        return ENCODING_AC3;
+    case AUDIO_FORMAT_E_AC3:
+        return ENCODING_E_AC3;
+    case AUDIO_FORMAT_DTS:
+        return ENCODING_DTS;
+    case AUDIO_FORMAT_DTS_HD:
+        return ENCODING_DTS_HD;
+    case AUDIO_FORMAT_MP3:
+        return ENCODING_MP3;
+    case AUDIO_FORMAT_AAC_LC:
+        return ENCODING_AAC_LC;
+    case AUDIO_FORMAT_AAC_HE_V1:
+        return ENCODING_AAC_HE_V1;
+    case AUDIO_FORMAT_AAC_HE_V2:
+        return ENCODING_AAC_HE_V2;
+    case AUDIO_FORMAT_IEC61937:
+        return ENCODING_IEC61937;
+    case AUDIO_FORMAT_DOLBY_TRUEHD:
+        return ENCODING_DOLBY_TRUEHD;
+    case AUDIO_FORMAT_AAC_ELD:
+        return ENCODING_AAC_ELD;
+    case AUDIO_FORMAT_AAC_XHE:
+        return ENCODING_AAC_XHE;
+    case AUDIO_FORMAT_AC4:
+        return ENCODING_AC4;
+    case AUDIO_FORMAT_E_AC3_JOC:
+        return ENCODING_E_AC3_JOC;
+    case AUDIO_FORMAT_MAT:
+    case AUDIO_FORMAT_MAT_1_0:
+    case AUDIO_FORMAT_MAT_2_0:
+    case AUDIO_FORMAT_MAT_2_1:
+        return ENCODING_DOLBY_MAT;
+    case AUDIO_FORMAT_OPUS:
+        return ENCODING_OPUS;
+    case AUDIO_FORMAT_MPEGH_BL_L3:
+        return ENCODING_MPEGH_BL_L3;
+    case AUDIO_FORMAT_MPEGH_BL_L4:
+        return ENCODING_MPEGH_BL_L4;
+    case AUDIO_FORMAT_MPEGH_LC_L3:
+        return ENCODING_MPEGH_LC_L3;
+    case AUDIO_FORMAT_MPEGH_LC_L4:
+        return ENCODING_MPEGH_LC_L4;
+    case AUDIO_FORMAT_DTS_UHD:
+        return ENCODING_DTS_UHD_P1;
+    case AUDIO_FORMAT_DRA:
+        return ENCODING_DRA;
+    case AUDIO_FORMAT_DTS_HD_MA:
+        return ENCODING_DTS_HD_MA;
+    case AUDIO_FORMAT_DTS_UHD_P2:
+        return ENCODING_DTS_UHD_P2;
+    case AUDIO_FORMAT_DEFAULT:
+        return ENCODING_DEFAULT;
+    case AUDIO_FORMAT_DSD:
+        return ENCODING_DSD;
+    default:
+        return ENCODING_INVALID;
     }
 }
 
@@ -506,6 +593,8 @@ int aml_audio_earc_get_latency(struct aml_audio_device *adev);
 int set_device_control(struct audio_hw_device *dev, struct str_parms *parms);
 audio_channel_mask_t aml_map_ch_to_mask(int ch);
 audio_channel_mask_t aml_map_ca_to_mask(int ca);
+
+void out_stream_send_codec_event(struct audio_stream_out *stream, const char *caller);
 void aml_stream_clear_speed_aux_info(struct aml_stream_out *aml_out);
 
 ssize_t mixer_aux_buffer_write_wrap(struct audio_stream_out *stream, void *abuffer);

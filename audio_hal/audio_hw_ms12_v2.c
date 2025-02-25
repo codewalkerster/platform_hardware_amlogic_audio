@@ -948,6 +948,38 @@ int get_ms12_mat_dec_delay() {
     return dolby_ms12_get_mat_dec_latency();
 }
 
+int get_ms12_codec_format_info(struct dolby_ms12_desc *ms12,struct codec_format_info *codec_format)
+{
+
+    struct aml_audio_device *adev = (struct aml_audio_device *)adev_get_handle();
+    if (!ms12 || !codec_format) {
+        ALOGE("-%s() pointer error ms12 %p codec_format %p", __FUNCTION__, ms12, codec_format);
+        return -EINVAL;
+    }
+    codec_format->encoding_format = ms12->input_config_format;
+    codec_format->channel_mask = ms12->config_channel_mask;
+    codec_format->sampe_rate = ms12->config_sample_rate;
+    bool is_aac_format = ((codec_format->encoding_format == AUDIO_FORMAT_AAC) || \
+                            (codec_format->encoding_format == AUDIO_FORMAT_AAC_LATM) || \
+                            (codec_format->encoding_format == AUDIO_FORMAT_HE_AAC_V1) || \
+                            (codec_format->encoding_format == AUDIO_FORMAT_HE_AAC_V2));
+    if (is_aac_format) {
+         int aac_profile = dolby_ms12_get_aac_profile();
+         if (adev->debug_flag)
+             ALOGI("aac_profile %d",aac_profile);
+         if (aac_profile == AAC_PROFILE_LC) {
+            codec_format->encoding_format = AUDIO_FORMAT_AAC_LC;
+         } else if (aac_profile == AAC_PROFILE_HEAAC_V1) {
+            codec_format->encoding_format = AUDIO_FORMAT_AAC_HE_V1;
+         } else if (aac_profile == AAC_PROFILE_HEAAC_V2) {
+            codec_format->encoding_format = AUDIO_FORMAT_AAC_HE_V2;
+         }
+    }
+    if (adev->debug_flag)
+        ALOGD("encoding_format %0x channel_mask %0x codec_format->sampe_rate %d",
+        codec_format->encoding_format, codec_format->channel_mask, codec_format->sampe_rate);
+    return 0;
+}
 static void ms12_close_all_spdifout(struct dolby_ms12_desc *ms12) {
     int i = 0;
     struct aml_audio_device *adev = adev_get_handle();
@@ -1041,6 +1073,7 @@ void set_ms12_decoder_mute(struct audio_stream_out *stream, bool b_mute, unsigne
         ALOGE("%s b_mute %d, duration %d fail ! (stream is NULL)", __func__, b_mute, duration);
         return;
     }
+    ALOGI("%s b_mute %d duration %d ms", __FUNCTION__, b_mute, duration);
     aml_out->is_decoder_muted = b_mute;
     aml_out->decoder_mute_duration = duration;
 }

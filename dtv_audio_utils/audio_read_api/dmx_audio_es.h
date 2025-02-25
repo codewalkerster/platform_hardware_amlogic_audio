@@ -9,6 +9,7 @@
     (fmt == ACODEC_FMT_MPEG2) || (fmt == ACODEC_FMT_AAC) || (fmt == ACODEC_FMT_AAC_LATM))
 
 #define  DVB_AUDIO_ES_PTS_VALID 0x02
+#define  DVB_AUDIO_ES_PTS_INVALID 0x04
 
 typedef enum
 {

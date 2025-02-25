@@ -18,6 +18,9 @@
 #define _DTV_PATCH_H_
 
 #include <cutils/str_parms.h>
+
+#define FORMAT_STABLE_COUNT 10
+
 #include "device_patch.h"
 #include "dtv_patch_utils.h"
 #include "dtv_patch_hal_avsync.h"
@@ -109,6 +112,7 @@ typedef struct aml_dtv_audio_instance {
     struct heaac_parser_info main_heaac_info;
     struct heaac_parser_info ad_heaac_info;
     int32_t PServerDev;
+    int update_stable_count;
 } aml_dtv_audio_instance_t;
 
 typedef struct aml_dtv_audio_context {
@@ -136,7 +140,7 @@ int out_start_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
 int out_stop_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
 int out_flush_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
 int out_standby_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
-int out_write_dtv_stream_for_tunerframework(struct audio_stream_out *stream, const void *buffer, size_t bytes);
+ssize_t out_write_dtv_stream_for_tunerframework(struct audio_stream_out *stream, const void *buffer, size_t bytes);
 int out_get_audio_description_mix_level(struct audio_stream_out *stream, float *leveldB);
 int out_set_audio_description_mix_level(struct audio_stream_out *stream, const float leveldB);
 int out_get_dual_mono_mode(struct audio_stream_out *stream, audio_dual_mono_mode_t *mode);
@@ -145,10 +149,13 @@ int out_set_volume_for_tunerframework(struct audio_stream_out *stream, float lef
 int out_set_playback_rate_parameters_for_tunerframework(struct audio_stream_out *stream, const audio_playback_rate_t *playbackRate);
 int out_get_playback_rate_parameters_for_tunerframework(struct audio_stream_out *stream, audio_playback_rate_t *playbackRate);
 int out_get_presentation_position_for_tunerframework (const struct audio_stream_out *stream, uint64_t *frames, struct timespec *timestamp);
+int out_set_params_for_tunerframework(struct audio_stream_out *stream,struct str_parms *parms);
 #endif
 int set_dtv_parameters(struct audio_hw_device *dev, struct str_parms *parms);
 int get_dtv_parameters(struct audio_hw_device *dev, const char *keys);
 int dtv_patch_get_latency(struct aml_audio_device *aml_dev);
 int dtv_patch_get_es_pts_dts_flag(struct aml_audio_device *aml_dev);
 int dtv_patch_get_cmd_close_status(struct aml_audio_device *aml_dev);
+int dtv_patch_get_decoder_fmt(struct aml_audio_device *aml_dev);
+int dtv_patch_get_ac4_acivie_res_id(struct aml_audio_device *aml_dev);
 #endif /* _DTV_PATCH_H_ */

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define LOG_TAG "audio_hw_decoder_dcv"
+#define LOG_TAG "audio_hw_decoder_aac"
 //#define LOG_NDEBUG 0
 
 #include <dlfcn.h>
@@ -81,6 +81,12 @@ struct aac_dec_t {
     unsigned char ad_fade;
     unsigned char ad_pan;
     unsigned char ad_placement;
+};
+
+enum aac_profile {
+    AAC_PROFILE_LC = 0,
+    AAC_PROFILE_HEAAC_V1 = 1,/*LC + SBR*/
+    AAC_PROFILE_HEAAC_V2 = 2,/*LC + SBR + PS*/
 };
 
 static  int unload_faad_decoder_lib(struct aac_dec_t *aac_dec)
@@ -427,6 +433,13 @@ static int faad_decoder_process(aml_dec_t *aml_dec, unsigned char *buffer, int b
     aac_dec->total_pcm_size += dec_pcm_data->data_len;
     if (dec_pcm_data->data_len)  {
         faad_op->getinfo(faad_op,&pAudioInfo);
+        if (pAudioInfo.file_profile == AAC_PROFILE_HEAAC_V1) {
+            aac_dec->stream_info.stream_format = AUDIO_FORMAT_AAC_HE_V1;
+        } else if (pAudioInfo.file_profile == AAC_PROFILE_HEAAC_V2) {
+            aac_dec->stream_info.stream_format = AUDIO_FORMAT_AAC_HE_V2;
+        } else if (pAudioInfo.file_profile == AAC_PROFILE_LC) {
+            aac_dec->stream_info.stream_format = AUDIO_FORMAT_AAC_LC;
+        }
         aac_dec->stream_info.stream_sr = pAudioInfo.samplerate;
         aac_dec->stream_info.stream_ch = faad_op->NchOriginal;
         aac_dec->stream_info.output_bLFE = faad_op->lfepresent;

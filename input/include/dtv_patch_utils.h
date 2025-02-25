@@ -46,7 +46,7 @@
 #define DIFF_ABS(a, b) ((a) > (b) ? (a -b ) : (b -a))
 
 
-#define INPUT_PACKAGE_MAXCOUNT 200
+#define INPUT_PACKAGE_MAXCOUNT 100
 
 
 #define AD_PACK_STATUS_UNNORMAL_THRESHOLD_MS 4000
@@ -117,7 +117,9 @@ typedef enum {
     AUDIO_DTV_PATCH_CMD_SET_SPDIF_PROTECTION_MODE  = 31,
     AUDIO_DTV_PATCH_CMD_ES_PTS_DTS_FLAG  = 32,
     AUDIO_DTV_PATCH_CMD_SET_PLAYBACK_MODE  = 33,
-    AUDIO_DTV_PATCH_CMD_NUM             = 34,
+    AUDIO_DTV_PATCH_CMD_SET_MEDIA_PROGRAM_ID  = 34,
+    AUDIO_DTV_PATCH_CMD_RESET_OUTPUT      = 35,
+    AUDIO_DTV_PATCH_CMD_NUM               = 36,
 } AUDIO_DTV_PATCH_CMD_TYPE;
 
 typedef enum  {
@@ -186,6 +188,7 @@ typedef struct aml_dtv_audiopara {
     int mixing_level;
     int advol_level;
     int media_sync_id;
+    int media_program_id;
     int media_presentation_id;
     int ad_package_status;
     int media_first_lang;

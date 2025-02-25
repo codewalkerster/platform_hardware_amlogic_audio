@@ -913,7 +913,15 @@ static int out_set_parameters (struct audio_stream *stream, const char *kvpairs)
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
-
+#ifdef ENABLE_DVB_PATCH
+        if (dtv_tuner_framework((struct audio_stream_out *)stream)) {
+            ret = out_set_params_for_tunerframework((struct audio_stream_out *)stream, parms);
+            if (ret >= 0) {
+                ALOGD("out_set_params_for_tunerframework (kv: %s)", kvpairs);
+                goto exit;
+            }
+        }
+#endif
         int presentation_id = -1;
         ret = str_parms_get_int(parms, AUDIO_PARAMETER_STREAM_PRESENTATION_ID, &presentation_id);
         if (ret >= 0) {
@@ -1059,8 +1067,7 @@ static uint32_t out_get_latency (const struct audio_stream_out *stream)
 bool dtv_tuner_framework(struct audio_stream_out *stream)
 {
     struct aml_stream_out *out = (struct aml_stream_out *)stream;
-    if (out && (out->dev) && is_same_patch_src(out->dev, SRC_DTV) &&
-        is_dev_patch_running(out->dev) &&
+    if (out && (out->dev)  &&
         (out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) &&
         (out->audioCfg.offload_info.content_id != 0)&&
         (out->audioCfg.offload_info.sync_id != 0)) {
@@ -4762,14 +4769,16 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         return strdup(temp_buf);
     } else if (strstr (keys, "ac4_active_pres_id")) {
        int active_id_offset = -1;
-        if ((eDolbyMS12Lib == adev->dolby_lib_type) && (adev->ms12.input_config_format == AUDIO_FORMAT_AC4)) {
+#ifndef AUDIO_HAL_DISABLE_MS12
+        if (eDolbyMS12Lib == adev->dolby_lib_type) {
+#ifdef ENABLE_DVB_PATCH
             //should use the dolby_ms12_get_ac4_active_presentation() before or after get_dolby_ms12_cleanup()
             pthread_mutex_lock(&adev->ms12.lock);
-            if (adev->ms12.dolby_ms12_enable && (0 == dolby_ms12_get_ac4_active_presentation(&active_id_offset))) {
-                ALOGI ("dolby_ms12_get_ac4_active_presentation index offset is %d\n", active_id_offset);
-            }
+            active_id_offset = dtv_patch_get_ac4_acivie_res_id(adev);
             pthread_mutex_unlock(&adev->ms12.lock);
+#endif
         }
+#endif
         sprintf(temp_buf, "ac4_active_pres_id=%d", active_id_offset);
         return strdup(temp_buf);
     } else if (strstr (keys, "hal_param_dtv_es_pts_dts_flag") ) {
@@ -4822,6 +4831,13 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         if (temp_params != NULL) {
             return temp_params;
         }
+    } else if (strstr (keys, "hal_param_dtv_decoder_fmt")) {
+#ifdef ENABLE_DVB_PATCH
+        int decoder_fmt = dtv_patch_get_decoder_fmt(adev);
+        sprintf(temp_buf, "hal_param_dtv_decoder_fmt=%d", decoder_fmt);
+#endif
+        ALOGV("temp_buf %s", temp_buf);
+        return strdup(temp_buf);
     }
 
     if (eDTSXLib == adev->dts_lib_type) {

@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <audio_utils/Metadata.h>
 
 #include "aml_alsa_mixer.h"
 #include "aml_audio_stream.h"
@@ -1693,6 +1694,28 @@ int set_device_control(struct audio_hw_device *dev, struct str_parms *parms)
     }
 exit:
     return ret;
+}
+
+
+void out_stream_send_codec_event(struct audio_stream_out *stream, const char *caller)
+{
+    struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
+    struct aml_audio_device *adev = aml_out->dev;
+    if (aml_out->stream_event_callback && aml_out->stream_cookie) {
+        ALOGI("caller:%s, out:%p, stream_cookie:%p", caller, aml_out, aml_out->stream_cookie);
+        audio_metadata_t *metadata = audio_metadata_create();
+
+        audio_metadata_put(metadata, KEY_CHANNEL_MASK,(int32_t)(aml_out->hal_channel_mask << 2));
+        audio_metadata_put(metadata, KEY_AUDIO_ENCODING,(int32_t)(audioFormat2EncodingFormat(aml_out->hal_format)));
+        audio_metadata_put(metadata, KEY_SAMPLE_RATE,(int32_t)(aml_out->hal_rate));
+
+        uint8_t *bs = NULL;
+        ssize_t length = byte_string_from_audio_metadata(metadata, &bs);
+        aml_out->stream_event_callback(STREAM_EVENT_CBK_TYPE_CODEC_FORMAT_CHANGED, (void*)bs, aml_out->stream_cookie);
+
+        free(bs);
+        audio_metadata_destroy(metadata);
+    }
 }
 
 void aml_stream_clear_speed_aux_info(struct aml_stream_out *aml_out)

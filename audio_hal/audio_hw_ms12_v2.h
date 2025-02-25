@@ -80,6 +80,30 @@ typedef enum {
     MS12_COMPRESSOR_SPEECH              = 5
 } MS12_COMPRESSOR_PROFILES;
 
+
+/**
+ *  @brief codec input stream codec info .
+ */
+
+typedef struct codec_format_info {
+
+	uint32_t encoding_format;
+	uint32_t channel_mask;
+	uint32_t sampe_rate;
+
+} codec_format_info_t;
+
+/**
+ *  @brief aac codec profile info
+ */
+
+enum aac_profile {
+    AAC_PROFILE_LC = 0,
+    AAC_PROFILE_HEAAC_V1 = 1,/*LC + SBR*/
+    AAC_PROFILE_HEAAC_V2 = 2,/*LC + SBR + PS*/
+};
+
+
 /*
  *@brief get dolby ms12 prepared
  */
@@ -462,6 +486,9 @@ int aml_dap_process(
     , size_t bytes
     , size_t *use_size);
 
+
+int dolby_ms12_get_latency(struct dolby_ms12_desc *ms12, audio_format_t output_format);
+int get_ms12_codec_format_info(struct dolby_ms12_desc *ms12,struct codec_format_info *codec_format);
 int set_ms12_fadein_max_detect_time_ms(int time_ms);
 
 #endif //end of _AUDIO_HW_MS12_H_

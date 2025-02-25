@@ -55,7 +55,8 @@
 #define ACODEC_FMT_MPEG2 27
 #define ACODEC_FMT_WMAVOI 28
 #define ACODEC_FMT_AC4    29
-
+#define ACODEC_FMT_HEAAC_V1  35
+#define ACODEC_FMT_HEAAC_V2  36
 #define DDP_DECODER_CACHE 32 * 90 /* ddp decoder cache es data one frame 32ms */
 
 typedef enum {
@@ -115,6 +116,7 @@ typedef enum aml_ad_placement {
 } aml_ad_placement_t;
 
 typedef struct aml_dec_stream_info {
+    int stream_format; /** the format in stream*/
     int stream_sr;    /** the sample rate in stream*/
     int stream_ch;    /** the original channels in stream*/
     int output_bLFE;
@@ -327,5 +329,7 @@ int aml_decoder_process(aml_dec_t *aml_dec, unsigned char*buffer, int bytes, int
 int aml_decoder_set_config(aml_dec_t *aml_dec, aml_dec_config_type_t config_type, aml_dec_config_t * dec_config);
 void aml_decoder_calc_coefficient(unsigned char ad_fade,float * mix_coefficient,float * ad_coefficient);
 void get_audio_decoder_info (aml_dec_info_t dec_info, aml_dec_t *aml_dec);
+int aml_decoder_get_info(aml_dec_t *aml_dec, aml_dec_info_type_t info_type, aml_dec_info_t * dec_info);
+
 
 #endif

@@ -424,6 +424,16 @@ extern "C" int dolby_ms12_get_input_atmos_info()
     }
 }
 
+extern "C" unsigned int dolby_ms12_get_aac_profile()
+{
+    android::DolbyMS12* dolby_ms12_instance = getInstance();
+    if (dolby_ms12_instance) {
+        return dolby_ms12_instance->DolbyMS12GetAacProfile();
+    } else {
+        return -1;
+    }
+}
+
 extern "C" int dolby_ms12_get_mat_dec_latency()
 {
     ALOGV("%s()\n", __FUNCTION__);
