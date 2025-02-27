@@ -1883,9 +1883,6 @@ MAIN_INPUT:
             int n_bytes_decoder_consumed = 0;
             int frame_length = main_frame_size;
 
-            /*we check whether there is enough space*/
-            if ((adev->continuous_audio_mode == 1)
-                && (is_dolby_ms12_support_compression_format(ms12_hal_format) || (ms12_hal_format == AUDIO_FORMAT_IEC61937)))
             {
                 int max_size = 0;
                 int main_avail = 0;
@@ -1931,8 +1928,10 @@ MAIN_INPUT:
                     if (is_ddp_format && ddp_1st_main_frame_size && (ddp_1st_numblks < DDP_FRAME_MAX_NUMBLK)) {
                         frame_length = ddp_1st_main_frame_size;
                     }
-
-                    if ((max_size - main_avail) >= frame_length) {
+                    /*
+                     * for pcm case we don't need check the available buf size, ms12 will allocate new one
+                     */
+                    if ((max_size - main_avail) >= frame_length || audio_is_linear_pcm(ms12_hal_format)) {
                         dolby_ms12_input_bytes = aml_ms12_main_decoder_write(
                                                             ms12
                                                             , ms12_dec
