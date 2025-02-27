@@ -834,7 +834,8 @@ dtvsync_queue:
         }
         Dtvsync->last_queue_apts = dtv_package->pts;
         if (is_multi_demux) {
-            if ((dtv_package->pts_dts_flag & 0x0F) != DVB_AUDIO_ES_PTS_INVALID) {
+            if ((dtv_package->pts_dts_flag & 0x0F) != DVB_AUDIO_ES_PTS_INVALID &&
+                dtv_package->pts) {
                 audio_queue_info.apts = dtv_package->pts;
                 audio_queue_info.duration = Dtvsync->duration;
             } else {
@@ -1062,6 +1063,10 @@ void update_dtv_audio_decoder_runtime_params(struct aml_stream_out *aml_out, aml
                 aml_out->dec_config.advol_level = dtv_audio_info->advol_level;
                 set_ms12_ad_vol(&aml_out->stream, dtv_audio_info->advol_level);
             }
+            if (dtv_audio_info->associate_audio_mixing_enable != aml_out->dec_config.ad_mixing_enable) {
+                aml_out->dec_config.ad_mixing_enable = dtv_audio_info->associate_audio_mixing_enable;
+                set_ms12_ad_mixing_enable(&aml_out->stream, dtv_audio_info->associate_audio_mixing_enable);
+            }
             if (dtv_audio_info->main_fmt == ACODEC_FMT_AC4) {
                 if (dtv_audio_info->media_presentation_id != aml_out->dec_config.media_presentation_id) {
                     aml_out->dec_config.media_presentation_id = dtv_audio_info->media_presentation_id;
@@ -1159,13 +1164,15 @@ int dtv_audio_check_package(struct aml_dtv_audio_instance *instance, struct pack
     int ret = 0;
     int64_t data_arrive_jitter_ms = 0;
     int64_t data_pts_jitter_ms = 0;
+    bool package_data_valid = ((p_package->pts_dts_flag & 0x0F) != DVB_AUDIO_ES_PTS_INVALID) && (p_package->pts != 0);
 
     //check package data to get first valid data
     if (!instance->package_checked_flag) {
-        if ((p_package->pts_dts_flag & 0x0F) != DVB_AUDIO_ES_PTS_INVALID) {
+        if (package_data_valid) {
             instance->package_checked_flag = true;
         } else {
-            ALOGI("dtv package pts_dts_flag %0x invalid, free the package.", p_package->pts_dts_flag );
+            ALOGI("dtv package pts_dts_flag %0x pts %"PRIx64" invalid, free the package.",
+                                                  p_package->pts_dts_flag, p_package->pts);
             if (p_package->data) {
                 aml_audio_free(p_package->data);
                 p_package->data = NULL;
@@ -1194,7 +1201,7 @@ int dtv_audio_check_package(struct aml_dtv_audio_instance *instance, struct pack
     data_arrive_jitter_ms = calc_time_interval_us(package_get_ts, &current_ts) / 1000;
     package_get_ts->tv_sec = current_ts.tv_sec;
     package_get_ts->tv_nsec = current_ts.tv_nsec;
-    if ((p_package->pts_dts_flag & 0x0F) != DVB_AUDIO_ES_PTS_INVALID) {
+    if (package_data_valid) {
         data_pts_jitter_ms = DIFF_ABS(instance->dtvsync.last_package_pts,p_package->pts)/90;
     } else {
         data_pts_jitter_ms = 0;
@@ -1653,9 +1660,11 @@ static void *audio_dtv_cmd_process_threadloop(void *data)
                 if (ret != 0) {
                    ALOGE("[%s:%d] release dtv patch failed, all_out_devices:%#x.", __func__, __LINE__, aml_dev->cur_out_devices);
                    goto exit;
-               }
-               clean_dtv_audio_info(dtv_audio_info);
-               dtv_audio_instance->dtv_audio_state = AUDIO_DTV_PATCH_DECODER_STATE_IDLE;
+                }
+                clean_dtv_audio_info(dtv_audio_info);
+                dtv_audio_instance->dtv_audio_state = AUDIO_DTV_PATCH_DECODER_STATE_IDLE;
+                pthread_cond_signal(&dtv_audio_context->dtv_cmd_processed_cond);
+                ALOGI("pthread_cond_signal dtv_cmd_processed_cond");
             } else {
                 ALOGI("++%s line %d state unsupport state %d cmd %d !\n",
                       __FUNCTION__, __LINE__, dtv_audio_instance->dtv_audio_state, cmd);
@@ -1700,7 +1709,7 @@ static int release_dtv_output_stream_thread(struct aml_dtv_audio_instance *dtv_a
     int ret = 0;
     ALOGI("++%s ---- %d\n", __FUNCTION__, dtv_audio_instance->output_thread_created);
     if (dtv_audio_instance->output_thread_created == 1) {
-        tv_set_ease(dtv_audio_instance->dtv_stream_out.stream_out, EaseOut);
+        //tv_set_ease(dtv_audio_instance->dtv_stream_out.stream_out, EaseOut);
         dtv_audio_instance->output_thread_exit = 1;
         if (dtv_audio_instance->dtv_stream_out.stream_out) {
             dtv_audio_instance->dtv_stream_out.stream_out->is_eos = true;
@@ -1758,6 +1767,7 @@ int create_dtv_cmd_process_thread(struct aml_dtv_audio_context *context)
     pthread_condattr_init(&cattr);
     pthread_condattr_setclock(&cattr, CLOCK_MONOTONIC);
     pthread_cond_init(&context->dtv_cmd_process_cond, &cattr);
+    pthread_cond_init(&context->dtv_cmd_processed_cond, &cattr);
 
     pthread_mutex_init(&context->dtv_cmd_process_mutex, NULL);
 
@@ -1769,6 +1779,7 @@ int create_dtv_cmd_process_thread(struct aml_dtv_audio_context *context)
         ALOGE("%s, Create process thread fail!\n", __FUNCTION__);
         pthread_mutex_destroy(&context->dtv_cmd_process_mutex);
         pthread_cond_destroy(&context->dtv_cmd_process_cond);
+        pthread_cond_destroy(&context->dtv_cmd_processed_cond);
         ret = -1;
     }
 
@@ -1782,12 +1793,13 @@ int release_dtv_cmd_process_thread(struct aml_dtv_audio_context *context)
     ALOGI("++%s ----\n", __FUNCTION__);
 
     context->cmd_process_thread_exit = 1;
-    deinit_cmd_list(&context->dtv_cmd_list);
+    pthread_cond_signal(&context->dtv_cmd_process_cond);
 
     pthread_join(context->audio_cmd_process_threadID, NULL);
     pthread_mutex_destroy(&context->dtv_cmd_process_mutex);
     pthread_cond_destroy(&context->dtv_cmd_process_cond);
-
+    pthread_cond_destroy(&context->dtv_cmd_processed_cond);
+    deinit_cmd_list(&context->dtv_cmd_list);
     ALOGI("--%s", __FUNCTION__);
     return ret;
 }
@@ -2123,12 +2135,23 @@ int disable_dtv_patch_for_tuner_framework(struct audio_stream_out *stream)
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct audio_hw_device *dev = (struct audio_hw_device *)(aml_out)->dev;
+    struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     int ret = 0,val = 0,path_id = aml_out->demux_id;
+    aml_dtv_audio_context_t *dtv_audio_context = get_dtv_audio_context(adev);
+    aml_dtv_audio_instance_t *dtv_audio_instance = &dtv_audio_context->instances[path_id];
+    struct timespec ts;
 
     val = (path_id << DVB_DEMUX_ID_BASE | AUDIO_DTV_PATCH_CMD_CLOSE);
     dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_CONTROL, val);
     ALOGD("%s[%d]: ret: %d", __func__, __LINE__, ret);
-
+    pthread_mutex_lock(&dtv_audio_context->dtv_cmd_process_mutex);
+    if (dtv_audio_instance->dtv_audio_state != AUDIO_DTV_PATCH_DECODER_STATE_IDLE) {
+        ts_wait_time(&ts, 200000);
+        ALOGI("wait dtv_cmd_processed_cond");
+        pthread_cond_timedwait(&dtv_audio_context->dtv_cmd_processed_cond, &dtv_audio_context->dtv_cmd_process_mutex, &ts);
+        ALOGI("get dtv_cmd_processed_cond");
+    }
+    pthread_mutex_unlock(&dtv_audio_context->dtv_cmd_process_mutex);
     return ret;
 }
 
@@ -2197,20 +2220,25 @@ int out_flush_dtv_stream_for_tunerframework(struct audio_stream_out *stream)
     aml_dtv_audiopara_t *dmx_info = &dtv_audio_context->instances[path_id].dtv_audio_info;
     aml_dtvsync_t *dtvsync = &dtv_audio_context->instances[path_id].dtvsync;
     void *demux_handle = dtv_audio_context->instances[path_id].demux_handle;
+    aml_dtv_audio_instance_t *dtv_audio_instance =  &get_dtv_audio_context(adev)->instances[path_id];
 
     int costtime_ms = 0;
     struct timespec curtime;
-
     clock_gettime(CLOCK_MONOTONIC, &curtime);
     costtime_ms = calc_time_interval_us(&aml_out->cbs_cmd_timestamp, &curtime) / 1000;
     clock_gettime(CLOCK_MONOTONIC, &aml_out->cbs_cmd_timestamp);
     ALOGI("costtime_ms %d",costtime_ms);
 
     ALOGD("%s[%d]", __func__, __LINE__);
-    if (aml_out->stream_status != STREAM_STANDBY) {
+
+    //In the ATF case, Only open and close stream, the stream status will be
+    //set to STANDBY. However, during flushing the output and input data, ATF will not
+    //call standby api, we could not drop the output and input data.
+    if (aml_out->stream_status == STREAM_STANDBY) {
         ALOGD("%s[%d] aml_out->stream_status %d", __func__, __LINE__, aml_out->stream_status);
         return ret;
     }
+    dtv_package_list_flush(dtv_audio_instance->dtv_package_list);
     if (dmx_info->dual_decoder_support) {
         Stop_Dmx_AD_Audio(demux_handle);
         Start_Dmx_AD_Audio(demux_handle);
@@ -2218,17 +2246,12 @@ int out_flush_dtv_stream_for_tunerframework(struct audio_stream_out *stream)
     Stop_Dmx_Main_Audio(demux_handle);
     Start_Dmx_Main_Audio(demux_handle);
     Flush_Dmx_Audio(demux_handle);
-
-    cmd = (path_id << DVB_DEMUX_ID_BASE | AUDIO_DTV_PATCH_CMD_STOP);
-    ret = dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_CONTROL, cmd);
-    if (dtvsync) {
-        aml_dtvsync_reset(dtvsync);
-    }
+    int val = (path_id << DVB_DEMUX_ID_BASE | AUDIO_DTV_PATCH_CMD_RESET_OUTPUT);
+    dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_CONTROL, val);
     aml_out->standby = 1;
     if (aml_out->stream_status != STREAM_PAUSED || costtime_ms > 200) {
         return ret;
     }
-
     return ret;
 }
 

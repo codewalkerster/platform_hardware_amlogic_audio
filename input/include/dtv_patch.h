@@ -120,6 +120,7 @@ typedef struct aml_dtv_audio_context {
     aml_dtv_audio_instance_t instances[DVB_DEMUX_SUPPORT_MAX_NUM];
     pthread_t audio_cmd_process_threadID;
     pthread_cond_t dtv_cmd_process_cond;
+    pthread_cond_t dtv_cmd_processed_cond;
     pthread_mutex_t dtv_cmd_process_mutex;
     struct cmd_node dtv_cmd_list;
     int cmd_process_thread_exit;

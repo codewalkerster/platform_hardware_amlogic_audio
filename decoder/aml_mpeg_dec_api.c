@@ -382,7 +382,6 @@ static int mad_decoder_process(aml_dec_t * aml_dec, unsigned char*buffer, int by
     }
     mad_op->getinfo(mad_op,&pAudioInfo);
     mad_dec->stream_info.stream_sr = pAudioInfo.samplerate;
-    mad_dec->stream_info.stream_ch = pAudioInfo.channels;
     mad_dec->stream_info.stream_bitrate = pAudioInfo.bitrate;
     mad_dec->stream_info.stream_error_num = pAudioInfo.error_num;
     mad_dec->stream_info.stream_drop_num = pAudioInfo.drop_num;
@@ -400,7 +399,6 @@ static int mad_decoder_process(aml_dec_t * aml_dec, unsigned char*buffer, int by
             dec_pcm_data->data_len  = dec_pcm_data->data_len * 2;
             pAudioInfo.channels = 2;
     }
-
     if (mad_dec->ad_decoder_supported ) {
         used_size = 0;
         int ad_in_size = aml_dec->ad_size;
@@ -510,9 +508,11 @@ static int mad_decoder_process(aml_dec_t * aml_dec, unsigned char*buffer, int by
 
     }
 
-    dec_pcm_data->data_sr  = pAudioInfo.samplerate;
-    dec_pcm_data->data_ch  = pAudioInfo.channels;
-    dec_pcm_data->data_format  = mad_config->mpeg_format;
+    if  (dec_pcm_data->data_len) {
+       dec_pcm_data->data_sr  = pAudioInfo.samplerate;
+       dec_pcm_data->data_ch  = pAudioInfo.channels;
+       dec_pcm_data->data_format  = mad_config->mpeg_format;
+    }
     if (dec_pcm_data->data_len != ad_dec_pcm_data->data_len ) {
         ALOGV("dec_pcm_data->data_len %d ad_dec_pcm_data->data_len %d",dec_pcm_data->data_len ,ad_dec_pcm_data->data_len);
     }

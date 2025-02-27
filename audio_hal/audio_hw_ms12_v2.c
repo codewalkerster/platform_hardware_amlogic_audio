@@ -4005,7 +4005,10 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
     aml_ms12_decoder_getparameter(ms12, aml_out->ms12_dec_handle, MS12_CODEC_PARAMETER_MAIN_PCMOUT_FRAME, &decoded_frame, sizeof(uint64_t));
     int debug_enable = get_debug_value(AML_DEBUG_AUDIOHAL_HW_SYNC);
     unsigned int ms12_delay_frame = stDelay.u32DelayFrame * speed_info->speed;
-
+    /* In the jira SWPL-199641, position and timestamp is used to be as the flag of unmute in the ATF audio only case,
+     * therefore, update_ms12_position will update the true timestamp and position to audio track in the dual path logic.
+     */
+    update_ms12_position(priv_data, u64DecOutFrame, stDelay);
     if (aml_out->dtvsync_enable) {
         if (aml_out->is_eos) {
             ALOGI("%s output_thread_exit", __func__);
@@ -4034,9 +4037,8 @@ Aml_MS12_SyncPolicy_t ms12_dtv_sync_callback(void *priv_data, unsigned long long
         delay_pts_diff = (delay_frame + ms12_delay_frame + tempo_delay_frame) * 90 / 48;
 
         if (debug_enable) {
-            ALOGI("%s dec frame =%" PRId64 " out frame =%lld decoded_delay =%d ms12 delay=%d tempo delay=%d total delay =%d  =%d ms",
-                __func__, decoded_frame, u64DecOutFrame, delay_frame, ms12_delay_frame, tempo_delay_frame, (delay_frame + ms12_delay_frame + tempo_delay_frame), delay_pts_diff / 90);
-
+            ALOGI("%s dec frame =%" PRId64 " out frame =%lld decoded_delay =%d ms12 delay=%d tempo delay=%d total delay =%d  =%d ms last_dec_out_frame =%" PRId64 "",
+                __func__, decoded_frame, u64DecOutFrame, delay_frame, ms12_delay_frame, tempo_delay_frame, (delay_frame + ms12_delay_frame + tempo_delay_frame), delay_pts_diff / 90, aml_out->last_dec_out_frame);
             ALOGI("%s in policy =%d tag frame =%d cur_frame=%d", __func__, syncpolicy_status.eSyncPolicy, syncpolicy_status.s32TagFrame, syncpolicy_status.s32CurFrame);
         }
 
