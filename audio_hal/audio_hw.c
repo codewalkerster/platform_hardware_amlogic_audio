@@ -937,6 +937,19 @@ static int out_set_parameters (struct audio_stream *stream, const char *kvpairs)
             goto exit;
         }
     }
+
+    ret = str_parms_get_str(parms, AUDIO_PARAMETER_KEY_CLOSING, value, sizeof(value)-1);
+    if (ret >= 0) {
+        if (strcmp(value, AUDIO_PARAMETER_VALUE_TRUE) == 0) {
+            out->is_closing = true;
+            ALOGI("%s stream %p is_closing", __func__, out);
+            aml_stream_delete_timer(adev, out);
+        } else {
+            out->is_closing = false;
+        }
+        goto exit;
+    }
+
 exit:
     str_parms_destroy (parms);
 
@@ -2924,13 +2937,10 @@ int output_stream_hwsync_prepare(struct aml_stream_out *out, int hw_sync_id)
         hw_sync->first_apts_flag = false;
         hw_sync->wait_video_done = false;
 
-        pthread_mutex_lock (&adev->lock);
         pthread_mutex_lock (&out->lock);
         out->frame_write_sum = 0;
         out->last_frames_position = 0;
-
         pthread_mutex_unlock (&out->lock);
-        pthread_mutex_unlock (&adev->lock);
         ALOGI ("[%s]  hwsync done\n", __FUNCTION__);
     } else {
         AM_LOGW("out->hw_sync_mode:%d, hw_sync_id:%d", out->hw_sync_mode, hw_sync_id);
@@ -3348,7 +3358,6 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     aml_stream_speed_info_t *speed_info = &out->speed_info;
 
     int ret = 0;
-    int wait_cnt = 0;
     AM_LOGI("io %d: out:%p dev:%s(%#x) flags:%#x, streamType:%s", out->io_handle, out,
         audioDevType2Str(out->out_device), out->out_device, out->flags, streamType2Str(out->streamType));
 
@@ -3546,21 +3555,7 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
 
     // for aml_stream_timer_pause_callback is async function,
     // should be very careful when you try to free output stream resource.
-    wait_cnt = 20;
-    while (wait_cnt > 0) {
-        pthread_mutex_lock(&adev->stream_release_lock);
-        if (out->is_callback_pending == false) {
-            pthread_mutex_unlock(&adev->stream_release_lock);
-            break;
-        }
-        pthread_mutex_unlock(&adev->stream_release_lock);
-        aml_audio_sleep(10*1000);
-        AM_LOGE("wait callback ...");
-        wait_cnt--;
-    }
-    if (wait_cnt <= 0) {
-        AM_LOGE("wait callback finish fail !");
-    }
+    aml_stream_wait_callback_finish(adev, out);
 
     pthread_mutex_destroy(&out->lock);
     pthread_mutex_destroy(&out->parser_MutexLock);
@@ -7345,9 +7340,7 @@ void adev_close_output_stream_new(struct audio_hw_device *dev,
     }
 
     if (aml_out->streamType == STREAM_PCM_HWSYNC) {
-        int ret = aml_audio_timer_delete(aml_out->timer_id);
-        ret = aml_audio_timer_delete(aml_out->timer_id2);
-        AM_LOGD("timer_id:%d  ret:%d", aml_out->timer_id, ret);
+        aml_stream_delete_timer(adev, aml_out);
     }
 
     if (aml_out->inputPortID != -1 && adev->useAudioMixer && adev->mixerData) {

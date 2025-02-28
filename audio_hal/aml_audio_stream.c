@@ -1788,3 +1788,59 @@ ssize_t mixer_aux_buffer_write_wrap(struct audio_stream_out *stream, void *abuff
     }
     return bytes;
 }
+
+bool aml_stream_wait_callback_finish(struct aml_audio_device *adev, struct aml_stream_out *out)
+{
+    int wait_cnt = 20;
+    if (adev == NULL || out == NULL) {
+        return false;
+    }
+
+    while (wait_cnt > 0) {
+        pthread_mutex_lock(&adev->stream_release_lock);
+        if (out->is_callback_pending == false) {
+            pthread_mutex_unlock(&adev->stream_release_lock);
+            break;
+        }
+        pthread_mutex_unlock(&adev->stream_release_lock);
+        aml_audio_sleep(10*1000);
+        ALOGE("%s wait callback ...", __func__);
+        wait_cnt--;
+    }
+
+    if (wait_cnt <= 0) {
+        ALOGE("%s wait callback finish fail !", __func__);
+        return false;
+    }
+    return true;
+}
+
+void aml_stream_delete_timer(struct aml_audio_device *adev, struct aml_stream_out *out)
+{
+    int ret = 0;
+    int wait_cnt = 20;
+    if (adev == NULL || out == NULL) {
+        return;
+    }
+
+    if (out->is_callback_pending) {
+        aml_stream_wait_callback_finish(adev, out);
+    }
+    if (out->streamType == STREAM_PCM_HWSYNC) {
+        if (out->timer_id <= AML_TIMER_ID_NUM && out->timer_id != AML_TIMER_ID_INVALID) {
+            ret = aml_audio_timer_delete(out->timer_id);
+            if (ret >= 0) {
+                out->timer_id = AML_TIMER_ID_INVALID;
+            }
+            AM_LOGI(" timer_id %d %s", out->timer_id, ret >= 0 ? "ok" : "fail !");
+        }
+
+        if (out->timer_id2 <= AML_TIMER_ID_NUM && out->timer_id2 != AML_TIMER_ID_INVALID) {
+            ret = aml_audio_timer_delete(out->timer_id2);
+            if (ret >= 0) {
+                out->timer_id2 = AML_TIMER_ID_INVALID;
+            }
+            AM_LOGI(" timer_id2 %d %s", out->timer_id2, ret >= 0 ? "ok" : "fail !");
+        }
+    }
+}

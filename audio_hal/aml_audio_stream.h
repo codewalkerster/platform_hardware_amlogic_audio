@@ -598,5 +598,7 @@ void out_stream_send_codec_event(struct audio_stream_out *stream, const char *ca
 void aml_stream_clear_speed_aux_info(struct aml_stream_out *aml_out);
 
 ssize_t mixer_aux_buffer_write_wrap(struct audio_stream_out *stream, void *abuffer);
+bool aml_stream_wait_callback_finish(struct aml_audio_device *adev, struct aml_stream_out *out);
+void aml_stream_delete_timer(struct aml_audio_device *adev, struct aml_stream_out *out);
 
 #endif /* _AML_AUDIO_STREAM_H_ */
