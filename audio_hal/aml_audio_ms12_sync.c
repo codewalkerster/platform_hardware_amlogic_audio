@@ -1491,7 +1491,7 @@ int aml_audio_get_ms12_nontunel_tune_latency(const struct audio_stream_out * str
     device_type_t platform_type = STB;
     bool is_netflix = adev->is_netflix;
 
-    if (eDolbyMS12Lib != adev->dolby_lib_type) {
+    if (eDolbyMS12Lib != adev->dolby_lib_type || !out->ms12_dec_handle) {
         return 0;
     }
 

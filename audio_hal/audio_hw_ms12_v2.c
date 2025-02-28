@@ -1734,6 +1734,12 @@ int dolby_ms12_main_process(
         return ret;
     }
 
+    //double check ms12 dec handle
+    dolby_ms12_create_dec_handle(stream);
+    ms12_dec = aml_out->ms12_dec_handle;
+
+    pthread_mutex_lock(&ms12_dec->main_lock);
+
     if (aml_out->is_ms12_main_decoder_disable) {
         AM_LOGI("is_ms12_main_decoder_disable, drop %zu bytes", bytes);
         if (audio_is_linear_pcm(aml_out->hal_format)) {
@@ -1744,14 +1750,9 @@ int dolby_ms12_main_process(
             }
         }
         *use_size = bytes;
-        return 0;
+        goto exit;
     }
 
-    //double check ms12 dec handle
-    dolby_ms12_create_dec_handle(stream);
-    ms12_dec = aml_out->ms12_dec_handle;
-
-    pthread_mutex_lock(&ms12_dec->main_lock);
     if (ms12->dolby_ms12_enable && !aml_out->is_ms12_main_decoder) {
         dolby_ms12_main_open(stream);
     }
@@ -2388,7 +2389,30 @@ int dolby_ms12_multi_app_process(
     return ret;
 }
 
+static void close_all_ms12_dec() {
 
+    /*close all the ms12 main decoder*/
+    struct aml_audio_device *adev = aml_adev_get_handle();
+    struct aml_stream_out *amlStream = NULL;
+    bool retValue = false;
+    ALOGI("%s close all ms12 decoder", __func__);
+    if (!list_empty(&adev->stream_ListHead)) {
+        struct listnode *item = NULL, *temp = NULL;
+        struct stream_infos *ptmp = NULL;
+
+        list_for_each_safe(item, temp, &adev->stream_ListHead) {
+            ptmp = (struct stream_infos *)item;
+            amlStream = (struct aml_stream_out *)ptmp->pStream;
+            if (amlStream->is_ms12_main_decoder && amlStream->ms12_dec_handle) {
+                amlStream->is_ms12_main_decoder_disable = true;
+                dolby_ms12_main_close((struct audio_stream_out *)amlStream);
+                ALOGI("%s close stream =%p", __func__, amlStream);
+            }
+        }
+    }
+
+    return;
+}
 /*
  *@brief get dolby ms12 cleanup
  */
@@ -2405,6 +2429,11 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12, bool set_non_continuous
     }
     adev = ms12_to_adev(ms12);
     adev->ms12_to_be_cleanup = true;
+
+
+   /*close all the ms12 dec before cleanup ms12*/
+    close_all_ms12_dec();
+
     pthread_mutex_lock(&ms12->lock);
 
     if (!ms12->dolby_ms12_init_flags || (ms12->dolby_ms12_enable == false)) {
@@ -5144,59 +5173,65 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
     aml_stream_speed_info_t *speed_info = &aml_out->speed_info;
 
     pthread_mutex_lock(&ms12_dec->main_lock);
+    /*after the mutex, we need check whether it is released*/
+    if (aml_out->is_ms12_main_decoder) {
 
-    aml_out->is_ms12_main_decoder = false;
+        aml_out->is_ms12_main_decoder = false;
 
-    if (aml_out->virtual_buf_handle) {
-        audio_virtual_buf_close(&aml_out->virtual_buf_handle);
-    }
+        if (aml_out->virtual_buf_handle) {
+            audio_virtual_buf_close(&aml_out->virtual_buf_handle);
+        }
 
-    if (aml_out->b_install_sync_callback) {
-        aml_ms12_decoder_unregister_callback(ms12, aml_out->ms12_dec_handle, MS12_CODEC_CALLBACK_SYNC);
-        ALOGI("%s set sync callback NULL", __func__);
-    }
+        if (aml_out->b_install_sync_callback) {
+            aml_ms12_decoder_unregister_callback(ms12, aml_out->ms12_dec_handle, MS12_CODEC_CALLBACK_SYNC);
+            ALOGI("%s set sync callback NULL", __func__);
+        }
 
-    aml_ms12_decoder_unregister_callback(ms12, aml_out->ms12_dec_handle, MS12_CODEC_CALLBACK_TEMPO);
-    if (speed_info->speed_handle) {
-        aml_audio_speed_close(speed_info->speed_handle);
-        speed_info->speed_handle = NULL;
-    }
+        aml_ms12_decoder_unregister_callback(ms12, aml_out->ms12_dec_handle, MS12_CODEC_CALLBACK_TEMPO);
+        if (speed_info->speed_handle) {
+            aml_audio_speed_close(speed_info->speed_handle);
+            speed_info->speed_handle = NULL;
+        }
 
-    aml_truehd_parser_close(ms12_dec->truehd_parser_handle);
-    ms12_dec->truehd_parser_handle = NULL;
-    aml_ac3_parser_close(ms12_dec->ac3_parser_handle);
-    ms12_dec->ac3_parser_handle = NULL;
-    aml_spdif_decoder_close(ms12_dec->spdif_dec_handle);
-    ms12_dec->spdif_dec_handle = NULL;
+        aml_truehd_parser_close(ms12_dec->truehd_parser_handle);
+        ms12_dec->truehd_parser_handle = NULL;
 
-    aml_ac3_parser_close(ms12_dec->info_ac3_parser_handle);
-    ms12_dec->info_ac3_parser_handle = NULL;
-    aml_spdif_decoder_close(ms12_dec->info_spdif_dec_handle);
-    ms12_dec->info_spdif_dec_handle = NULL;
+        aml_ac3_parser_close(ms12_dec->ac3_parser_handle);
+        ms12_dec->ac3_parser_handle = NULL;
+        aml_spdif_decoder_close(ms12_dec->spdif_dec_handle);
+        ms12_dec->spdif_dec_handle = NULL;
 
-    aml_ms12_bypass_close(ms12_dec->ms12_bypass_handle);
-    ms12_dec->ms12_bypass_handle = NULL;
-    ms12_dec->is_bypass_ms12 = false;
+        aml_ac3_parser_close(ms12_dec->info_ac3_parser_handle);
+        ms12_dec->info_ac3_parser_handle = NULL;
+        aml_spdif_decoder_close(ms12_dec->info_spdif_dec_handle);
+        ms12_dec->info_spdif_dec_handle = NULL;
 
-    aml_ms12_main_decoder_close(ms12, aml_out->ms12_dec_handle);
-    //set_ms12_main_audio_mute(ms12, false, 0);
-    ms12_dec->mat_stream_profile = 0;
-    ms12_dec->is_bypass_ms12 = false;
+        aml_ms12_bypass_close(ms12_dec->ms12_bypass_handle);
+        ms12_dec->ms12_bypass_handle = NULL;
+        ms12_dec->is_bypass_ms12 = false;
 
-    if (adev->focus_ms12_stream == aml_out) {
-        adev->focus_ms12_stream = NULL;
-    }
-    /*the main stream is closed, we should update the sink format now*/
-    if (adev->active_outputs[STREAM_PCM_NORMAL] && (adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_BYPASS) && !get_dev_patch(adev)) {
-        get_sink_format(&adev->active_outputs[STREAM_PCM_NORMAL]->stream);
-    }
 
-    if (ms12->dolby_ms12_enable) {
-        set_ms12_drc_params_for_stereo_and_dap_multi_pcm_output(
-            adev
-            , ms12
-            , AUDIO_FORMAT_PCM_16_BIT //treat as PCM format when stream is end.
-            );
+        aml_ms12_main_decoder_close(ms12, aml_out->ms12_dec_handle);
+        //set_ms12_main_audio_mute(ms12, false, 0);
+        ms12_dec->mat_stream_profile = 0;
+        ms12_dec->is_bypass_ms12 = false;
+
+        if (adev->focus_ms12_stream == aml_out) {
+            adev->focus_ms12_stream = NULL;
+        }
+
+        /*the main stream is closed, we should update the sink format now*/
+        if (adev->active_outputs[STREAM_PCM_NORMAL] && (adev->digital_audio_mode == AML_DIGITAL_AUDIO_MODE_BYPASS) && !get_dev_patch(adev)) {
+            get_sink_format(&adev->active_outputs[STREAM_PCM_NORMAL]->stream);
+        }
+
+        if (ms12->dolby_ms12_enable) {
+            set_ms12_drc_params_for_stereo_and_dap_multi_pcm_output(
+                adev
+                , ms12
+                , AUDIO_FORMAT_PCM_16_BIT //treat as PCM format when stream is end.
+                );
+        }
     }
 
     pthread_mutex_unlock(&ms12_dec->main_lock);
