@@ -7253,6 +7253,7 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
         aml_out->stream.set_volume = out_set_volume_for_tunerframework;
         aml_out->stream.set_playback_rate_parameters = out_set_playback_rate_parameters_for_tunerframework;
         aml_out->stream.get_playback_rate_parameters = out_get_playback_rate_parameters_for_tunerframework;
+        aml_out->stream.common.standby = out_standby_dtv_stream_for_tunerframework;
     }
 #endif
 #endif

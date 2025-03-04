@@ -140,7 +140,7 @@ int out_resume_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
 int out_start_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
 int out_stop_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
 int out_flush_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
-int out_standby_dtv_stream_for_tunerframework(struct audio_stream_out *stream);
+int out_standby_dtv_stream_for_tunerframework(struct audio_stream *stream);
 ssize_t out_write_dtv_stream_for_tunerframework(struct audio_stream_out *stream, const void *buffer, size_t bytes);
 int out_get_audio_description_mix_level(struct audio_stream_out *stream, float *leveldB);
 int out_set_audio_description_mix_level(struct audio_stream_out *stream, const float leveldB);

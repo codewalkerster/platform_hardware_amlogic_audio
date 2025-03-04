@@ -1356,6 +1356,7 @@ void  clean_dtv_audio_info(aml_dtv_audiopara_t *dtv_audio_info)
     dtv_audio_info->ad_pan = 0;
     dtv_audio_info->playback_mode = NORMAL_MODE;
     dtv_audio_info->volume = 1.0f;
+    dtv_audio_info->tv_mute = 0;
 }
 
 static void set_dtv_audio_datasource(aml_dtv_audio_instance_t *instance)
@@ -1593,7 +1594,10 @@ static void *audio_dtv_cmd_process_threadloop(void *data)
                 dtv_audio_instance->package_checked_flag = false;
                 create_dtv_output_stream_thread(dtv_audio_instance);
                 dtv_audio_instance->dtv_audio_state = AUDIO_DTV_PATCH_DECODER_STATE_RUNNING;
-            } else {
+           } else if (cmd == AUDIO_DTV_PATCH_CMD_STOP) {
+               ALOGI("[audiohal_kpi]++%s now  stop  the audio decoder now \n", __FUNCTION__);
+               dtv_audio_instance->dtv_audio_state = AUDIO_DTV_PATCH_DECODER_STATE_RELEASE;
+           } else {
                 ALOGI("++%s line %d  state unsupport state %d cmd %d !\n",
                       __FUNCTION__, __LINE__, dtv_audio_instance->dtv_audio_state, cmd);
             }
@@ -2255,7 +2259,7 @@ int out_flush_dtv_stream_for_tunerframework(struct audio_stream_out *stream)
     return ret;
 }
 
-int out_standby_dtv_stream_for_tunerframework(struct audio_stream_out *stream)
+int out_standby_dtv_stream_for_tunerframework(struct audio_stream *stream)
 {
     int ret = 0,cmd = 0;
 
@@ -2268,7 +2272,11 @@ int out_standby_dtv_stream_for_tunerframework(struct audio_stream_out *stream)
     if (aml_out->stream_status == STREAM_STANDBY) {
         return ret;
     }
+
+    cmd = (path_id << DVB_DEMUX_ID_BASE | AUDIO_DTV_PATCH_CMD_RESET_OUTPUT);
+    ret = dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_CONTROL, cmd);
     aml_out->stream_status = STREAM_STANDBY;
+    aml_out->standby = true;
     return ret;
 }
 
