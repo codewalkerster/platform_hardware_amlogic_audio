@@ -513,14 +513,19 @@
  *          current values are 100(passthrough should consider bitstream out,
  *          its value is AVSYNC_MS12_DTV_DDP_OUT_LATENCY)
  */
+
+/*
+ * MS12 SDK v2.8
+ * target: [-40, 40]
+*/
 /* for different port and different format */
 #define  AVSYNC_MS12_DTV_HDMI_ARC_OUT_PCM_LATENCY            (50)
 #define  AVSYNC_MS12_DTV_HDMI_ARC_OUT_DD_LATENCY             (0)
 #define  AVSYNC_MS12_DTV_HDMI_ARC_OUT_DDP_LATENCY            (0)
 #define  AVSYNC_MS12_DTV_HDMI_OUT_PCM_LATENCY                (-60) /* if 0,  result locates at [-10, 10] */
 #define  AVSYNC_MS12_DTV_HDMI_OUT_DD_LATENCY                 (0)
-#define  AVSYNC_MS12_DTV_HDMI_OUT_DDP_LATENCY                (-80)
-#define  AVSYNC_MS12_DTV_HDMI_OUT_MAT_LATENCY                (-40)
+#define  AVSYNC_MS12_DTV_HDMI_OUT_DDP_LATENCY                (-30)
+#define  AVSYNC_MS12_DTV_HDMI_OUT_MAT_LATENCY                (-20)
 #define  AVSYNC_MS12_DTV_SPEAKER_LATENCY                     (0)
 #define  AVSYNC_MS12_TV_DTV_SPEAKER_LATENCY                  (60)
 
