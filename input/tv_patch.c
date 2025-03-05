@@ -592,13 +592,7 @@ int teardown_output_format_change(struct aml_audio_patch *patch, struct audio_st
         AM_LOGW("Warning, old_stream_in is NULL, return!");
         return -1;
     }
-    //TODO: temporary solution for MS12 not support PCM32 input
-    if (aml_dev->dolby_lib_type == eDolbyMS12Lib  || aml_dev->dolby_lib_type_last == eDolbyMS12Lib) {
-        *new_stream = old_stream;
-        AM_LOGW("do nothing for ms12 case");
-        return 0;
-    }
-    //END
+
     if (!audio_is_linear_pcm(patch->aformat) && old_aml_out->hal_format == AUDIO_FORMAT_PCM_16_BIT) {
         *new_stream = old_stream;
         AM_LOGW("StreamOut already foramt:AUDIO_FORMAT_PCM_16_BIT for RAW patch->foramt:%x", patch->aformat);

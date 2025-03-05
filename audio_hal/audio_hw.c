@@ -5641,13 +5641,7 @@ void config_output(struct audio_stream_out *stream, bool reset_decoder)
             if (!ms12->dolby_ms12_enable) {
                 adev_ms12_prepare((struct audio_hw_device *)adev);
             }
-            /*after enable teardown_output_format_change for ms12 case, this code can be removed*/
-            if (is_dev_patch_exist(adev) &&
-                (is_same_patch_src(adev, SRC_HDMIIN) ||
-                is_same_patch_src(adev, SRC_SPDIFIN) ||
-                is_same_patch_src(adev, SRC_ARCIN))) {
-                dolby_ms12_main_close(stream);
-            }
+
             adev->mix_init_flag = true;
             audiohal_send_msg_2_ms12(&adev->ms12, MS12_MESG_TYPE_RESET_MS12_ENCODER);
             pthread_mutex_unlock(&adev->lock);
