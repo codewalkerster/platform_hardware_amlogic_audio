@@ -35,6 +35,7 @@
 #define ADD_AUDIO_DELAY_INTERFACE
 #include "audio_hwsync.h"
 #include "../vendor_process/include/audio_post_process.h"
+#include "../vendor_process/include/aml_audio_aloop_record.h"
 #include "aml_hw_mixer.h"
 #include "../aml_aq_hw/audio_eq_drc_compensation.h"
 #include "aml_audio_types_def.h"
@@ -621,6 +622,7 @@ struct aml_audio_device {
     bool reset_hdmitx_audio;
     bool is_dtg_case;//dtg case at the UK
     void *zero_data_detect_list;
+    pcm_record_delay_t aml_pcm_record_delay;
 };
 
 struct meta_data {

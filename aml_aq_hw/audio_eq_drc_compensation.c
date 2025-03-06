@@ -35,6 +35,8 @@
 #include "aml_peq.h"
 #include "aml_audio_enhancement.h"
 #include "dolby_lib_api.h"
+#include "alsa_device_parser.h"
+#include "aml_audio_aloop_record.h"
 
 #undef  LOG_TAG
 #define LOG_TAG  "audio_hw_aq"
@@ -898,6 +900,34 @@ int set_AQ_parameters(struct audio_hw_device *dev, struct str_parms *parms)
         }
         aml_set_audio_enhancement_enable(&adev->native_postprocess, val);
         ALOGI("audio_enhancement: %s\n", (val == 1) ? "enable":"disable");
+        goto exit;
+    }
+
+    /* start to record with audio delay in ms (max 5000ms): "audio_pcm_record_enable=1,2000" */
+    /* start to record without audio delay: "audio_pcm_record_enable=1" */
+    /* stop to record: "audio_pcm_record_enable=0" */
+    /* debug command: param_set 0 "audio_pcm_record_enable=1,2000" */
+    /* debug command: tinycap file.wav -r 48000 -c 2 -p 512 -D 1 -d 1 */
+    ret = str_parms_get_str(parms, "audio_pcm_record_enable", value, sizeof(value));
+    if (ret >= 0) {
+        pcm_record_delay_t *pcm_record = &adev->aml_pcm_record_delay;
+        int record_enable = 0;
+        int delay_in_ms = 0;
+
+        sscanf(value,"%d,%d", &record_enable, &delay_in_ms);
+        if (record_enable) {
+            if (delay_in_ms > MAX_DELAY_TIME)
+                delay_in_ms = MAX_DELAY_TIME;
+            else if (delay_in_ms < 0)
+                delay_in_ms = 0;
+            aml_audio_aloop_open(pcm_record);
+        } else {
+            aml_audio_aloop_close(pcm_record);
+            delay_in_ms = 0;
+        }
+
+        pcm_record->delay_in_ms = delay_in_ms;
+        ALOGI("audio_pcm_record_enable: %s, audio delay %dms\n", (record_enable == 1) ? "enable":"disable", delay_in_ms);
         goto exit;
     }
 

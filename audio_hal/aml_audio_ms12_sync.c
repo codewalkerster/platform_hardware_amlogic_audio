@@ -1144,6 +1144,10 @@ int aml_audio_get_ms12_tunnel_latency(struct audio_stream_out *stream)
 
     latency_frames = tuning_delay + atmos_tuning_delay + bypass_delay - video_delay + dv_delay + hdmi_delay;
 
+    if (adev->aml_pcm_record_delay.aloop_write_enable) {
+        latency_frames += adev->aml_pcm_record_delay.delay_in_ms * 48;
+    }
+
     ALOGV("latency frames =%d tuning delay=%d ms atmos =%d ms video delay %d ms dv_delay %d ms",
         latency_frames, tuning_delay / 48, atmos_tuning_delay / 48, video_delay / 48, dv_delay / 48);
     return latency_frames;
@@ -1414,6 +1418,11 @@ static int get_nonms12_tunnel_latency_offset(enum OUT_PORT port
     }
 
     latency_ms = input_latency_ms + output_latency_ms + port_latency_ms;
+
+    if (adev->aml_pcm_record_delay.aloop_write_enable) {
+        latency_ms += adev->aml_pcm_record_delay.delay_in_ms;
+    }
+
     ALOGV("%s total latency =%d, ms in=%d ms out=%d ms(is output ddp_atmos %d) port=%d ms", __func__,
        latency_ms, input_latency_ms, output_latency_ms, is_output_ddp_atmos, port_latency_ms);
 

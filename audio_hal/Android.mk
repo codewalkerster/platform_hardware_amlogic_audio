@@ -92,6 +92,7 @@ include $(BUILD_PREBUILT)
         ../vendor_process/audio_post_process.c \
         ../vendor_process/aml_ai_audio.c \
         ../vendor_process/aml_audio_enhancement.c \
+        ../vendor_process/aml_audio_aloop_record.c \
         ../aml_aq_hw/audio_eq_drc_compensation.c \
         ../aml_aq_hw/audio_eq_drc_parser.c \
         ../aml_aq_hw/ini/dictionary.c \

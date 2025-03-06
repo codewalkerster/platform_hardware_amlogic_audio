@@ -4798,14 +4798,35 @@ static int audio_enhancment_process(struct aml_audio_device *adev, Aml_MS12_Proc
 
     audio_buffer_t in_buf;
     audio_buffer_t out_buf;
-    int nChannels = pAudioEnhancementModule->channel_width;
-    int frames = Info->u32InBufferSize / sizeof(float) / nChannels;
+    pAudioEnhancementModule->channel_width = Info->s32Channel;
+    int frames = Info->u32InBufferSize / sizeof(float) / Info->s32Channel;
     in_buf.frameCount =  out_buf.frameCount = frames;
     in_buf.raw = out_buf.raw = Info->pu8InBuffer;
 
     memcpy_to_i32_from_float(in_buf.raw, in_buf.raw, Info->u32InBufferSize / sizeof(float));
     aml_audio_enhancement_module_process(pAudioEnhancementModule, &in_buf, &out_buf);
     memcpy_to_float_from_i32(out_buf.raw, out_buf.raw, Info->u32InBufferSize / sizeof(float));
+
+    return 0;
+}
+
+static int audio_aloop_write_delay(struct aml_audio_device *adev, Aml_MS12_ProcessInfo_t *pstProcessInfo) {
+    Aml_MS12_ProcessInfo_t *Info = pstProcessInfo;
+    pcm_record_delay_t *pcm_record = &adev->aml_pcm_record_delay;
+
+    if (!pcm_record->aloop_write_enable) {
+        return 0;
+    }
+
+    audio_channel_mask_t channel_mask = acmod_convert_to_channel_mask(Info->as32Acmod[0], Info->as32Acmod[1]);
+    void *buffer = (void *) Info->pu8InBuffer;
+    int bytes = Info->u32InBufferSize;
+    pcm_record->channel_width = Info->s32Channel;
+    pcm_record->channel_mask = channel_mask;
+    pcm_record->format = AUDIO_FORMAT_PCM_FLOAT;
+
+    aml_audio_aloop_write(pcm_record, buffer, bytes);
+    aml_audio_data_delay(pcm_record, buffer, bytes);
 
     return 0;
 }
@@ -4825,6 +4846,7 @@ int ms12_content_process_callback(void *priv_data, void *info) {
         pstProcessInfo->s32InFrameType, pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize);
 
     audio_enhancment_process(adev, pstProcessInfo);
+    audio_aloop_write_delay(adev, pstProcessInfo);
 
     pstProcessInfo->s32OutFrameType = pstProcessInfo->s32InFrameType;
     pstProcessInfo->pu8OutBuffer = pstProcessInfo->pu8InBuffer;

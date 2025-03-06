@@ -916,6 +916,15 @@ static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, 
     if (port->postprocess)
         audio_post_process(port->postprocess, buffer, frames);
 
+    if (adev->aml_pcm_record_delay.aloop_write_enable) {
+        pcm_record_delay_t *pcm_record = &adev->aml_pcm_record_delay;
+        pcm_record->channel_width = 2;
+        pcm_record->channel_mask = AUDIO_CHANNEL_OUT_STEREO;
+        pcm_record->format = target_cfg->format;
+        aml_audio_aloop_write(pcm_record, buffer, bytes);
+        aml_audio_data_delay(pcm_record, buffer, bytes);
+    }
+
     if (adev->native_postprocess.audio_enhancment_handle) {
         audio_buffer_t in_buf;
         audio_buffer_t out_buf;

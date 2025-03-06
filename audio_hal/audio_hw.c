@@ -8467,6 +8467,7 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->continuous_audio_mode = adev->continuous_audio_mode_default;
     pthread_mutex_init(&adev->alsa_pcm_lock, NULL);
     pthread_mutex_init(&adev->stream_release_lock, NULL);
+    pthread_mutex_init(&adev->aml_pcm_record_delay.pcm_record_lock , NULL);
 
     /* Set the earctx mode by the property, only need set false */
     earctx_mode = property_get_bool("persist.vendor.earc_settings", true);
