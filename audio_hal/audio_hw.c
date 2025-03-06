@@ -4698,6 +4698,11 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         AM_LOGI("dolby_decode_enable :%d", dolby_decode_enable);
         sprintf(temp_buf, "dolby_decode_enable=%d", dolby_decode_enable);
         return  strdup(temp_buf);
+    } else if (strstr(keys, "dolby_ms12_enable")) {
+        int ms12_enable = (eDolbyMS12Lib == adev->dolby_lib_type_last);
+        ALOGI("ms12_enable :%d", ms12_enable);
+        sprintf(temp_buf, "dolby_ms12_enable=%d", ms12_enable);
+        return  strdup(temp_buf);
     } else if (strstr (keys, "stream_dra_channel") ) {
 #ifdef ENABLE_DVB_PATCH
        if (is_dev_patch_exist(adev) && is_same_patch_src(adev, SRC_DTV)) {
@@ -8394,9 +8399,6 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
     adev->debug_flag = aml_audio_get_debug_flag();
     adev->count = 1;
     aml_audio_board_config_init(&adev->board_config);
-    if (adev->dolby_lib_type_last != eDolbyMS12Lib) {
-        adev->board_config.dolby_ms12_audio_config = -1;
-    }
     /*set audio hal process bitwidth*/
     adev_config_process_bitwidth(adev);
 
