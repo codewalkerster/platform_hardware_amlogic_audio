@@ -293,21 +293,25 @@ static inline void stop_dtv_patch_mgr(struct patch_manager *patch_mgr)
 
 static inline bool is_dtv_patch_exist_mgr(struct patch_manager *patch_mgr)
 {
-    struct aml_audio_patch *patch = NULL;
+    struct aml_audio_patch *aml_patch = NULL;
+    struct audio_patch *audio_patch = NULL;
     struct listnode *node = NULL;
     struct audio_patch_set *patch_set = NULL;
-    void *aml_audio_patch = NULL;
+    bool found = false;
     /* find audio_patch in patch_set list */
     list_for_each(node, &patch_mgr->patch_list) {
-       patch_set = node_to_item(node, struct audio_patch_set, list_node);
-       if (patch_set) {
-           patch = patch_set->aml_audio_patch;
-           if (patch && patch->patch_src == SRC_DTV) {
+        patch_set = node_to_item(node, struct audio_patch_set, list_node);
+        if (patch_set) {
+        audio_patch = &(patch_set->audio_patch);
+        aml_patch = patch_set->aml_audio_patch;
+            if (aml_patch && (audio_patch->sources[0].ext.device.type == AUDIO_DEVICE_IN_TV_TUNER_DTV)) {
+                found = true;
                 break;
             }
-       }
+        }
     }
-    return patch!=NULL;
+    ALOGI("%s is dtv =%d", __func__, found);
+    return found;
 }
 
 
