@@ -2996,6 +2996,11 @@ int dolby_ms12_bypass_process(struct audio_stream_out *stream, void *buffer, siz
     pthread_mutex_lock(&ms12->bypass_lock);
 
     if (is_ac3_eac3) {
+        //SPDIF Encoder works well with DDP frame 0x0B77 but not 0x770B.
+        const uint8_t *data = (const uint8_t *)buffer;
+        if ((data[0] == 0x77) && (data[1] == 0x0B)) {
+            endian16_convert(buffer, bytes);
+        }
         ret = ac3_and_eac3_bypass_process(stream, buffer, bytes);
     }
     else if (is_dolby_truehd) {
