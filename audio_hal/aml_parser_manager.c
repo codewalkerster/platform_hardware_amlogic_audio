@@ -97,6 +97,9 @@ static bool is_raw_parser_support(audio_format_t inFormat) {
         case AUDIO_FORMAT_AC4:
         case AUDIO_FORMAT_DTS:
         case AUDIO_FORMAT_DTS_HD:
+        case AUDIO_FORMAT_DTS_HD_MA:
+        case AUDIO_FORMAT_DTS_UHD:
+        case AUDIO_FORMAT_DTS_UHD_P2:
             retValue = true;
             break;
         default:
@@ -133,6 +136,9 @@ static int _convert_format_to_parser_type(audio_format_t inFormat, bool isHwsync
                 break;
             case AUDIO_FORMAT_DTS:
             case AUDIO_FORMAT_DTS_HD:
+            case AUDIO_FORMAT_DTS_HD_MA:
+            case AUDIO_FORMAT_DTS_UHD:
+            case AUDIO_FORMAT_DTS_UHD_P2:
                 parserType = AML_PARSER_DTS;
                 break;
             default:
@@ -175,6 +181,9 @@ static aml_parser_func_t *_get_dynamic_parser_function(aml_parser_t *pAmlParser,
                 break;
             case AUDIO_FORMAT_DTS:
             case AUDIO_FORMAT_DTS_HD:
+            case AUDIO_FORMAT_DTS_HD_MA:
+            case AUDIO_FORMAT_DTS_UHD:
+            case AUDIO_FORMAT_DTS_UHD_P2:
                 pParserFunc = get_dts_parser_func_handle();
                 break;
             default:

@@ -167,6 +167,13 @@ static aml_dec_func_t *get_dynamic_decoder_function(aml_dec_t *aml_dec, audio_fo
             return pFunc;
         }
     }
+    case AUDIO_FORMAT_DTS_UHD_P2: {
+        if (dts_lib_type == eDTSXLib) {
+            pFunc = get_dtsx_dec_func_handle();
+            return pFunc;
+        } else
+            return NULL;
+    }
     case AUDIO_FORMAT_PCM_16_BIT:
     case AUDIO_FORMAT_PCM_32_BIT:
     case AUDIO_FORMAT_PCM_8_BIT:
