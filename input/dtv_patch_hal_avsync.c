@@ -201,6 +201,9 @@ void dtv_audio_sync_nonms12_pts_update(struct audio_stream_out *stream, dec_data
 dtvsync_process_res dtv_audio_sync_non_ms12_process(struct audio_stream_out *stream, void *abuffer) {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = aml_out->dev;
+    int path_id = aml_out->demux_id;
+    aml_dtv_audio_context_t *dtv_audio_context = get_dtv_audio_context(adev);
+    aml_dtv_audiopara_t *dtv_audio_info = &dtv_audio_context->instances[path_id].dtv_audio_info;
     dtvsync_process_res process_result = DTVSYNC_AUDIO_OUTPUT;
     aml_dtvsync_t *dtvsync = (aml_dtvsync_t *)aml_out->hwsync->mediasync;
     aml_audio_buffer_t *outPcmBuffer = (aml_audio_buffer_t *)abuffer;
@@ -214,7 +217,7 @@ dtvsync_process_res dtv_audio_sync_non_ms12_process(struct audio_stream_out *str
     if (aml_out->offload_mute) {
         memset(outPcmBuffer->pData, 0, outPcmBuffer->size);
     }
-    aml_audio_switch_output_mode((int16_t *)outPcmBuffer->pData, outPcmBuffer->size, aml_dec->output_format, adev->sound_track_mode);
+    aml_audio_switch_output_mode((int16_t *)outPcmBuffer->pData, outPcmBuffer->size, aml_dec->output_format, dtv_audio_info->output_mode);
 
     if (dtvsync) {
         int alsa_latency = 90 *(out_get_alsa_latency_frames(stream)  * 1000) / aml_out->config.rate;

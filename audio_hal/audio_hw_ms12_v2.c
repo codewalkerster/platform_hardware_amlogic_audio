@@ -6317,7 +6317,6 @@ static int ms12_decoder_sound_mode_process(struct aml_stream_out *aml_out, Aml_M
     if (is_dolby_ms12_support_compression_format (aml_out->hal_internal_format)) {
         return -1;
     }
-    struct aml_audio_device *adev = aml_out->dev;
     int sample_size = 2;
     if (is_dtv_stream_out(&aml_out->stream)) {
         audio_format_t output_format;
@@ -6345,7 +6344,13 @@ static int ms12_decoder_sound_mode_process(struct aml_stream_out *aml_out, Aml_M
             pstProcessInfo->u32InBufferSize = adjust_channels((const void* )pstProcessInfo->pu8InBuffer, in_buff_chans,
                              (void*)pstProcessInfo->pu8InBuffer, out_buff_chans,
                              sample_size, pstProcessInfo->u32InBufferSize);
-            aml_audio_switch_output_mode((int16_t *)pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize, output_format, adev->sound_track_mode);
+
+#ifdef ENABLE_DVB_PATCH
+            aml_audio_buffer_info_t *pBuffer = (aml_audio_buffer_info_t *)aml_out->audio_buffer;
+            aml_audio_buffer_t *audioBuffer = pBuffer->inBuffer;
+            aml_dtv_audiopara_t *dtv_audio_info = audioBuffer->privObject;
+            aml_audio_switch_output_mode((int16_t *)pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize, output_format, dtv_audio_info->output_mode);
+#endif
             in_buff_chans = 2;
             out_buff_chans = 8;
             pstProcessInfo->u32InBufferSize = adjust_channels((const void* )pstProcessInfo->pu8InBuffer, in_buff_chans,

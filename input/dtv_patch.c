@@ -1648,7 +1648,12 @@ static void *audio_dtv_cmd_process_threadloop(void *data)
                  * */
                 release_dtv_output_stream_thread(dtv_audio_instance);
                 dtv_audio_instance->dtv_audio_state = AUDIO_DTV_PATCH_DECODER_STATE_RELEASE;
-            } else {
+            } else if (cmd == AUDIO_DTV_PATCH_CMD_RESET_OUTPUT) {
+                release_dtv_output_stream_thread(dtv_audio_instance);
+                dtv_audio_instance->dtv_audio_state = AUDIO_DTV_PATCH_DECODER_STATE_PREPARED;
+                ALOGI("[audiohal_kpi]++%s now resetthe audio decoder now \n",
+                      __FUNCTION__);
+           } else {
                 ALOGI("++%s line %d state unsupport state %d cmd %d !\n",
                       __FUNCTION__, __LINE__, dtv_audio_instance->dtv_audio_state, cmd);
             }
