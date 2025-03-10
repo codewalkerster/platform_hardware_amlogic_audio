@@ -220,26 +220,50 @@ int get_sink_dv_latency_offset(bool tunnel, bool is_netflix)
 }
 
 
-static int get_ms12_nontunnel_input_latency(audio_format_t input_format) {
+static int get_ms12_nontunnel_input_latency(audio_format_t input_format, enum OUT_PORT port) {
     char buf[PROPERTY_VALUE_MAX] = {'\0'};
     int ret = -1;
     int latency_ms = 0;
     char *prop_name = NULL;
     switch (input_format) {
     case AUDIO_FORMAT_PCM_16_BIT: {
-        prop_name = AVSYNC_MS12_NONTUNNEL_PCM_LATENCY_PROPERTY;
-        latency_ms = AVSYNC_MS12_NONTUNNEL_PCM_LATENCY;
+        /* CVBS/Speaker output, Dolby MS12 AVSync target is [-45, 125] */
+        if ((port == OUTPORT_SPEAKER) || (port == OUTPORT_AUX_LINE)) {
+            prop_name = AVSYNC_MS12_NONTUNNEL_PCM_CVBS_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_MS12_NONTUNNEL_PCM_CVB_SLATENCY;
+        }
+        /* HDMI output, Dolby MS12 AVSync target is [-40, 40] */
+        else {
+            prop_name = AVSYNC_MS12_NONTUNNEL_PCM_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_MS12_NONTUNNEL_PCM_LATENCY;
+        }
         break;
     }
     case AUDIO_FORMAT_AC3:
     case AUDIO_FORMAT_E_AC3: {
-        prop_name = AVSYNC_MS12_NONTUNNEL_DDP_LATENCY_PROPERTY;
-        latency_ms = AVSYNC_MS12_NONTUNNEL_DDP_LATENCY;
+        /* CVBS/Speaker output, Dolby MS12 AVSync target is [-45, 125] */
+        if ((port == OUTPORT_SPEAKER) || (port == OUTPORT_AUX_LINE)) {
+            prop_name = AVSYNC_MS12_NONTUNNEL_DDP_CVBS_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_MS12_NONTUNNEL_DDP_CVBS_LATENCY;
+        } else
+        /* HDMI output, Dolby MS12 AVSync target is [-40, +40] */
+        {
+            prop_name = AVSYNC_MS12_NONTUNNEL_DDP_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_MS12_NONTUNNEL_DDP_LATENCY;
+        }
         break;
     }
     case AUDIO_FORMAT_AC4: {
-        prop_name = AVSYNC_MS12_NONTUNNEL_AC4_LATENCY_PROPERTY;
-        latency_ms = AVSYNC_MS12_NONTUNNEL_AC4_LATENCY;
+        /* CVBS/Speaker output, Dolby MS12 AVSync target is [-45, 125] */
+        if ((port == OUTPORT_SPEAKER) || (port == OUTPORT_AUX_LINE)) {
+            prop_name = AVSYNC_MS12_NONTUNNEL_AC4_CVBS_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_MS12_NONTUNNEL_AC4_CVBS_LATENCY;
+        } else
+        /* HDMI output, Dolby MS12 AVSync target is [-40, 40] */
+        {
+            prop_name = AVSYNC_MS12_NONTUNNEL_AC4_LATENCY_PROPERTY;
+            latency_ms = AVSYNC_MS12_NONTUNNEL_AC4_LATENCY;
+        }
         break;
     }
     default:
@@ -745,7 +769,7 @@ static int get_ms12_nontunnel_latency_offset(enum OUT_PORT port
         }
         port_latency_ms = get_ms12_netflix_port_latency(port, output_format);
     } else {
-        input_latency_ms  = get_ms12_nontunnel_input_latency(input_format);
+        input_latency_ms  = get_ms12_nontunnel_input_latency(input_format, port);
         output_latency_ms = get_ms12_output_latency(output_format);
         if (adev->compensate_video_enable) {
             output_latency_ms = 0;
