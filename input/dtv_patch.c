@@ -82,19 +82,21 @@ static int dtv_patch_handle_event(struct audio_hw_device *dev, int cmd, int val)
     int ret  = 0;;
     float dtv_volume_switch = 1.0;
 
-    acquire_dtv_mutex_lock(adev);
-
     unsigned int path_id = val >> DVB_DEMUX_ID_BASE;
     ALOGI("%s path_id %d cmd %d",__FUNCTION__,path_id, cmd);
     if ((int)path_id < 0  ||  path_id >= DVB_DEMUX_SUPPORT_MAX_NUM) {
         ALOGI("path_id %d invalid ! ",path_id);
-        goto exit;
+        return 0;
     }
 
     aml_dtv_audio_context_t *context = get_dtv_audio_context(adev);
+
     aml_dtv_audio_instance_t *dtv_audio_instance =  &context->instances[path_id];
     aml_dtv_audiopara_t *dtv_audio_info = &dtv_audio_instance->dtv_audio_info;
     val = val & ((1 << DVB_DEMUX_ID_BASE) - 1);
+    /*all dtv audio parameters setting need to be protected by lock, in case of  asynchronous processing*/
+    pthread_mutex_lock(&context->dtv_cmd_process_mutex);
+
     switch (cmd) {
         case AUDIO_DTV_PATCH_CMD_SET_PLAYBACK_MODE:
             ALOGI("DTV playback_mode %d", val);
@@ -229,17 +231,15 @@ static int dtv_patch_handle_event(struct audio_hw_device *dev, int cmd, int val)
                 break;
             }
             ALOGI("[%s:%d] Send dtv patch cmd:%s cmd_id %d", __func__, __LINE__, dtvAudioPatchCmd2Str(val), val);
-            pthread_mutex_lock(&context->dtv_cmd_process_mutex);
             dtv_audio_add_cmd(&context->dtv_cmd_list, val, path_id);
             pthread_cond_signal(&context->dtv_cmd_process_cond);
-            pthread_mutex_unlock(&context->dtv_cmd_process_mutex);
             break;
         default:
             ALOGI("invalid cmd %d", cmd);
     }
 
 exit:
-    release_dtv_mutex_lock(adev);
+    pthread_mutex_unlock(&context->dtv_cmd_process_mutex);
     return ret;
 }
 
@@ -2079,12 +2079,10 @@ int enable_dtv_patch_for_tuner_framework(struct audio_config *config, struct aud
     /*1.only when config has valid content id and sync id*/
     if (config->offload_info.content_id != 0 && config->offload_info.sync_id != 0)
     {
-         pthread_mutex_lock(&dtv_audio_context->dtv_cmd_process_mutex);
         /*2.parser demux id from offload_info, then set it. tuner/filter.cpp for reference.*/
         val = (config->offload_info.content_id >> 16) & 0xF;//demux id
         if (val > DVB_DEMUX_SUPPORT_MAX_NUM - 1)  {
             ALOGW("invalid dmx id %d ", val);
-            pthread_mutex_unlock(&dtv_audio_context->dtv_cmd_process_mutex);
             return -1;
         }
         path_id = val;
@@ -2125,7 +2123,6 @@ int enable_dtv_patch_for_tuner_framework(struct audio_config *config, struct aud
         }
         val = (path_id << DVB_DEMUX_ID_BASE | val);
         dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_SECURITY_MEM_LEVEL, val);
-        pthread_mutex_unlock(&dtv_audio_context->dtv_cmd_process_mutex);
         /*7.init mediasync via cmds.*/
         val = (path_id << DVB_DEMUX_ID_BASE | AUDIO_DTV_PATCH_CMD_OPEN);
         ret = dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_CONTROL, val);
@@ -2400,6 +2397,8 @@ int out_set_volume_for_tunerframework(struct audio_stream_out *stream, float lef
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     bool is_cbs_dtv_audio = dtv_tuner_framework(stream);
     int path_id = aml_out->demux_id;
+    aml_dtv_audio_instance_t *dtv_audio_instance =  &get_dtv_audio_context(adev)->instances[path_id];
+    aml_dtv_audiopara_t *dmx_info = &dtv_audio_instance->dtv_audio_info;
     int ret = 0, val = 0;
 
     if (is_cbs_dtv_audio) {
@@ -2407,7 +2406,9 @@ int out_set_volume_for_tunerframework(struct audio_stream_out *stream, float lef
         val = left * 100;
         val = (path_id << DVB_DEMUX_ID_BASE | val);
         ret = dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_VOLUME, val);
-
+        /*atf player do not use hal_param_tv_mute to control stream volume, when other source
+        switch to atf and set hal_param_tv_mute to true,that will lead to atf case mute*/
+        dmx_info->tv_mute = 0;
     }
     return ret;
 }
