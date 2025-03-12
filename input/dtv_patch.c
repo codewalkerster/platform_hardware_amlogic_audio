@@ -846,13 +846,15 @@ dtvsync_queue:
                 audio_queue_info.apts = -1;
                 audio_queue_info.duration = -1;
             }
-
+             if (Get_Audio_LastES_Apts(demux_handle, &last_queue_es_apts) == 0 && dtv_package->pts) {
+                dtv_audio_instance->last_queue_es_apts = last_queue_es_apts;
+             }
             if (dtv_audio_info->playback_mode == NORMAL_MODE) {
                 audio_queue_info.isworkingchannel = true;
             } else {
                 audio_queue_info.isworkingchannel = false;
-                if (Get_Audio_LastES_Apts(demux_handle, &last_queue_es_apts) == 0 && dtv_package->pts) {
-                    audio_queue_info.duration = (int)(last_queue_es_apts - dtv_package->pts);
+                if (dtv_package->pts) {
+                    audio_queue_info.duration = (int)(dtv_audio_instance->last_queue_es_apts - dtv_package->pts);
                 }
             }
             audio_queue_info.tunit = MEDIASYNC_UNIT_PTS;
@@ -860,7 +862,7 @@ dtvsync_queue:
             if (aml_dev->debug_flag > 0)
                  ALOGI("path_no %d working_channel:%d,queue pts:[%" PRIx64 ",%" PRIx64 "], size:%d,"
                        "dur:%d ms, isneedupdate %d flag %0x.\n",\
-                       dtv_audio_info->demux_id, audio_queue_info.isworkingchannel, dtv_package->pts,last_queue_es_apts,\
+                       dtv_audio_info->demux_id, audio_queue_info.isworkingchannel, dtv_package->pts,dtv_audio_instance->last_queue_es_apts,\
                        dtv_package->size, audio_queue_info.duration/90,audio_queue_info.isneedupdate, dtv_package->pts_dts_flag);
 
             if (!audio_queue_info.isworkingchannel) {
@@ -946,10 +948,7 @@ void update_dtv_audio_instance_format_info(struct aml_dtv_audio_instance *instan
             bypass_aml_dec = true;
         }
     }
-    if (instance->update_stable_count <= FORMAT_STABLE_COUNT) {
-        instance->update_stable_count++;
-    }
-
+    instance->update_stable_count++;
     if (bypass_aml_dec) {
 #ifndef AUDIO_HAL_DISABLE_MS12
         get_ms12_codec_format_info((struct audio_stream_out *)aml_out, &codec_format);
@@ -2455,31 +2454,44 @@ int out_set_volume_for_tunerframework(struct audio_stream_out *stream, float lef
     }
     return ret;
 }
+
 bool on_stream_format_changed(struct aml_stream_out *aml_out) {
-    int ret = false;
     struct aml_audio_device *adev= (struct aml_audio_device *)(aml_out)->dev;
     struct aml_audio_patch *audio_patch = get_dev_patch(adev);
     aml_dtv_audio_instance_t *dtv_audio_instance =  &get_dtv_audio_context(adev)->instances[aml_out->demux_id];
+    int64_t latency_diff = 0;
     if (!dtv_audio_instance) {
         ALOGE("dtv_audio_instance null return false");
         return false;
     }
-    if (aml_out->hal_format != dtv_audio_instance->in_format) {
+    aml_dtvsync_t *Dtvsync = &dtv_audio_instance->dtvsync;
+    dtv_audio_instance->dtv_latency = (int64_t)(dtv_audio_instance->last_queue_es_apts - Dtvsync->cur_outapts) / 90;
+    latency_diff =  DIFF_ABS(aml_out->report_latency, dtv_audio_instance->dtv_latency);
+    if (aml_out->hal_format != dtv_audio_instance->in_format && dtv_audio_instance->update_stable_count > FORMAT_STABLE_COUNT) {
         aml_out->hal_format = dtv_audio_instance->in_format;
-        ret = true;
+        aml_out->audio_info_change_mask = aml_out->audio_info_change_mask | FORMAT_CHANGE;
     }
 
     if (aml_out->hal_channel_mask != dtv_audio_instance->in_chanmask) {
         aml_out->hal_channel_mask = dtv_audio_instance->in_chanmask;
-        ret = true;
+        aml_out->audio_info_change_mask =aml_out->audio_info_change_mask | CHANNEL_MASK_CHANGE;
     }
 
     if (aml_out->hal_rate != dtv_audio_instance->input_sample_rate) {
         aml_out->hal_rate = dtv_audio_instance->input_sample_rate;
-        ret = true;
+        aml_out->audio_info_change_mask =aml_out->audio_info_change_mask | SAMPLE_RATE_CHANGE;
     }
-
-    return ret;
+     //The KPI requirement for PVR exit is within 200ms. To prevent frequent scheduling from affecting CPU performance,
+    //latency is reported every 500ms when it is above 500ms, and all the time when it is below 500ms.
+    if ((latency_diff >= REPORT_LATENCY_THRESHOLD && dtv_audio_instance->dtv_latency > REPORT_LATENCY_THRESHOLD) ||
+       (dtv_audio_instance->dtv_latency <= REPORT_LATENCY_THRESHOLD)) {
+        aml_out->report_latency = dtv_audio_instance->dtv_latency;
+        aml_out->audio_info_change_mask =aml_out->audio_info_change_mask | OUTPUT_LATENCY_CHANGE;
+    }
+    if (aml_out->audio_info_change_mask > 0)
+        return true;
+    else
+        return false;
 }
 
 int out_set_playback_rate_parameters_for_tunerframework(struct audio_stream_out *stream, const audio_playback_rate_t *playbackRate)
@@ -2533,6 +2545,7 @@ ssize_t out_write_dtv_stream_for_tunerframework(struct audio_stream_out *stream,
     int path_id = aml_out->demux_id;
     aml_dtv_audio_instance_t *dtv_audio_instance =  &get_dtv_audio_context(adev)->instances[path_id];
     aml_dtv_audiopara_t *dmx_info = &dtv_audio_instance->dtv_audio_info;
+
     void *demux_handle = dtv_audio_instance->demux_handle;
     if (aml_out->hwsync == NULL) {
         aml_out->hwsync = aml_audio_calloc(1, sizeof(audio_hwsync_t));
@@ -2654,9 +2667,7 @@ ssize_t out_write_dtv_stream_for_tunerframework(struct audio_stream_out *stream,
     }
 #endif
     /*now just report aac heaac format, others to do */
-    if (is_aac_format(dtv_audio_instance->aformat) && on_stream_format_changed(aml_out) && dtv_audio_instance->update_stable_count > FORMAT_STABLE_COUNT) {
-        ALOGD("stream format changed to format %0x channelmask%0x samplerate %d",
-            aml_out->hal_format, aml_out->hal_channel_mask, aml_out->hal_rate );
+    if (on_stream_format_changed(aml_out)) {
         out_stream_send_codec_event(stream, __FUNCTION__);
     }
     return bytes_cost;

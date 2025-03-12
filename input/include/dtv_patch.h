@@ -40,8 +40,7 @@ enum {
 
 #define DTVSYNC_INIT_PTS     (-10000)
 #define DTVSYNC_INVALID_PTS   (-20000)
-
-
+#define REPORT_LATENCY_THRESHOLD (500)
 #define DTVSYNC_APTS_THRESHOLD  (-5000)
 typedef enum {
    DTV_AUDIO_PATCH = 0,
@@ -78,7 +77,7 @@ typedef struct aml_dtv_audio_instance {
     int out_sample_rate;
     audio_format_t out_format;
     bool ad_substream_checked_flag;
-
+    int64_t dtv_latency;
     int dtv_aformat;
     int dtv_has_video;
     bool package_checked_flag;
@@ -117,6 +116,7 @@ typedef struct aml_dtv_audio_instance {
     bool do_pre_mute_flag;
     struct aml_stream_out *cbs_stream_out;
     struct timespec last_timestamp;
+    int64_t last_queue_es_apts;
 } aml_dtv_audio_instance_t;
 
 typedef struct aml_dtv_audio_context {

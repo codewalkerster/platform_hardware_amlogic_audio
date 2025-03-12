@@ -654,6 +654,12 @@ typedef struct audio_data_handle_info {
     int16_t *pcm16_buf;
     size_t pcm16_buf_size;
 } audio_data_handle_info_st;
+enum {
+    OUTPUT_LATENCY_CHANGE   = 0x0001,
+    SAMPLE_RATE_CHANGE      = 0x0010,
+    CHANNEL_MASK_CHANGE     = 0x0100,
+    FORMAT_CHANGE           = 0x1000,
+};
 
 typedef struct aml_stream_speed_info {
     float speed;
@@ -728,6 +734,7 @@ struct aml_stream_out {
     float last_volume_r;
     bool ms12_vol_ctrl;
     int last_codec_type;
+    uint64_t report_latency;
     /**
      * as raw audio framesize  is 1 computed by audio_stream_out_frame_size
      * we need divide more when we got 61937 audio package
@@ -739,6 +746,7 @@ struct aml_stream_out {
     struct timespec timestamp;
     struct timespec lasttimestamp;
     stream_type_t streamType;
+    int audio_info_change_mask;
     int streamTypeIndex;
     /**
      * flag indicates that this stream need do mixing

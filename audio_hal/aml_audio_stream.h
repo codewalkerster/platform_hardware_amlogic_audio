@@ -35,6 +35,7 @@
 #define KEY_SAMPLE_RATE     "sample-rate"
 #define KEY_AUDIO_ENCODING  "audio-encoding"
 #define KEY_CHANNEL_MASK    "channel-mask"
+#define KEY_DTV_LATENCY    "audio-latency"
 
 
 enum {

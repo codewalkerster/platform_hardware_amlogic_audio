@@ -2895,7 +2895,8 @@ static int out_set_event_callback(struct audio_stream_out *stream,
 {
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     AM_LOGI("io %d: out:%p, callback:%p cookie:%p", out->io_handle, stream, callback, cookie);
-
+    out->stream_event_callback = callback;
+    out->stream_cookie = cookie;
     return 0;
 }
 
@@ -7403,6 +7404,7 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
     enable_dtv_patch_for_tuner_framework(config, *stream_out);
     aml_out->audioCfg.offload_info.content_id = config->offload_info.content_id;
     aml_out->audioCfg.offload_info.sync_id = config->offload_info.sync_id;
+    aml_out->report_latency = 0;
     if (dtv_tuner_framework(*stream_out)) {
         /*assign pause/resume api for tuner framework output stream.
           application scenarios like: time shift pause/resume*/
@@ -7410,6 +7412,7 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
         aml_out->stream.resume = out_resume_dtv_stream_for_tunerframework;
         aml_out->stream.flush = out_flush_dtv_stream_for_tunerframework;
         aml_out->stream.write = out_write_dtv_stream_for_tunerframework;
+        aml_out->audio_info_change_mask = 0;
         aml_out->stream.get_presentation_position = out_get_presentation_position_for_tunerframework;
         aml_out->stream.set_audio_description_mix_level = out_set_audio_description_mix_level;
         aml_out->stream.get_audio_description_mix_level = out_get_audio_description_mix_level;

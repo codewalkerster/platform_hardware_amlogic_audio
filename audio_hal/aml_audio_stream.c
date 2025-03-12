@@ -40,7 +40,6 @@
 #include "amlAudioMixer.h"
 #include "audio_hw_ms12_common.h"
 #include "audio_hw_resource_mgr.h"
-#include "dtv_private_object.h"
 #include "aml_audio_ms12_sync.h"
 
 #ifdef MS12_V24_ENABLE
@@ -1700,25 +1699,70 @@ exit:
     return ret;
 }
 
+/*
+ *@brief handle audio info change mask
+ * OUTPUT_LATENCY_CHANGE   = 0x0001
+ * SAMPLE_RATE_CHANGE      = 0x0010
+ * CHANNEL_MASK_CHANGE     = 0x0100
+ * FORMAT_CHANGE           = 0x1000
+ */
 
+static void handle_audio_info_change_mask (struct aml_stream_out *aml_out, audio_metadata_t *metadata) {
+    int digitCount = sizeof(aml_out->audio_info_change_mask) * 8;
+    for (int i = digitCount - 1; i >= 0; i--) {
+        int digit = (aml_out->audio_info_change_mask >> (i)) & 0x1;
+        if (digit == 0)
+            continue;
+        int case_mask;
+        case_mask = i/4;
+        switch (case_mask) {
+            /*handle OUTPUT_LATENCY_CHANGE*/
+            case 0: {
+                audio_metadata_put(metadata, KEY_DTV_LATENCY,(int32_t)(aml_out->report_latency));
+                break;
+            }
+            /*handle SAMPLE_RATE_CHANGE*/
+            case 1:{
+                audio_metadata_put(metadata, KEY_SAMPLE_RATE,(int32_t)(aml_out->hal_rate));
+                break;
+            }
+            /*CHANNEL_MASK_CHANGE*/
+            case 2:{
+                 audio_metadata_put(metadata, KEY_CHANNEL_MASK,(int32_t)(aml_out->hal_channel_mask << 2));
+                 break;
+            }
+            /*handle FORMAT_CHANGE*/
+            case 3:{
+                audio_metadata_put(metadata, KEY_AUDIO_ENCODING,(int32_t)(audioFormat2EncodingFormat(aml_out->hal_format)));
+                break;
+            }
+
+            default:
+                break;
+        }
+    }
+
+}
 void out_stream_send_codec_event(struct audio_stream_out *stream, const char *caller)
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = aml_out->dev;
+    int is_format_change = 0;
+    int is_channel_mask_change = 0;
+    int is_sample_rate_change = 0;
+    int is_dtv_latency_change = 0;
     if (aml_out->stream_event_callback && aml_out->stream_cookie) {
-        ALOGI("caller:%s, out:%p, stream_cookie:%p", caller, aml_out, aml_out->stream_cookie);
+        if (adev->debug_flag > 1) {
+            ALOGI("caller:%s, out:%p, stream_cookie:%p dtv_audio_latency: %d", caller, aml_out, aml_out->stream_cookie,aml_out->latency_frames);
+        }
         audio_metadata_t *metadata = audio_metadata_create();
-
-        audio_metadata_put(metadata, KEY_CHANNEL_MASK,(int32_t)(aml_out->hal_channel_mask << 2));
-        audio_metadata_put(metadata, KEY_AUDIO_ENCODING,(int32_t)(audioFormat2EncodingFormat(aml_out->hal_format)));
-        audio_metadata_put(metadata, KEY_SAMPLE_RATE,(int32_t)(aml_out->hal_rate));
-
+        handle_audio_info_change_mask(aml_out,metadata);
         uint8_t *bs = NULL;
         ssize_t length = byte_string_from_audio_metadata(metadata, &bs);
         aml_out->stream_event_callback(STREAM_EVENT_CBK_TYPE_CODEC_FORMAT_CHANGED, (void*)bs, aml_out->stream_cookie);
-
         free(bs);
         audio_metadata_destroy(metadata);
+        aml_out->audio_info_change_mask = 0;
     }
 }
 
