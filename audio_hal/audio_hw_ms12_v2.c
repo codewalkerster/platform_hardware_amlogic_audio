@@ -1172,6 +1172,8 @@ static void set_dolby_ms12_dap_init_mode(struct aml_audio_device *adev)
 
     if (adev->dolby_ms12_dap_init_mode) {
         dap_init_mode = adev->dolby_ms12_dap_init_mode;
+    } else {
+        adev->dolby_ms12_dap_init_mode = dap_init_mode;
     }
     ALOGI("dap_init_mode = %d", dap_init_mode);
     dolby_ms12_set_dap2_initialisation_mode(dap_init_mode);
