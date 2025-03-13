@@ -4277,7 +4277,7 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             sprintf(parm, "%s %d", "-ac4_de", adev->ms12.ac4_de);
             pthread_mutex_lock(&adev->lock);
             if (strlen(parm) > 0)
-                aml_ms12_update_runtime_params(&(adev->ms12), parm);
+                set_ms12_decoder_parameters(adev, parm);
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
