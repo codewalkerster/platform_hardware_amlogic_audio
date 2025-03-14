@@ -4907,10 +4907,12 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
         hal_internal_format == AUDIO_FORMAT_AAC ||
         hal_internal_format == AUDIO_FORMAT_AAC_LATM) {
         if (dtv_audio_info) {
+            aml_dec_config_t *dec_config  = &aml_out->dec_config;
             codec_info.s32AdInput = 1;//dtv_audio_info->dual_decoder_support;
-            associate_audio_mixing_enable = dtv_audio_info->associate_audio_mixing_enable;
-            mixing_level = dtv_audio_info->mixing_level;
-            ad_vol = dtv_audio_info->advol_level;
+            /*dec_config need default values for dolby decoder to do runtime setting*/
+            associate_audio_mixing_enable = dec_config->ad_mixing_enable = dtv_audio_info->associate_audio_mixing_enable;
+            mixing_level = dec_config->mixer_level = dtv_audio_info->mixing_level;
+            ad_vol = dec_config->advol_level = dtv_audio_info->advol_level;
             media_presentation_id = dtv_audio_info->media_presentation_id;
             dtv_decoder_offset_base = aml_out->hwsync->payload_offset;
             /*for ac4, there is only one input case*/

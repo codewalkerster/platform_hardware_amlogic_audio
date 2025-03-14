@@ -2620,13 +2620,24 @@ int out_get_presentation_position_for_tunerframework (const struct audio_stream_
     struct audio_hw_device *dev = (struct audio_hw_device *)(aml_out)->dev;
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     int path_id = aml_out->demux_id;
+    int ret = -EINVAL;
     aml_dtv_audio_instance_t *dtv_audio_instance =  &get_dtv_audio_context(adev)->instances[path_id];
-    struct audio_stream_out *dtv_stream = (struct audio_stream_out *)(dtv_audio_instance->dtv_stream_out.stream_out);
+
+    /*dtv_stream has problem of asynchronous access, so need using the lock and state info to  protect */
+    struct aml_stream_out *dtv_stream = dtv_audio_instance->dtv_stream_out.stream_out;
     if (dtv_stream) {
-        return dtv_stream->get_presentation_position(dtv_stream, frames, timestamp);
+        if (dtv_audio_instance->output_thread_exit) {
+            goto exit;
+        }
+        pthread_mutex_lock(&dtv_stream->lock);
+        ret = dtv_stream->stream.get_presentation_position(&dtv_stream->stream, frames, timestamp);
+        pthread_mutex_unlock(&dtv_stream->lock);
     }
-    ALOGI("%s(), not ready yet", __func__);
-    return -EINVAL;
+exit:
+    if (ret != 0) {
+        ALOGI("%s(), not ready yet error %d", __func__, ret);
+    }
+    return ret;
 }
 int out_set_params_for_tunerframework(struct audio_stream_out *stream,struct str_parms *parms) {
     int ret = 0;
