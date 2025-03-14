@@ -6410,8 +6410,23 @@ static int ms12_decoder_sound_mode_process(struct aml_stream_out *aml_out, Aml_M
     if (is_dolby_ms12_support_compression_format (aml_out->hal_internal_format)) {
         return -1;
     }
+
     int sample_size = 2;
-    if (is_dtv_stream_out(&aml_out->stream)) {
+    struct aml_audio_device *adev = aml_out->dev;
+    AM_AOUT_OutputMode_t cur_sound_track_mode = adev->sound_track_mode;
+
+#ifdef ENABLE_DVB_PATCH
+    bool is_dtv_patch = is_dtv_stream_out(&aml_out->stream);
+    if (is_dtv_patch) {
+        aml_audio_buffer_info_t *pBuffer = (aml_audio_buffer_info_t *)aml_out->audio_buffer;
+        aml_audio_buffer_t *audioBuffer = pBuffer->inBuffer;
+        aml_dtv_audiopara_t *dtv_audio_info = audioBuffer->privObject;
+        cur_sound_track_mode = dtv_audio_info->output_mode;
+    }
+#endif
+
+    /* For local play or dtv input, analog audio output channel should be switched by User setting*/
+    if (cur_sound_track_mode > AM_AOUT_OUTPUT_STEREO) {
         audio_format_t output_format;
         switch (pstProcessInfo->s32InFrameType) {
         case PCM_INT16:
@@ -6431,6 +6446,7 @@ static int ms12_decoder_sound_mode_process(struct aml_stream_out *aml_out, Aml_M
             break;
         }
 
+
         if (pstProcessInfo->as32Acmod[0] == AML_DOLBY_ACMOD_STEREO) {
             size_t in_buff_chans = 8;
             size_t out_buff_chans = 2;
@@ -6438,12 +6454,7 @@ static int ms12_decoder_sound_mode_process(struct aml_stream_out *aml_out, Aml_M
                              (void*)pstProcessInfo->pu8InBuffer, out_buff_chans,
                              sample_size, pstProcessInfo->u32InBufferSize);
 
-#ifdef ENABLE_DVB_PATCH
-            aml_audio_buffer_info_t *pBuffer = (aml_audio_buffer_info_t *)aml_out->audio_buffer;
-            aml_audio_buffer_t *audioBuffer = pBuffer->inBuffer;
-            aml_dtv_audiopara_t *dtv_audio_info = audioBuffer->privObject;
-            aml_audio_switch_output_mode((int16_t *)pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize, output_format, dtv_audio_info->output_mode);
-#endif
+            aml_audio_switch_output_mode((int16_t *)pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize, output_format, cur_sound_track_mode);
             in_buff_chans = 2;
             out_buff_chans = 8;
             pstProcessInfo->u32InBufferSize = adjust_channels((const void* )pstProcessInfo->pu8InBuffer, in_buff_chans,

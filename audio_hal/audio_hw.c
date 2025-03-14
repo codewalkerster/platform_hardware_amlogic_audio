@@ -6418,6 +6418,12 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
                 , audio_bytes_per_sample(aml_out->hal_internal_format)
                 );
 
+            //only system, the dolby_ms12_main_open is not ready
+            //when the codec pipeline is not existed, switch the left/right channel here.
+            if (adev->sound_track_mode > AM_AOUT_OUTPUT_STEREO) {
+                aml_audio_switch_output_mode(buffer, bytes_remaining, aml_out->hal_internal_format, adev->sound_track_mode);
+            }
+
 
             while (bytes_remaining && adev->ms12.dolby_ms12_enable && retry < 20) {
                 size_t used_size = 0;
