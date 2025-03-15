@@ -1912,7 +1912,8 @@ MAIN_INPUT:
             int main_channel_num = aml_out->hal_ch;
             int main_sample_rate = 48000;
             int n_bytes_decoder_consumed = 0;
-            int frame_length = main_frame_size;
+            int write_size = main_frame_size;
+            int left_size = main_frame_size - n_bytes_decoder_consumed;
 
             {
                 int max_size = 0;
@@ -1930,6 +1931,13 @@ MAIN_INPUT:
                 char *frame_addr = (char *)main_frame_buffer;
 
                 do {
+                    left_size = main_frame_size - n_bytes_decoder_consumed;
+                    if (left_size < 0) {
+                        *use_size = bytes;
+                        ALOGE("%s main =%d consune=%d left=%d", __func__, main_frame_size, n_bytes_decoder_consumed, left_size);
+                        goto exit;
+                    }
+                    write_size = left_size;
                     main_avail = aml_ms12_decoder_getparameter(ms12, ms12_dec, MS12_CODEC_PARAMETER_MAIN_BUFFER_AVAIL, &max_size, sizeof(int));
                     /* after flush, max_size value will be set to 0 and after write first data,
                      * it will be initialized
@@ -1957,21 +1965,31 @@ MAIN_INPUT:
                     It also needs further testing to check if there is any side effects.
                     */
                     if (is_ddp_format && ddp_1st_main_frame_size && (ddp_1st_numblks < DDP_FRAME_MAX_NUMBLK)) {
-                        frame_length = ddp_1st_main_frame_size;
+                        write_size = ddp_1st_main_frame_size;
+                        if (write_size > left_size) {
+                            write_size = left_size;
+                        }
+                    } else if (main_avail == 0 && write_size > (max_size - main_avail)) {
+                        /*the buf size is not big enough, we need sperate it to several times*/
+                        write_size = max_size - main_avail;
                     }
                     /*
                      * for pcm case we don't need check the available buf size, ms12 will allocate new one
                      */
-                    if ((max_size - main_avail) >= frame_length || audio_is_linear_pcm(ms12_hal_format)) {
+                    if ((max_size - main_avail) >= write_size || audio_is_linear_pcm(ms12_hal_format)) {
                         dolby_ms12_input_bytes = aml_ms12_main_decoder_write(
                                                             ms12
                                                             , ms12_dec
                                                             , (frame_addr + n_bytes_decoder_consumed)
-                                                            , frame_length
+                                                            , write_size
                                                             , &ms12_pcminfo);
+                        if (dolby_ms12_input_bytes < 0) {
+                            *use_size = bytes;
+                            goto exit;
+                        }
                         if (adev->debug_flag >= 2)
-                            ALOGI("%s line %d frame_length %d ret dolby_ms12 input_bytes %d",
-                                __func__, __LINE__, frame_length, dolby_ms12_input_bytes);
+                            ALOGI("%s line %d write_size %d ret dolby_ms12 input_bytes %d",
+                                __func__, __LINE__, write_size, dolby_ms12_input_bytes);
                         n_bytes_decoder_consumed += dolby_ms12_input_bytes;
                         //let the cpu scheduling
                         dolby_ms12_get_latency_for_stereo_out(&ms12_codecbuf_delay1);
