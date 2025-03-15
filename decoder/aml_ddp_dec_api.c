@@ -733,9 +733,14 @@ int is_ad_substream_supported(unsigned char *buffer,int write_len) {
     int mChMask = 0;
     int isDependentFrame = 0;
     int ad_substream_supported = 0;
+    int remain_size = 0;
     ALOGV("%s %x %x\n", __FUNCTION__, read_pointer[0], read_pointer[1]);
 
-    while (offset <  write_len -1) {
+    while (offset <  write_len - 1) {
+        remain_size = write_len - offset;
+        if (remain_size < PTR_HEAD_SIZE) {
+            break;
+        }
         if ((read_pointer[0] == 0x0b && read_pointer[1] == 0x77) || \
                     (read_pointer[0] == 0x77 && read_pointer[1] == 0x0b)) {
             Get_Parameters(read_pointer, &mSample_rate, &mFrame_size, &mChMask, &is__aml_eac3, &isDependentFrame, &ad_substream_supported);
