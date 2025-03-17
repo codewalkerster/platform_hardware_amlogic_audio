@@ -2201,6 +2201,7 @@ int nego_sample_rate(int input_rate, audio_format_t fmt, audio_devices_t devices
     int rate;
     const int *a;
     size_t n; // sample rate list
+    struct aml_audio_device *adev = adev_get_handle();
 
     if (devices == AUDIO_DEVICE_OUT_HDMI) {
         audio_profile_cap_t *audio_cap_item = get_edid_support_audio_format(fmt);
@@ -2222,11 +2223,13 @@ int nego_sample_rate(int input_rate, audio_format_t fmt, audio_devices_t devices
     rate = close_one(input_rate, a, n);
     rate = MAX(rate, 48000);
 #define ARRAY_STR_LEN 64
-    char s0[AUDIO_DEVICE_OUT_STR_LEN], s1[ARRAY_STR_LEN];
-    AM_LOGI("tag=rate input rate=%d fmt=0x%x device=0x%x/%s sup_sampling_rates='%s' -> rate=%d",
-            input_rate, fmt, devices, show_audio_device_out(devices, s0, AUDIO_DEVICE_OUT_STR_LEN),
-            show_int_array(a, n, '|', s1, ARRAY_STR_LEN),
-            rate);
+    if (adev->debug_flag) {
+        char s0[AUDIO_DEVICE_OUT_STR_LEN], s1[ARRAY_STR_LEN];
+        AM_LOGI("tag=rate input rate=%d fmt=0x%x device=0x%x/%s sup_sampling_rates='%s' -> rate=%d",
+                input_rate, fmt, devices, show_audio_device_out(devices, s0, AUDIO_DEVICE_OUT_STR_LEN),
+                show_int_array(a, n, '|', s1, ARRAY_STR_LEN),
+                rate);
+    }
     return rate;
 }
 

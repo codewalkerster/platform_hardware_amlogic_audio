@@ -6293,13 +6293,17 @@ static bool ms12_config_decoder_volume(
         }
     }
 
-    AM_LOGI("stream:%p change volume %f to %f, mute %d, ease_frames=%d",
-        aml_out, current_volume, next_volume, ms12_dec->is_muted, ease_setting.ease_frames);
-
     if (ms12_dec->is_muted) {
+        next_volume = 0.0f;
         ease_setting.target_volume = 0.0f;
     }
-    aml_audio_ease_config_frame(&aml_out->volume_easing, &ease_setting, p_data_format);
+
+    if (!aml_volume_shaper_check_equal(current_volume, next_volume)) {
+        AM_LOGI("stream:%p change volume %f to %f, mute %d, ease_frames=%d",
+            aml_out, current_volume, next_volume, ms12_dec->is_muted, ease_setting.ease_frames);
+
+        aml_audio_ease_config_frame(&aml_out->volume_easing, &ease_setting, p_data_format);
+    }
     return true;
 }
 
@@ -6318,6 +6322,7 @@ static int ms12_decoder_volume_process(struct aml_stream_out *aml_out, Aml_MS12_
     aml_data_format_t data_format;
     struct dolby_ms12_dec_desc *ms12_dec = aml_out->ms12_dec_handle;
     const int PROCESS_FRAMES = 256;  // process 256 samples each time, so that zero data detect more accurate.
+    int debug_value = get_debug_value(AML_DEBUG_AUDIOHAL_VOLUME_SHAPER);
 
     memset(&data_format, 0, sizeof(data_format));
     data_format.sr = pstProcessInfo->s32SampleRate;
@@ -6352,12 +6357,23 @@ static int ms12_decoder_volume_process(struct aml_stream_out *aml_out, Aml_MS12_
         pu8Data = pstProcessInfo->pu8InBuffer + n_frames_offset * frame_size;
 
         // volume configure
-         if (ms12_config_decoder_mute(aml_out, pu8Data, handle_frames, &data_format) == false) {
+        if (ms12_config_decoder_mute(aml_out, pu8Data, handle_frames, &data_format) == false) {
             ms12_config_decoder_volume(aml_out, pu8Data, handle_frames, &data_format);
         }
 
+        if (debug_value != 0) {
+            float current = aml_audio_ease_get_current_volume(&aml_out->volume_easing);
+            float next = aml_out->volume_easing.target_volume;
+            int ease_frames = aml_out->volume_easing.ease_frames;
+            AM_LOGD("stream:%p mute %d, current %f, next %f, ease_frames=%d", aml_out, ms12_dec->is_muted, current, next, ease_frames);
+        }
+
         // volume process
-        aml_audio_ease_process(&aml_out->volume_easing, pu8Data, handle_frames * frame_size, true);
+        if ((debug_value & AML_VOLUME_DEBUG_BYPASS_MASK) == AML_VOLUME_DEBUG_BYPASS_MASK) {
+            AM_LOGD("stream:%p volume debug bypass enable ! (volume or mute request are ignored)", aml_out);
+        } else {
+            aml_audio_ease_process(&aml_out->volume_easing, pu8Data, handle_frames * frame_size, true);
+        }
         n_frames_offset += handle_frames;
     }
     return 0;

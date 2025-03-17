@@ -44,6 +44,8 @@ typedef struct aml_volume_shaper {
 /* Pick up -1.0f(magic number, outside of 0.0f~1.0f) as a invalid value. */
 #define AML_AUDIO_GAIN_FLOAT_INVALID      (-GAIN_FLOAT_UNITY)
 
+#define AML_VOLUME_DEBUG_BYPASS_MASK       0xF0000
+
 
 int aml_volume_shaper_check_equal(float a, float b);
 int aml_volume_shaper_check_sanity(float volume);
