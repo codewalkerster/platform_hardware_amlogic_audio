@@ -6950,7 +6950,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
 
     bool is_raw_stream_flag = is_raw_stream(aml_out);
     /*local IEC61937 playback, goes into IEC passthrough, it doesn't need parer*/
-    bool bypass_parser = (aml_out->hal_format == AUDIO_FORMAT_IEC61937 && !aml_out->is_tv_src_stream);
+    bool bypass_parser = is_dts_format(aml_out->hal_internal_format) || (aml_out->hal_format == AUDIO_FORMAT_IEC61937 && !aml_out->is_tv_src_stream);
 
     /* is_unsupport_raw_stream and is_dtv_stream_flag would be removed later, it's just for debug.
      * for hwsync mode, must use parser to parse it
