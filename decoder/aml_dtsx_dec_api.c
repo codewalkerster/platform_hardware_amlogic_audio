@@ -967,16 +967,6 @@ static int _aml_dtsx_dualcore_init(dtsx_dec_t *p_dtsx_dec)
     }
 
     dtsx_config_params_t *p_config_params = &(p_dtsx_dec->dtsxHandle.config_params);
-    memcpy(p_config_params, &_dtsx_config_params, sizeof(dtsx_config_params_t));
-
-    // update config param.
-    p_config_params->core1_dec_out = 2123;   // 2123(7.1 8 lanes) is hardcode
-    p_config_params->core2_spkr_out = 2; // Default 2ch output.
-    //p_config_params->auto_config_out_for_vx = p_dtsx_dec->auto_config_out_for_vx;
-    p_config_params->dec_sink_dev_type = p_dtsx_dec->sink_dev_type;
-    p_config_params->pp_sink_dev_type = p_dtsx_dec->sink_dev_type;
-    p_config_params->bPassthrough = p_dtsx_dec->passthroug_enable;
-    p_config_params->sink_support_multich_pcm = p_dtsx_dec->sink_support_multich_pcm;
 
     /* Prepare the init argv for core1 decoder */
     snprintf(p_dtsx_dec->init_argv[cmd_count++], DTSX_PARAM_STRING_LEN, "dtsx_core1_max_spkrout=%d", p_config_params->core1_dec_out);
@@ -1111,8 +1101,11 @@ int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
 
     aml_dec = &dtsx_dec->aml_dec;
     aml_dtsx_config_t *dtsx_config = &dec_config->dtsx_config;
+    dtsx_config_params_t *p_config_params = &(dtsx_dec->dtsxHandle.config_params);
     aml_dec->dev = dtsx_config->dev;
     adev = (struct aml_audio_device *)(dtsx_config->dev);
+    dtsx_dec_t *p_global_dtsx_setting = &adev->dts_x;
+    dtsx_config_params_t *p_global_config_params = &(p_global_dtsx_setting->dtsxHandle.config_params);
 
     dec_data_info_t *dec_pcm_data = &aml_dec->dec_pcm_data;
     dec_data_info_t *dec_raw_data = &aml_dec->dec_raw_data;
@@ -1141,6 +1134,27 @@ int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
             dtsx_dec->init_argv[i] = dtsx_dec->init_argv[0] + (DTSX_PARAM_STRING_LEN * i);
         }
     }
+
+    /*For stb case,decoder don't enable LnD*/
+    if (dtsx_dec->device_type == STB) {
+        _dtsx_config_params.drc_boost_value[DTSX_OUTPUT_SPK] = 0;
+        _dtsx_config_params.drc_cut_value[DTSX_OUTPUT_SPK] = 0;
+        _dtsx_config_params.loudness_enable[DTSX_OUTPUT_SPK] = 0;
+    }
+    ///< Set default parameters.
+    memcpy(p_config_params, &_dtsx_config_params, sizeof(dtsx_config_params_t));
+
+    ///< Update config param.
+    p_config_params->core1_dec_out = 2123;   // 2123(7.1 8 lanes) is hardcode
+    p_config_params->core2_spkr_out = 2; // Default 2ch output.
+    p_config_params->dec_sink_dev_type = dtsx_dec->sink_dev_type;
+    p_config_params->pp_sink_dev_type = dtsx_dec->sink_dev_type;
+    p_config_params->bPassthrough = dtsx_dec->passthroug_enable;
+
+    ///< Update global settings.
+    p_config_params->auto_config_out_for_vx = p_global_config_params->auto_config_out_for_vx;
+    p_config_params->drc_boost_value[DTSX_OUTPUT_SPK] = p_global_config_params->drc_boost_value[DTSX_OUTPUT_SPK];
+    p_config_params->drc_cut_value[DTSX_OUTPUT_SPK] = p_global_config_params->drc_cut_value[DTSX_OUTPUT_SPK];
 
     if (_aml_dtsx_dualcore_init(dtsx_dec) < 0) {
         ALOGE("dtsx init fail");
@@ -1249,7 +1263,10 @@ int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
         _dtsx_debug.debug_flag = false;
     }
     *ppaml_dec = aml_dec;
-    memcpy(&adev->dts_x, dtsx_dec, sizeof(dtsx_dec_t));
+    adev->dts_x.p_dtsx_dec_inst = dtsx_dec->p_dtsx_dec_inst;
+    adev->dts_x.p_dtsx_pp_inst = dtsx_dec->p_dtsx_pp_inst;
+    memcpy(&adev->dts_x.dtsxHandle, &dtsx_dec->dtsxHandle, sizeof(dtsx_decoder_func_t));
+    DCA_ADD_STATUS(adev->dts_x.status, DCA_INITED);
 
     ALOGI("%s success", __func__);
     return 0;
@@ -1394,7 +1411,9 @@ int dtsx_decoder_release_patch(aml_dec_t *aml_dec)
     }
 
     adev = (struct aml_audio_device *)(aml_dec->dev);
-    memset(&adev->dts_x, 0, sizeof(dtsx_dec_t));
+    DCA_CLEAR_STATUS(adev->dts_x.status, DCA_INITED | DCA_PROCESS_HALF_FRAME);
+    adev->dts_x.p_dtsx_dec_inst = NULL;
+    adev->dts_x.p_dtsx_pp_inst = NULL;
     aml_dec->frame_cnt = 0;
 
     if (aml_dec->decFunc) {
@@ -1633,8 +1652,9 @@ int dtsx_decoder_process_patch(aml_dec_t *aml_dec, unsigned char *buffer, int by
 uint32_t dtsx_get_out_chmask_internal(dtsx_dec_t *dtsx_dec)
 {
     ///< not init yet.
-    if (!dtsx_dec->dtsxHandle.postprocess_get_out_info2 || !dtsx_dec->p_dtsx_pp_inst)
+    if (!dtsx_dec->dtsxHandle.postprocess_get_out_info2 || !dtsx_dec->p_dtsx_pp_inst) {
         return 0;
+    }
 
     return dtsx_dec->core2_pcm_out_info.channel_mask;
 }
@@ -2251,9 +2271,10 @@ int aml_dtsx_get_runtime_params(dtsx_dec_t *dtsx_dec, const char *keys, char *ke
 {
     int ret = 0;
     int temp_value = 0;
+    dtsx_config_params_t *p_config_params = &(dtsx_dec->dtsxHandle.config_params);
 
     if (strstr(keys, "dtsx_spk_drc")) {
-        if (_dtsx_config_params.drc_cut_value[DTSX_OUTPUT_SPK] == 0 && _dtsx_config_params.drc_boost_value[DTSX_OUTPUT_SPK] == 0) {
+        if (p_config_params->drc_cut_value[DTSX_OUTPUT_SPK] == 0 && p_config_params->drc_boost_value[DTSX_OUTPUT_SPK] == 0) {
             temp_value = 0;
         } else {
             temp_value = 1;
