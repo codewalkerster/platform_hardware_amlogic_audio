@@ -550,10 +550,10 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, void *abuffer)
             **multi channel pcm, no go through here, as multi ch pcm send to audioMixer with out_write_pcm_to_AudioMixer.
             **And AudioMixer has mc output/spdifout to handle this case.
             */
-            /*if (!dts_pcm_direct_output && !speed_enabled && audio_is_linear_pcm(aml_dec->format) && raw_in_data->data_ch > 2) {
+            if (!dts_pcm_direct_output && audio_is_linear_pcm(aml_dec->format) && raw_in_data->data_ch > 2 && (adev->dolby_lib_type_last == eDolbyMS12Lib)) {
                 aml_audio_stream_volume_process(stream, raw_in_data->buf, sizeof(int16_t), raw_in_data->data_ch, raw_in_data->data_len);
                 aml_audio_spdif_output(stream, &aml_out->spdifout_handle, raw_in_data);
-            } else */if (dts_pcm_direct_output) {
+            } else if (dts_pcm_direct_output) {
                 aml_audio_stream_volume_process(stream, dec_pcm_data->buf, sizeof(int16_t), dec_pcm_data->data_ch, dec_pcm_data->data_len);
                 aml_audio_spdif_output(stream, &aml_out->spdifout_handle, dec_pcm_data);
             }
