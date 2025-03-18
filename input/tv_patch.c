@@ -191,9 +191,6 @@ static bool reconfig_stream_param(struct aml_stream_in *stream_in, struct aml_au
             } else if (patch->input_sample_rate > 48000) {
                 period_size = DEFAULT_CAPTURE_PERIOD_SIZE * 2;
             }
-            /* only multi-channel pcm should update rate to SW resampler */
-            patch->input_sample_rate = audio_parse_get_audio_samplerate(patch->audio_parse_para);
-            AM_LOGD("audio type:%d, samplerate:%d", type, patch->input_sample_rate);
         } else if (type == LPCM) {
             buf_size = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT * 4;
         } else if (type == MAT) {
@@ -203,6 +200,9 @@ static bool reconfig_stream_param(struct aml_stream_in *stream_in, struct aml_au
             period_count = 16;
             buf_size = ring_buffer_size;
         }
+        /* update rate to SW resampler */
+        patch->input_sample_rate = audio_parse_get_audio_samplerate(patch->audio_parse_para);
+        AM_LOGD("audio type:%d, samplerate:%d", type, patch->input_sample_rate);
     }
 
     if (ringbuffer) {
@@ -408,6 +408,9 @@ void *audio_patch_input_threadloop(void *data)
 
         if (patch->input_src == AUDIO_DEVICE_IN_LINE) {
             read_threshold = 4 * read_bytes;
+        } else if ((patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC || patch->input_src == AUDIO_DEVICE_IN_SPDIF)
+                && patch->aformat == AUDIO_FORMAT_AC3 && patch->input_sample_rate == 44100) {
+            read_threshold = 2 * read_bytes;
         }
 
         // buffer size diff from allocation size, need to resize.
@@ -766,6 +769,7 @@ void *audio_patch_output_threadloop(void *data)
               __func__, get_buffer_read_space(ringbuffer));
         if (get_buffer_read_space(ringbuffer) < (write_bytes * period_mul)) {
             // wait 300ms
+            ALOGV("%s(),   wait 300ms    ", __func__);
             ts_wait_time(&ts, 300000);
             pthread_cond_timedwait(&patch->cond, &patch->mutex, &ts);
         }
