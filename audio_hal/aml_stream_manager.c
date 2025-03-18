@@ -317,7 +317,7 @@ bool aml_is_preempt_deep_buffer_stream(struct aml_stream_out *amlStream)
             ptmp = (struct stream_infos *)item;
             nodeIndex++;
             struct aml_stream_out *pOutStream = (struct aml_stream_out *)ptmp->pStream;
-            if (pOutStream && (pOutStream->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER) && !pOutStream->standby) {
+            if (pOutStream && !pOutStream->standby && ((pOutStream->flags & AUDIO_OUTPUT_FLAG_DEEP_BUFFER) || pOutStream->is_system_audio_usage_media)) {
                 retValue = true;
                 break;
             }
@@ -325,7 +325,7 @@ bool aml_is_preempt_deep_buffer_stream(struct aml_stream_out *amlStream)
 
         amlStream->is_preempt_system_audio_usage_media_stream = retValue;
     }
-    ALOGI("%s main stream can preempt the deep buffer:%d and retValue:%d", __func__, amlStream->is_preempt_system_audio_usage_media_stream, retValue);
+    ALOGI("%s main stream can preempt the system audio usage media (deep buffer) stream:%d and retValue:%d", __func__, amlStream->is_preempt_system_audio_usage_media_stream, retValue);
 
     return retValue;
 }
@@ -355,6 +355,7 @@ void aml_check_close_ms12_output_main_stream(struct aml_stream_out *amlStream)
             if (pOutStream && pOutStream->is_ms12_main_decoder && !pOutStream->is_preempt_system_audio_usage_media_stream && is_asdk_test) {
                 pthread_mutex_lock(&pOutStream->lock);
                 if (pOutStream->is_ms12_main_decoder) {
+                    ALOGI("%s() line %d close ms12 main stream", __func__, __LINE__);
                     aml_close_ms12_output_main_stream(pOutStream);
                 }
                 pthread_mutex_unlock(&pOutStream->lock);

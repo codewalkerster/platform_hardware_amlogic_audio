@@ -6301,11 +6301,10 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
      * atmos_stickiness_usage_media_ddp_out-no_cfg-v241-HDMI (6581)
      * atmos_stickiness_usage_media_mat_out-no_cfg-v241-HDMI (6612)
      */
-
-    if (is_deep_buf && !adev->is_netflix && !is_tv_stream_out(aml_out) && !is_dev_patch_exist(adev)) {
-        ALOGV("%s() line %d close ms12 main stream", __func__, __LINE__);
+    if (((aml_out->track_base_usage == AUDIO_USAGE_MEDIA) || is_deep_buf) && !adev->is_netflix && !is_tv_stream_out(aml_out) && !is_dev_patch_exist(adev)) {
         aml_check_close_ms12_output_main_stream(aml_out);
         aml_out->is_ms12_main_decoder_disable = true;
+        aml_out->is_system_audio_usage_media = true;
     }
 
 
