@@ -113,6 +113,8 @@ typedef struct aml_dtv_audio_instance {
     struct heaac_parser_info ad_heaac_info;
     int32_t PServerDev;
     int update_stable_count;
+    struct timespec package_mute_ts;
+    bool do_pre_mute_flag;
 } aml_dtv_audio_instance_t;
 
 typedef struct aml_dtv_audio_context {

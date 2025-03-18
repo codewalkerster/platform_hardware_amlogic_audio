@@ -1208,11 +1208,28 @@ int dtv_audio_check_package(struct aml_dtv_audio_instance *instance, struct pack
         ALOGI("cur_package size %u pts %"PRIx64" jitter %"PRIx64" ms pts diff %"PRIx64" ms",
           p_package->size, p_package->pts, data_arrive_jitter_ms, data_pts_jitter_ms);
     }
-    //do fade in
+    /*  do mute then do fade in.
+     *  do mute when data arrvie jitter > 400ms or data pts jump back.
+     */
     if (instance->dtvsync.last_package_pts != DTVSYNC_INIT_PTS &&
         ((data_arrive_jitter_ms >= DTV_AUDIO_DATA_JITTERMS_THRESHOLD) ||
         (data_pts_jitter_ms >= AUDIO_PTS_DISCONTINUE_THRESHOLD / 90))) {
-        tv_set_ease(instance->dtv_stream_out.stream_out, EaseIn);
+        if (eDolbyMS12Lib == aml_dev->dolby_lib_type_last) {
+            if (!instance->dtv_stream_out.stream_out->is_decoder_muted) {
+                set_ms12_decoder_mute(&instance->dtv_stream_out.stream_out->stream, true, 0);
+                clock_gettime(CLOCK_MONOTONIC, &instance->package_mute_ts);
+            }
+            instance->do_pre_mute_flag = true;
+        }
+    }
+    /*to avoid data arrvie jitter and  data pts jump back triggered one by one,
+     * do premute 40ms then do fade in.
+     */
+    if (!dtv_audio_info->tv_mute && instance->do_pre_mute_flag) {
+        if (calc_time_interval_us(&instance->package_mute_ts, &current_ts) / 1000 > DTV_AUDIO_REPLAY_PREMUTE_MS) {
+            instance->do_pre_mute_flag = false;
+            tv_set_ease(instance->dtv_stream_out.stream_out, EaseIn);
+        }
     }
 
     if (p_package->pts != DTVSYNC_INVALID_PTS) {

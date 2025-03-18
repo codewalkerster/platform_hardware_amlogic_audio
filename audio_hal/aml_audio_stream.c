@@ -1616,7 +1616,9 @@ void tv_set_ease(struct aml_stream_out *out, int ease_mode)
                 }
             } else if (ease_mode == EaseIn) {
                 if (is_ms12_case) {
-                    need_do_fade = aml_dev->ms12.is_muted;
+                    /* check if decode is muted or not, if muted, do fade in.
+                     */
+                    need_do_fade = out->is_decoder_muted;
                 } else {
                     if (aml_dev->audio_ease) {
                         float vol_now = aml_audio_ease_get_current_volume(out->audio_stream_ease);
@@ -1628,7 +1630,7 @@ void tv_set_ease(struct aml_stream_out *out, int ease_mode)
                 } else {
                      if (is_TV(aml_dev)) {
                         if (is_ms12_case) {
-                            duration_ms = property_get_int32("vendor.media.audio.dtv.fadein.us", MS12_AUDIO_FADEOUT_TV_DURATION_US) / 1000;
+                            duration_ms = property_get_int32("vendor.media.audio.dtv.fadein.us", MS12_AUDIO_FADEIN_TV_DURATION_US) / 1000;
                         } else {
                             duration_ms = property_get_int32("vendor.media.audio.dtv.fadein.us", NON_MS12_AUDIO_FADEIN_TV_DURATION_US) / 1000;
                         }
