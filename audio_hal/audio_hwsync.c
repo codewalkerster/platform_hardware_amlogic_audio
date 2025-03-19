@@ -668,23 +668,21 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
                 bool force_update = false;
                 aml_audio_speed_post_delay_t *p_post_delay = &speed_info->post_delay;
 
-                if (speed_info->hwsync_force_update) {
-                    if (p_post_delay->transitioning) {
-                        speed_select = p_post_delay->last_speed;
-                    } else if (is_float_equal(p_post_delay->next_speed, speed_info->speed)) {
-                        if (out->hwsync->last_output_pts && out->hwsync->last_output_pts != ULLONG_MAX) {
-                            // Make sure : different speed has different apts value.
-                            uint64_t mini_apts64 = out->hwsync->last_output_pts + 90;
-                            if (apts64 < mini_apts64) {
-                                AM_LOGI("apts64 change %" PRIu64 " to %" PRIu64 "", apts64, mini_apts64);
-                                apts64 = mini_apts64;
-                            }
+                if (p_post_delay->transitioning || !is_float_equal(p_post_delay->next_speed, speed_info->speed)) {
+                    speed_select = p_post_delay->last_speed;
+                } else if (speed_info->hwsync_force_update) {
+                    if (out->hwsync->last_output_pts && out->hwsync->last_output_pts != ULLONG_MAX) {
+                        // Make sure : different speed has different apts value.
+                        uint64_t mini_apts64 = out->hwsync->last_output_pts + 90;
+                        if (apts64 < mini_apts64) {
+                            AM_LOGI("apts64 change %" PRIu64 " to %" PRIu64 "", apts64, mini_apts64);
+                            apts64 = mini_apts64;
                         }
-                        force_update = true;
-                        speed_info->hwsync_force_update = false;
-                        pcr = apts64;
-                        pcr_pts_gap = gap = 0;
                     }
+                    force_update = true;
+                    speed_info->hwsync_force_update = false;
+                    pcr = apts64;
+                    pcr_pts_gap = gap = 0;
                 }
                 aml_hwsync_wrap_reset_pcrscr_speed(out->hwsync, apts64, speed_select, force_update);
             }
