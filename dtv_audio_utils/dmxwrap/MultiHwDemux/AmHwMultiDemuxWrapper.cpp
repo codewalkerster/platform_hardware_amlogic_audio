@@ -463,6 +463,10 @@ AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperCloseAD() {
        ALOGE("AmDmxDevice is NULL");
        return AM_Dmx_ERROR;
     }
+    {
+        TSPMutex::Autolock l(mAudioADEsDataQueueLock);
+        clearPendingEsData(mAudioADEsDataQueue);
+    }
     AmDmxDevice->AM_DMX_FreeFilter(mDemuxPara.aud_ad_fd);
     return AM_Dmx_SUCCESS;
 }

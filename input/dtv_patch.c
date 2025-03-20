@@ -309,13 +309,19 @@ int audio_dtv_patch_parser_process_write(struct package *p_package,
 
     if (instance->aformat == AUDIO_FORMAT_AC3 ||
         instance->aformat == AUDIO_FORMAT_E_AC3) {
-
         if (!instance->ac3_parser_handle) {
             aml_ac3_parser_open(&instance->ac3_parser_handle);
             ALOGI("instance->ac3_parser_handle %p", instance->ac3_parser_handle);
         }
-        if (ad_data_size && !instance->ad_ac3_parser_handle) {
-            aml_ac3_parser_open(&instance->ad_ac3_parser_handle);
+        if (dtv_audio_info->dual_decoder_support) {
+            if (!instance->ad_ac3_parser_handle) {
+                aml_ac3_parser_open(&instance->ad_ac3_parser_handle);
+            }
+        } else {
+            if (instance->ad_ac3_parser_handle) {
+                aml_ac3_parser_close(instance->ad_ac3_parser_handle);
+                instance->ad_ac3_parser_handle = NULL;
+            }
         }
 
         struct ac3_parser_info ac3_info = { 0 };
@@ -367,16 +373,6 @@ int audio_dtv_patch_parser_process_write(struct package *p_package,
                 if (ad_frame_buffer && ad_frame_size) {
                     dtv_audio_info->ad_data = ad_frame_buffer;
                     dtv_audio_info->ad_size = ad_frame_size;
-                } else {
-                      if (instance->aformat == AUDIO_FORMAT_AC3) {
-                           dtv_audio_info->ad_size = DTV_DD_MUTE_FRAME_SIZE;
-                           dtv_audio_info->ad_data = (char *)mute_buffer;
-                           dtv_audio_copy_raw_mute_frame(mute_buffer, AUDIO_FORMAT_AC3);
-                      } else if (instance->aformat == AUDIO_FORMAT_E_AC3) {
-                           dtv_audio_info->ad_size = DTV_DDP_MUTE_FRAME_SIZE;
-                           dtv_audio_info->ad_data = (char *)mute_buffer;
-                           dtv_audio_copy_raw_mute_frame(mute_buffer, AUDIO_FORMAT_E_AC3);
-                      }
                 }
             }
             ret = dtv_stream_out_write(stream_out, main_frame_buffer, main_frame_size);
@@ -2577,6 +2573,7 @@ ssize_t out_write_dtv_stream_for_tunerframework(struct audio_stream_out *stream,
                         dtv_patch_handle_event(dev, AUDIO_DTV_PATCH_CMD_SET_AD_ENABLE, val);
                         Stop_Dmx_AD_Audio(demux_handle);
                         Destroy_Dmx_AD_Audio(demux_handle);
+                        dmx_info->ad_package_status = AD_PACK_STATUS_HOLD;
                         ALOGI("current_metadata_unit->stream_id %d",current_metadata_unit->stream_id);
                     }
                 }

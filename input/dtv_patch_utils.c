@@ -81,7 +81,7 @@ const float mixing_coefficient[65] = {
 
 int adapt_mixing_level_db(int mixing_level)
 {
-	return mixing_coefficient[mixing_level + mixing_level_base];
+    return mixing_coefficient[mixing_level + mixing_level_base];
 
 }
 
@@ -298,7 +298,6 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
     }
 
     int timems_diff = llabs(main_pts - ad_pts) / 90;
-
     if (ad_pts == 0) {
        if (ad_status == AD_PACK_STATUS_HOLD) {
            return AD_PACK_STATUS_NORMAL;
@@ -352,16 +351,7 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
                 }
 
             } else {
-                timems_diff = (ad_pts - main_pts) / 90;
-                if (timems_diff > hold_threshold_ms) {
-                    ad_status = AD_PACK_STATUS_HOLD;
-                } else {
-                    if (timems_diff < hold_start_threshold_ms) {
-                        ad_status = AD_PACK_STATUS_NORMAL;
-                    } else {
-                        ad_status = AD_PACK_STATUS_HOLD;
-                    }
-                }
+                ad_status = AD_PACK_STATUS_HOLD;
             }
             break;
 
@@ -379,7 +369,7 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
                     && timems_diff < hold_threshold_ms) {
                     ad_status = AD_PACK_STATUS_NORMAL;
                 } else if (timems_diff >= hold_threshold_ms) {
-                    ad_status = AD_PACK_STATUS_NORMAL;
+                    ad_status = AD_PACK_STATUS_DROP;
                 } else {
                     ad_status = AD_PACK_STATUS_HOLD;
                 }
