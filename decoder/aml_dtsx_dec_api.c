@@ -1150,6 +1150,7 @@ int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
     p_config_params->dec_sink_dev_type = dtsx_dec->sink_dev_type;
     p_config_params->pp_sink_dev_type = dtsx_dec->sink_dev_type;
     p_config_params->bPassthrough = dtsx_dec->passthroug_enable;
+    p_config_params->sink_support_multich_pcm = dtsx_dec->sink_support_multich_pcm;
 
     ///< Update global settings.
     p_config_params->auto_config_out_for_vx = p_global_config_params->auto_config_out_for_vx;
