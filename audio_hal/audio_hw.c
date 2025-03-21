@@ -7418,7 +7418,8 @@ int adev_create_audio_patch(struct audio_hw_device *dev,
     if ((src_config->ext.device.type == AUDIO_DEVICE_IN_WIRED_HEADSET) ||
         (src_config->ext.device.type == AUDIO_DEVICE_IN_BLUETOOTH_BLE) ||
         (src_config->ext.device.type == AUDIO_DEVICE_IN_BUILTIN_MIC) ||
-        (src_config->ext.device.type == AUDIO_DEVICE_IN_ECHO_REFERENCE)) {
+        (src_config->ext.device.type == AUDIO_DEVICE_IN_ECHO_REFERENCE) ||
+        (src_config->ext.device.type == AUDIO_DEVICE_IN_BLUETOOTH_SCO_HEADSET)) {
         ALOGD("voice search is in use, bypass adev_create_audio_patch()!!\n");
         //we can't return error to application because it maybe process the error .
         *handle = AML_HAL_INVALID_PATCH_HANDLE;
