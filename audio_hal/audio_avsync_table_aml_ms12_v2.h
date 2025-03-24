@@ -69,13 +69,13 @@
 #define  AVSYNC_MS12_TUNNEL_AC4_HDMI_LATENCY                  (0)
 
 
-#define  AVSYNC_MS12_NONTUNNEL_BYPASS_LATENCY            (-60)
+#define  AVSYNC_MS12_NONTUNNEL_BYPASS_LATENCY            (-70)
 
 /*
  * -220 -> -250 for result as +35 -> +60
  * -220 -> -180 for result as +35 -> -5
  */
-#define  AVSYNC_MS12_TUNNEL_BYPASS_LATENCY               (-90)
+#define  AVSYNC_MS12_TUNNEL_BYPASS_LATENCY               (-110)
 
 
 #define  AVSYNC_MS12_NETFLIX_NONTUNNEL_BYPASS_LATENCY            (-130)
