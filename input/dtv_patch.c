@@ -1848,6 +1848,7 @@ int create_dtv_patch_l(struct aml_audio_patch **audio_patch, audio_devices_t inp
     dtv_audio_instance->ad_substream_checked_flag = false;
     dtv_audio_instance->output_thread_exit = 0;
     dtv_audio_instance->PServerDev = -1;
+    dtv_audio_instance->audio_patch_base.input_src = input;
 
 
     *audio_patch = &dtv_audio_instance->audio_patch_base;

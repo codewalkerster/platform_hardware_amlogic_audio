@@ -63,6 +63,7 @@ typedef struct patch_manager
     enum IN_PORT inport;
     bool valid;
     pthread_mutex_t lock;
+    pthread_mutex_t listnode_lock;
 
     // operations of patch manger
     create_patch_t create_patch;
@@ -109,6 +110,7 @@ struct aml_audio_patch *get_patch_from_mgr(struct patch_manager *patch_mgr)
     struct audio_patch *patch_tmp = NULL;
     //ALOGI("get_patch_from_mgr %d",list_empty(&patch_mgr->patch_list));
     /* find audio_patch in patch_set list */
+    pthread_mutex_lock(&patch_mgr->listnode_lock);
     list_for_each(node, &patch_mgr->patch_list) {
        patch_set = node_to_item(node, struct audio_patch_set, list_node);
        if (patch_set) {
@@ -121,6 +123,7 @@ struct aml_audio_patch *get_patch_from_mgr(struct patch_manager *patch_mgr)
             }
        }
     }
+    pthread_mutex_unlock(&patch_mgr->listnode_lock);
     //ALOGI("patch %p", patch);
     if (patch_set) {
         return patch_set->aml_audio_patch;
@@ -193,6 +196,7 @@ struct audio_patch_set *get_patch_set_by_handle(struct patch_manager *patch_mgr,
       struct audio_patch *patch = NULL;
       struct listnode *node = NULL;
       /* find audio_patch in patch_set list */
+      pthread_mutex_lock(&patch_mgr->listnode_lock);
       list_for_each(node, &patch_mgr->patch_list) {
           patch_set = node_to_item(node, struct audio_patch_set, list_node);
           patch = &patch_set->audio_patch;
@@ -204,6 +208,7 @@ struct audio_patch_set *get_patch_set_by_handle(struct patch_manager *patch_mgr,
               patch = NULL;
           }
       }
+      pthread_mutex_unlock(&patch_mgr->listnode_lock);
 
       return patch_set;
 
@@ -378,7 +383,7 @@ static int create_patch_internal(struct patch_manager *patch_mgr,
 #ifdef ENABLE_DVB_PATCH
     case PATCH_TYPE_DTV:
         ret = create_dtv_patch((struct aml_audio_patch **)&patch_set_new->aml_audio_patch,
-                 AUDIO_DEVICE_IN_TV_TUNER, AUDIO_DEVICE_OUT_SPEAKER);
+                 AUDIO_DEVICE_IN_TV_TUNER_DTV, AUDIO_DEVICE_OUT_SPEAKER);
         if (ret == 0) {
             set_patch_running_mgr(patch_mgr, true);
             set_patch_source_mgr(patch_mgr, SRC_DTV);
@@ -799,6 +804,7 @@ int init_patch_manager(struct aml_audio_device *adev)
     patch_mgr->create_patch = create_patch_internal;
     patch_mgr->release_patch = release_patch_internal;
     pthread_mutex_init(&patch_mgr->lock, NULL);
+    pthread_mutex_init(&patch_mgr->listnode_lock, NULL);
 
     ALOGI("%s() OK", __func__);
     return 0;
@@ -830,6 +836,7 @@ void destroy_patch_manager(struct aml_audio_device *adev)
     patch_mgr->audio_patching = false;
     //patch_mgr->audio_patch = NULL;
     pthread_mutex_destroy(&patch_mgr->lock);
+    pthread_mutex_destroy(&patch_mgr->listnode_lock);
     free(patch_mgr);
     adev->patch_manager = NULL;
     ALOGI("%s() done!", __func__);
@@ -990,7 +997,7 @@ int patch_mgr_release_patch(struct aml_audio_device *aml_dev, aml_audio_patch_ha
     if (patch->sources[0].type == AUDIO_PORT_TYPE_DEVICE) {
         /* aml_dev patch doesn't match the released patch, go to exit */
         audio_devices_t release_src_dev = patch->sources[0].ext.device.type;
-        struct aml_audio_patch *aml_patch = get_dev_patch(aml_dev);
+        struct aml_audio_patch *aml_patch = patch_set->aml_audio_patch;
         patch_source = get_patch_source(aml_dev, release_src_dev, PATCH_ROUTE_DEV_DEV);
         if (aml_patch) {
 #if 0
