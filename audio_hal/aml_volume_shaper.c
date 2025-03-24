@@ -275,6 +275,11 @@ int aml_volume_shaper_add(aml_volume_shaper_t *p_vol_shaper, float vol, uint64_t
     if (p_vol_shaper == NULL) {
         return -1;
     }
+    if (!p_vol_shaper->bEnable) {
+        AML_VS_LOG("p_vol_shaper %p, disable !", p_vol_shaper);
+        return -1;
+    }
+
     if (time_us > 0) {
         curr_time_us = time_us;
     } else {
@@ -392,6 +397,7 @@ int aml_volume_shaper_init(aml_volume_shaper_t *p_vol_shaper, int delay_samples)
     list_init(&p_vol_shaper->list_head);
     p_vol_shaper->last_used_node = NULL;
     p_vol_shaper->bInitialized = true;
+    p_vol_shaper->bEnable= false;
     p_vol_shaper->s32DelayFrames = delay_samples;
     p_vol_shaper->u64CurrentEaseFrames = 0;
     p_vol_shaper->fLastUsedVolume = AML_AUDIO_GAIN_FLOAT_INVALID;
@@ -433,6 +439,11 @@ int aml_volume_shaper_get(aml_volume_shaper_t *p_vol_shaper, int move_frames, fl
         AM_LOGV("p_vol_shaper is NULL");
         return -1;
     }
+    if (!p_vol_shaper->bEnable) {
+        AML_VS_LOG("p_vol_shaper %p, disable !", p_vol_shaper);
+        return -1;
+    }
+
     if (p_volume == NULL) {
         AM_LOGV("next_volume is NULL");
         return -1;
@@ -554,4 +565,22 @@ bool aml_volume_shaper_update_moving_frame(aml_volume_shaper_t *p_vol_shaper, in
         return true;
     }
     return false;
+}
+
+void aml_volume_shaper_set_enable(aml_volume_shaper_t *p_vol_shaper, bool enable)
+{
+    if (p_vol_shaper == NULL) {
+        AM_LOGV("p_vol_shaper is NULL");
+        return;
+    }
+    p_vol_shaper->bEnable = enable;
+}
+
+bool aml_volume_shaper_get_enable(aml_volume_shaper_t *p_vol_shaper)
+{
+    if (p_vol_shaper == NULL) {
+        AM_LOGV("p_vol_shaper is NULL");
+        return false;
+    }
+    return p_vol_shaper->bEnable;
 }

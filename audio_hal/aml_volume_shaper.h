@@ -27,6 +27,7 @@ typedef struct aml_volume_shaper {
     bool              bDebug;
     bool              bInitialized;
     bool              bUseStartFrames;
+    bool              bEnable;
 
     float             fLastUsedVolume;
     float             fFinalVolume;
@@ -45,6 +46,7 @@ typedef struct aml_volume_shaper {
 #define AML_AUDIO_GAIN_FLOAT_INVALID      (-GAIN_FLOAT_UNITY)
 
 #define AML_VOLUME_DEBUG_BYPASS_MASK       0xF0000
+#define AML_VOLUME_DEBUG_DUMP_MASK         0x01000
 
 
 int aml_volume_shaper_check_equal(float a, float b);
@@ -64,6 +66,8 @@ bool aml_volume_shaper_update_moving_frame(aml_volume_shaper_t *p_vol_shaper, in
 
 int aml_volume_shaper_add(aml_volume_shaper_t *p_vol_shaper, float vol, uint64_t time_us);
 int aml_volume_shaper_get(aml_volume_shaper_t *p_vol_shaper, int move_frames, float *p_volume, int *p_write_ms);
+void aml_volume_shaper_set_enable(aml_volume_shaper_t *p_vol_shaper, bool enable);
+bool aml_volume_shaper_get_enable(aml_volume_shaper_t *p_vol_shaper);
 
 void aml_volume_shaper_enable_debug(aml_volume_shaper_t *p_vol_shaper, bool debug_enable) ;
 

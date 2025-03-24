@@ -1143,6 +1143,15 @@ static int out_set_volume (struct audio_stream_out *stream, float left, float ri
         if (out->volume_l != out->volume_r) {
             ALOGW("%s, left:%f right:%f NOT match", __FUNCTION__, left, right);
         }
+
+        // Currently audiohal volumeshaper can not satisfy normal playback's complicated cases,
+        // Thus turn it off.
+        if (out->is_netflix_src_stream || is_asdk_test) {
+            aml_volume_shaper_set_enable(&out->volume_shaper, true);
+        } else {
+            aml_volume_shaper_set_enable(&out->volume_shaper, false);
+        }
+
         //if (is_tv_stream) {
             //left = dtv_get_ms12_volume_on_non_TV_device(out);
         //}
@@ -3015,6 +3024,10 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
         out->is_dtv_src_stream = true;
     } else {
         adev->foreground_stream_type = FG_STREAM_TYPE_AUDIOFLINGER;
+    }
+    if (!out->is_tv_src_stream && adev->is_netflix) {
+        out->is_netflix_src_stream = true;
+        ALOGI("%s(): aml Netflix output stream(%p)", __func__, out);
     }
 
     if (flags == AUDIO_OUTPUT_FLAG_NONE)

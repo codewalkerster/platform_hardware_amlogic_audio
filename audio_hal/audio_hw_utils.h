@@ -113,6 +113,8 @@ typedef enum tv_standards_t
 
 #define NETFLIX_FADEIN_MAX_DETECT_TIME_MS  2000
 
+#define AUDIO_HAL_DUMP_DEFAULT_PATH "/data/vendor/audiohal/"
+
 int64_t aml_gettime(void);
 int get_sysfs_uint(const char *path, uint *value);
 int set_sysfs_int(const char *path, int value);

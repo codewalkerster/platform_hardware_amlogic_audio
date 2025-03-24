@@ -785,6 +785,7 @@ struct aml_stream_out {
     struct pcm *pcm2; /*used for dual bitstream output*/
     int pcm2_mute_cnt;
     bool is_tv_src_stream;
+    bool is_netflix_src_stream;
 	bool is_dtv_src_stream;
 	bool is_eos;
     bool last_timestamp_valid;

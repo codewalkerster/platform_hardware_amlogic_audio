@@ -5112,8 +5112,7 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
     } else {
         aml_volume_shaper_set_delay_frames(&aml_out->volume_shaper, 64 * 48);
     }
-    aml_volume_shaper_enable_debug(&aml_out->volume_shaper, get_debug_value(AML_DEBUG_AUDIOHAL_VOLUME_SHAPER));
-
+    aml_volume_shaper_enable_debug(&aml_out->volume_shaper, get_debug_value(AML_DEBUG_AUDIOHAL_VOLUME_SHAPER) != 0 ? true : false);
 
     aml_ac3_parser_open(&ms12_dec->ac3_parser_handle);
     aml_ac3_parser_open(&ms12_dec->info_ac3_parser_handle);
@@ -6320,7 +6319,7 @@ static bool ms12_config_decoder_mute(
     return true;
 }
 
-static bool ms12_config_decoder_volume(
+static bool ms12_netflix_config_decoder_volume(
     struct aml_stream_out *aml_out, const char *p_data, const int data_frames, aml_data_format_t *p_data_format)
 {
     int duration_ms = 0;
@@ -6339,21 +6338,33 @@ static bool ms12_config_decoder_volume(
     // 768 : netflix mediavol tuning value
     const int ease_frames = 768;
 
-    b_moving = aml_volume_shaper_update_moving_frame(&aml_out->volume_shaper, data_frames);
-    if (aml_out == NULL || p_data_format == NULL || aml_out->volume_easing.do_easing || b_moving) {
+    if (aml_out == NULL || aml_out->ms12_dec_handle == NULL || p_data_format == NULL) {
         return false;
     }
+    next_volume = aml_out->volume_l;
 
     ms12_dec = aml_out->ms12_dec_handle;
-    current_volume = aml_audio_ease_get_current_volume(&aml_out->volume_easing);
+    b_moving = aml_volume_shaper_update_moving_frame(&aml_out->volume_shaper, data_frames);
     curr_ease_frame = aml_volume_shaper_get_current_frame(&aml_out->volume_shaper);
+    current_volume = aml_audio_ease_get_current_volume(&aml_out->volume_easing);
 
-    if (aml_volume_shaper_get(&aml_out->volume_shaper, ease_frames, &next_volume, &vol_write_ms) == 0) {
-        ALOGV("%s aml_volume_shaper_get OK, next_volume %f, ease_frames %d", __func__, next_volume, ease_frames);
+    if (!(aml_out->volume_easing.do_easing || b_moving)) {
+        if (aml_volume_shaper_get(&aml_out->volume_shaper, ease_frames, &next_volume, &vol_write_ms) == 0) {
+            ALOGV("%s aml_volume_shaper_get OK, next_volume %f, ease_frames %d", __func__, next_volume, ease_frames);
+        }
+        if (aml_volume_shaper_check_sanity(next_volume) && !aml_volume_shaper_check_equal(current_volume, next_volume)) {
+            volume_updated = true;
+        }
     }
-    if (aml_volume_shaper_check_sanity(next_volume) && !aml_volume_shaper_check_equal(current_volume, next_volume)) {
-        volume_updated = true;
+    if (ms12_dec->is_muted) {
+        next_volume = 0.0f;
+        if (!aml_volume_shaper_check_equal(current_volume, next_volume) &&
+            !(aml_volume_shaper_check_equal(aml_out->volume_easing.target_volume, next_volume)
+            && aml_out->volume_easing.do_easing)) {
+            volume_updated = true;
+        }
     }
+
     if (aml_out->volume_easing.data_format.ch == 0) {
         first_process = true;
     }
@@ -6387,17 +6398,54 @@ static bool ms12_config_decoder_volume(
         }
     }
 
-    if (ms12_dec->is_muted) {
-        next_volume = 0.0f;
-        ease_setting.target_volume = 0.0f;
-    }
-
     if (!aml_volume_shaper_check_equal(current_volume, next_volume)) {
         AM_LOGI("stream:%p change volume %f to %f, mute %d, ease_frames=%d",
             aml_out, current_volume, next_volume, ms12_dec->is_muted, ease_setting.ease_frames);
-
-        aml_audio_ease_config_frame(&aml_out->volume_easing, &ease_setting, p_data_format);
     }
+    aml_audio_ease_config_frame(&aml_out->volume_easing, &ease_setting, p_data_format);
+
+    return true;
+}
+
+static bool ms12_config_decoder_volume(struct aml_stream_out *aml_out, aml_data_format_t *p_data_format)
+{
+    int duration_ms = 0;
+    float current_volume = 1.0f;
+    float target_volume = 1.0f;
+    ease_setting_t ease_setting;
+    float next_volume = AML_AUDIO_GAIN_FLOAT_INVALID;
+    struct dolby_ms12_dec_desc *ms12_dec = NULL;
+    const int ease_frames = 1536;
+
+    if (aml_out == NULL || p_data_format == NULL) {
+        return false;
+    }
+    ms12_dec = aml_out->ms12_dec_handle;
+    current_volume = aml_audio_ease_get_current_volume(&aml_out->volume_easing);
+    target_volume = aml_out->volume_easing.target_volume;
+    next_volume = aml_out->volume_l;
+
+    if (ms12_dec->is_muted) {
+        next_volume = 0.0f;
+    }
+
+    if (!aml_volume_shaper_check_sanity(next_volume)
+        || (aml_volume_shaper_check_equal(target_volume, next_volume) && aml_out->volume_easing.do_easing)) {
+        return false;
+    }
+
+    memset(&ease_setting, 0, sizeof(ease_setting));
+    ease_setting.ease_type = EaseLinear;
+    ease_setting.ease_frames = ease_frames;
+    ease_setting.start_volume = current_volume;
+    ease_setting.target_volume = next_volume;
+
+    if (!aml_volume_shaper_check_equal(current_volume, next_volume)) {
+        AM_LOGI("stream:%p change volume %f to %f, mute %d, ease_frames=%d",
+              aml_out, current_volume, next_volume, ms12_dec->is_muted, ease_frames);
+    }
+    aml_audio_ease_config_frame(&aml_out->volume_easing, &ease_setting, p_data_format);
+
     return true;
 }
 
@@ -6417,6 +6465,7 @@ static int ms12_decoder_volume_process(struct aml_stream_out *aml_out, Aml_MS12_
     struct dolby_ms12_dec_desc *ms12_dec = aml_out->ms12_dec_handle;
     const int PROCESS_FRAMES = 256;  // process 256 samples each time, so that zero data detect more accurate.
     int debug_value = get_debug_value(AML_DEBUG_AUDIOHAL_VOLUME_SHAPER);
+    char dump_path[64];
 
     memset(&data_format, 0, sizeof(data_format));
     data_format.sr = pstProcessInfo->s32SampleRate;
@@ -6452,14 +6501,25 @@ static int ms12_decoder_volume_process(struct aml_stream_out *aml_out, Aml_MS12_
 
         // volume configure
         if (ms12_config_decoder_mute(aml_out, pu8Data, handle_frames, &data_format) == false) {
-            ms12_config_decoder_volume(aml_out, pu8Data, handle_frames, &data_format);
+            if (aml_volume_shaper_get_enable(&aml_out->volume_shaper)) {
+                ms12_netflix_config_decoder_volume(aml_out, pu8Data, handle_frames, &data_format);
+            } else {
+                ms12_config_decoder_volume(aml_out, &data_format);
+            }
         }
 
         if (debug_value != 0) {
             float current = aml_audio_ease_get_current_volume(&aml_out->volume_easing);
             float next = aml_out->volume_easing.target_volume;
             int ease_frames = aml_out->volume_easing.ease_frames;
-            AM_LOGD("stream:%p mute %d, current %f, next %f, ease_frames=%d", aml_out, ms12_dec->is_muted, current, next, ease_frames);
+            AM_LOGD("stream:%p mute %d, current %f, next %f, s32InFrameType %d, s32Channel %d, ease_frames %d", aml_out,
+                ms12_dec->is_muted, current, next, pstProcessInfo->s32InFrameType, pstProcessInfo->s32Channel, ease_frames);
+        }
+
+        if (debug_value & AML_VOLUME_DEBUG_DUMP_MASK) {
+            memset(dump_path, 0, sizeof(dump_path));
+            snprintf(dump_path, sizeof(dump_path)-1, "%s/before_vol.pcm", AUDIO_HAL_DUMP_DEFAULT_PATH);
+            aml_dump_audio_bitstreams(dump_path, pu8Data, handle_frames * frame_size);
         }
 
         // volume process
@@ -6468,6 +6528,13 @@ static int ms12_decoder_volume_process(struct aml_stream_out *aml_out, Aml_MS12_
         } else {
             aml_audio_ease_process(&aml_out->volume_easing, pu8Data, handle_frames * frame_size, true);
         }
+
+        if (debug_value & AML_VOLUME_DEBUG_DUMP_MASK) {
+            memset(dump_path, 0, sizeof(dump_path));
+            snprintf(dump_path, sizeof(dump_path)-1, "%s/after_vol.pcm", AUDIO_HAL_DUMP_DEFAULT_PATH);
+            aml_dump_audio_bitstreams(dump_path, pu8Data, handle_frames * frame_size);
+        }
+
         n_frames_offset += handle_frames;
     }
     return 0;

@@ -80,7 +80,6 @@
 #define DRC_HIGH_CUT_BIT 3
 #define DRC_LOW_BST_BIT 16
 
-#define AUDIO_HAL_DUMP_DEFAULT_PATH "/data/vendor/audiohal/"
 
 #define WRITE_TIME_PRINT_THRESHOLD (100) // milliseconds
 
