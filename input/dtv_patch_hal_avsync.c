@@ -146,9 +146,9 @@ void dtv_audio_sync_prepare (aml_dec_t *aml_dec, aml_audio_buffer_t *audioBuffer
             }
         }
         aml_dtv_audiopara_t *dtv_audio_info = (aml_dtv_audiopara_t *)audioBuffer->privObject;
-        if (dtv_audio_info && dtv_audio_info->ad_data) {
-           aml_dec->ad_data = dtv_audio_info->ad_data;
-           aml_dec->ad_size =  dtv_audio_info->ad_size;
+        if (dtv_audio_info) {
+            aml_dec->ad_data = dtv_audio_info->ad_data;
+            aml_dec->ad_size =  dtv_audio_info->ad_size;
         }
     }
 }

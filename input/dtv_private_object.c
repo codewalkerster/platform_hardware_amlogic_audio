@@ -157,6 +157,7 @@ int init_dtv_object(struct aml_audio_device *adev)
             dtv_audio_context->instances[index].dtv_audio_info.playback_mode = NORMAL_MODE;
             dtv_audio_context->instances[index].dtv_audio_info.volume = 1.0f;
             dtv_audio_context->instances[index].dtv_audio_info.tv_mute = 0;
+            dtv_audio_context->instances[index].cbs_stream_out = NULL;
         }
     }
 

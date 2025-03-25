@@ -180,6 +180,7 @@ static void getAudioADEsData(AmHwMultiDemuxWrapper* mDemuxWrapper, int fid, cons
             memcpy(mDemuxWrapper->Last_AD_EsData->data + mDemuxWrapper->Last_AD_EsData->size, mEsData->data, mEsData->size);
             mDemuxWrapper->Last_AD_EsData->size += mEsData->size;
         }
+        aml_audio_free(mEsData->data);
         aml_audio_free(mEsData);
         return;
     }
@@ -225,7 +226,7 @@ AmHwMultiDemuxWrapper::AmHwMultiDemuxWrapper() {
     mDemuxPara.vid_fd = -1;
     mDemuxPara.security_mem_level = 0;
     mDemuxPara.dsc_fd = NULL;
-
+    Last_AD_EsData = NULL;
 }
 
 AmHwMultiDemuxWrapper::~AmHwMultiDemuxWrapper() {
@@ -468,6 +469,12 @@ AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperCloseAD() {
         clearPendingEsData(mAudioADEsDataQueue);
     }
     AmDmxDevice->AM_DMX_FreeFilter(mDemuxPara.aud_ad_fd);
+    filtering_aud_ad_pid  = 0x1fff;
+    if (Last_AD_EsData) {
+        aml_audio_free(Last_AD_EsData);
+        Last_AD_EsData = NULL;
+    }
+    clearPendingEsData(mAudioADEsDataQueue);
     return AM_Dmx_SUCCESS;
 }
 
@@ -576,6 +583,7 @@ AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperCloseMain() {
        return AM_Dmx_ERROR;
     }
     AmDmxDevice->AM_DMX_FreeFilter(mDemuxPara.aud_fd);
+    filtering_aud_pid  = 0x1fff;
     return AM_Dmx_SUCCESS;
 }
 

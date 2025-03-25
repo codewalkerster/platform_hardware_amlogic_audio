@@ -3437,7 +3437,6 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
     if (dtv_tuner_framework(stream)) {
         /*enter into tuner framework case, we need to stop&release audio dtv patch*/
         ALOGD("[audiohal_kpi] %s %d", __func__, __LINE__);
-        out_stop_dtv_stream_for_tunerframework(stream);
         /*coverity[sleep]*/
         ret = disable_dtv_patch_for_tuner_framework(stream);
         if (!ret) {
