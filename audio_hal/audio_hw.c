@@ -6883,6 +6883,18 @@ ssize_t out_write_new(struct audio_stream_out *stream,
         AM_LOGI("+++ io %d: out(%p) position(%zu)", aml_out->io_handle, stream, bytes);
     }
 
+    if (!aml_out->check_preempt_done) {
+        aml_stream_check_preempt(aml_out);
+        aml_out->check_preempt_done = true;
+    }
+
+    /*current dts and dolby can't be co-exist. To be fixed*/
+    if (aml_out->is_preempted) {
+        ALOGI("%s drop data size =(%zu)", __func__, bytes);
+        usleep(32*1000);
+        return bytes;
+    }
+
     //cts tunnel underrun case failed, depond on pause/resume invoked from AudioFlinger.
     //sometimes AudioFlinger always invoke the pause to Hal during 800ms for track retry count.
     //so add this code to control pause/resume MediaSync and video in Hal.

@@ -29,7 +29,7 @@
 #include <aml_dump_debug.h>
 #include "dolby_lib_api.h"
 #include "aml_stream_manager.h"
-
+#include "audio_hw_utils.h"
 
 static bool _is_stream_raw_format(struct aml_stream_out *amlStream)
 {
@@ -364,6 +364,45 @@ void aml_check_close_ms12_output_main_stream(struct aml_stream_out *amlStream)
     }
 
     return ;
+}
+
+void aml_stream_check_preempt(struct aml_stream_out *amlStream) {
+    struct aml_audio_device *adev = (struct aml_audio_device *)amlStream->dev;
+
+    bool is_new_dolby_format = is_dolby_ms12_support_compression_format(amlStream->hal_internal_format);
+    bool is_new_dts_format = is_dts_format(amlStream->hal_internal_format);
+
+    pthread_mutex_lock(&adev->streamList_MutexLock);
+
+    if (!list_empty(&adev->stream_ListHead)) {
+        struct listnode *item = NULL, *temp = NULL;
+        struct stream_infos *ptmp = NULL;
+        struct aml_stream_out *tmpStream = NULL;
+        list_for_each_safe(item, temp, &adev->stream_ListHead) {
+            ptmp = (struct stream_infos *)item;
+            tmpStream = (struct aml_stream_out *)ptmp->pStream;
+            if (tmpStream) {
+                if (is_new_dolby_format) {
+                    /*if the incoming stream is dolby, try to preempt the dts one*/
+                    if (is_dts_format(tmpStream->hal_internal_format)) {
+                        tmpStream->is_preempted = true;
+                        ALOGI("%s new stream %p format =0x%x preempt old stream %p format=0x%x",
+                              __func__, amlStream, amlStream->hal_internal_format, tmpStream, tmpStream->hal_internal_format);
+                    }
+                } else if (is_new_dts_format) {
+                    /*if the incoming stream is dts, try to preempt the all the ms12 stream*/
+                    if (tmpStream->is_ms12_main_decoder) {
+                        tmpStream->is_preempted = true;
+                        ALOGI("%s new stream %p format =0x%x preempt old stream %p format=0x%x",
+                             __func__,amlStream, amlStream->hal_internal_format, tmpStream, tmpStream->hal_internal_format);
+                    }
+                }
+            }
+        }
+    }
+
+    pthread_mutex_unlock(&adev->streamList_MutexLock);
+    return;
 }
 
 int aml_stream_register(struct aml_stream_out *amlStream)

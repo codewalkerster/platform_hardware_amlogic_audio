@@ -57,6 +57,8 @@ int aml_stream_register(struct aml_stream_out *amlStream);
 void aml_stream_unregister(struct aml_stream_out *amlStream);
 struct aml_stream_out * aml_get_main_active_stream(audio_format_t audio_format);
 
+void aml_stream_check_preempt(struct aml_stream_out *amlStream);
+
 void aml_init_stream_manager(struct aml_audio_device *adev);
 void aml_destroy_stream_manager(struct aml_audio_device *adev);
 

@@ -912,6 +912,8 @@ struct aml_stream_out {
     int input_cache_frames;
     int input_start_threshold;
     int64_t trace_last_write_time_ms;
+    bool check_preempt_done;
+    bool is_preempted;
 };
 
 #ifdef LOWPOWER_DSP_FFV
