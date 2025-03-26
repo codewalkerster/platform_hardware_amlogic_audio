@@ -1153,7 +1153,11 @@ int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
     p_config_params->sink_support_multich_pcm = dtsx_dec->sink_support_multich_pcm;
 
     ///< Update global settings.
-    p_config_params->auto_config_out_for_vx = p_global_config_params->auto_config_out_for_vx;
+    if (dtsx_dec->device_type == STB) {
+        p_config_params->auto_config_out_for_vx = -1;
+    } else {
+        p_config_params->auto_config_out_for_vx = p_global_config_params->auto_config_out_for_vx;
+    }
     p_config_params->drc_boost_value[DTSX_OUTPUT_SPK] = p_global_config_params->drc_boost_value[DTSX_OUTPUT_SPK];
     p_config_params->drc_cut_value[DTSX_OUTPUT_SPK] = p_global_config_params->drc_cut_value[DTSX_OUTPUT_SPK];
 
