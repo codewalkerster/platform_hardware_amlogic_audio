@@ -1556,12 +1556,47 @@ void * aml_audio_get_muteframe(audio_format_t output_format, int * frame_size, i
     }
 }
 
+static inline float clamp_float(float value) {
+    return fmin(fmax(value, -1.f), 1.f);
+}
+
+/**
+ * @brief Switch audio output mode with support for 16-bit, 32-bit integer and 32-bit float formats
+ * @param in Input audio buffer
+ * @param bytes Size of input buffer in bytes
+ * @param format Audio format (PCM_16_BIT, PCM_32_BIT, or PCM_FLOAT)
+ * @param mode Output mode selection
+ */
 void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format, AM_AOUT_OutputMode_t mode)
 {
+    // 1. Input validation
+    if (in == NULL || bytes == 0) {
+        ALOGE("Invalid input: in=%p bytes=%zu", in, bytes);
+        return;
+    }
+
+    size_t sample_size = audio_bytes_per_sample(format);
+    if (sample_size == 0) {
+        ALOGE("%s wrong audio format =0x%x", __func__, format);
+        return;
+    }
+
+    // 2. Enhanced debug logging
+    ALOGV("%s line %d in %p bytes %#x format %#x mode %d",
+          __func__, __LINE__, in, bytes, format, mode);
+    ALOGV("Input buffer first 4 samples: [0]=%d [1]=%d [2]=%d [3]=%d",
+          ((int32_t*)in)[0], ((int32_t*)in)[1], ((int32_t*)in)[2], ((int32_t*)in)[3]);
+    ALOGV("Sample size: %zu, total samples: %zu", sample_size, bytes/sample_size);
+
     if (format == AUDIO_FORMAT_PCM_16_BIT) {
-        int16_t tmp,tmp2;
+        int16_t tmp, tmp2;
         int16_t *buf = (int16_t *)in;
-        for (unsigned int i= 0; i < bytes / 2; i = i + 2) {
+
+        size_t sample_count = bytes / sample_size;
+
+        ALOGV("Processing %zu 16-bit samples in mode %d", sample_count, mode);
+
+        for (unsigned int i = 0; i < sample_count; i = i + 2) {
             switch (mode) {
                 case AM_AOUT_OUTPUT_DUAL_LEFT:
                     buf[i + 1] = buf[i];
@@ -1569,29 +1604,41 @@ void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format,
                 case AM_AOUT_OUTPUT_DUAL_RIGHT:
                     buf[i] = buf[i + 1];
                     break;
-                case AM_AOUT_OUTPUT_SWAP:
+                case AM_AOUT_OUTPUT_SWAP: {
                     tmp = buf[i];
                     buf[i] = buf[i + 1];
                     buf[i + 1] = tmp;
                     break;
-                case AM_AOUT_OUTPUT_LRMIX:
-                    tmp = (buf[i] / 2)  + (buf[i + 1] / 2);
+                }
+                case AM_AOUT_OUTPUT_LRMIX: {
+                    // Safe 16-bit mixing algorithm
+                    int32_t mixed = ((int32_t)buf[i] + (int32_t)buf[i + 1]) / 2;
+
+                    // Saturation handling
+                    tmp = (int16_t)clamp16(mixed);
                     buf[i] = tmp;
                     buf[i + 1] = tmp;
                     break;
+                }
                 case AM_AOUT_OUTPUT_JOINT_STEREO:
-                    tmp = clamp16(buf[i]  + buf[i + 1]);
-                    tmp2 = clamp16(buf[i] - buf[i + 1]);
+                    tmp = clamp16((int32_t)buf[i] + (int32_t)buf[i + 1]);
+                    tmp2 = clamp16((int32_t)buf[i] - (int32_t)buf[i + 1]);
                     buf[i] = tmp;
                     buf[i + 1] = tmp2;
-                default :
+                    break;
+                default:
+                    ALOGW("Unknown mode: %d", mode);
                     break;
             }
         }
     } else if (format == AUDIO_FORMAT_PCM_32_BIT) {
-        int32_t tmp,tmp2;
         int32_t *buf = (int32_t *)in;
-        for (unsigned int i= 0; i < bytes / 2; i = i + 2) {
+
+        size_t sample_count = bytes / sample_size;
+
+        ALOGV("Processing %zu 32-bit samples in mode %d", sample_count, mode);
+
+        for (unsigned int i = 0; i < sample_count; i = i + 2) {
             switch (mode) {
                 case AM_AOUT_OUTPUT_DUAL_LEFT:
                     buf[i + 1] = buf[i];
@@ -1599,29 +1646,91 @@ void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format,
                 case AM_AOUT_OUTPUT_DUAL_RIGHT:
                     buf[i] = buf[i + 1];
                     break;
-                case AM_AOUT_OUTPUT_SWAP:
-                    tmp = buf[i];
+                case AM_AOUT_OUTPUT_SWAP: {
+                    int32_t tmp = buf[i];
                     buf[i] = buf[i + 1];
                     buf[i + 1] = tmp;
                     break;
-                case AM_AOUT_OUTPUT_LRMIX:
-                    tmp = (buf[i] / 2)  + (buf[i + 1] / 2);
-                    buf[i] = tmp;
-                    buf[i + 1] = tmp;
+                }
+                case AM_AOUT_OUTPUT_LRMIX: {
+                    // Improved 32-bit mixing algorithm
+                    int64_t sum = (int64_t)buf[i] + (int64_t)buf[i + 1];
+                    int32_t mixed = (int32_t)(sum / 2);
+
+                    // Saturation detection
+                    if (abs(mixed) > 0x7FFFFF00) {
+                        ALOGV("Warning: possible clipping at sample %d (value=%d)", i, mixed);
+                        mixed = clamp32(mixed);
+                    }
+
+                    buf[i] = mixed;
+                    buf[i + 1] = mixed;
                     break;
-                case AM_AOUT_OUTPUT_JOINT_STEREO:
-                    tmp = clamp32(buf[i]  + buf[i + 1]);
-                    tmp2 = clamp32(buf[i] - buf[i + 1]);
-                    buf[i] = tmp;
-                    buf[i + 1] = tmp2;
-                default :
+                }
+                case AM_AOUT_OUTPUT_JOINT_STEREO: {
+                    int64_t sum = (int64_t)buf[i] + (int64_t)buf[i + 1];
+                    int64_t diff = (int64_t)buf[i] - (int64_t)buf[i + 1];
+
+                    buf[i] = clamp32(sum);
+                    buf[i + 1] = clamp32(diff);
+                    break;
+                }
+                default:
+                    ALOGW("Unknown mode: %d", mode);
+                    break;
+            }
+        }
+    }
+    else if (format == AUDIO_FORMAT_PCM_FLOAT) {
+        float *buf = (float*)in;
+        size_t sample_count = bytes / sample_size;
+
+        ALOGV("Processing %zu float samples in mode %d", sample_count, mode);
+
+        for (unsigned int i = 0; i < sample_count; i = i + 2) {
+            switch (mode) {
+                case AM_AOUT_OUTPUT_DUAL_LEFT:
+                    buf[i + 1] = buf[i];
+                    break;
+                case AM_AOUT_OUTPUT_DUAL_RIGHT:
+                    buf[i] = buf[i + 1];
+                    break;
+                case AM_AOUT_OUTPUT_SWAP: {
+                    float tmp = buf[i];
+                    buf[i] = buf[i+1];
+                    buf[i+1] = tmp;
+                    break;
+                }
+                case AM_AOUT_OUTPUT_LRMIX: {
+                    // Float mixing with proper scaling
+                    float mixed = clamp_float(buf[i] + buf[i+1]) * 0.5f;
+                    buf[i] = buf[i+1] = mixed;
+                    break;
+                }
+                case AM_AOUT_OUTPUT_JOINT_STEREO: {
+                    // Joint stereo processing for float
+                    float sum = clamp_float(buf[i] + buf[i+1]);
+                    float diff = clamp_float(buf[i] - buf[i+1]);
+                    buf[i] = sum;
+                    buf[i+1] = diff;
+                    break;
+                }
+                default:
+                    ALOGW("Unknown mode: %d", mode);
                     break;
             }
         }
     } else {
-        ALOGW("Warning! Unsupport format:0x%x mode:%d", format, mode);
+        ALOGW("Warning! Unsupported format:0x%x mode:%d", format, mode);
     }
+
+    // Final debug output
+    ALOGV("Processing completed. First 4 output samples: [0]=%d [1]=%d [2]=%d [3]=%d",
+          ((int32_t*)in)[0], ((int32_t*)in)[1], ((int32_t*)in)[2], ((int32_t*)in)[3]);
 }
+
+
+
 
 /*****************************************************************************
 *   Function Name:  aml_audio_data_detect

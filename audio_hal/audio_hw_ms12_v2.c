@@ -120,6 +120,7 @@
 #define DUMP_MS12_INPUT_APP              0x400
 #define DUMP_MS12_INPUT_ASSOCIATE        0x800
 #define DUMP_MS12_INPUT_DEEP_BUF         0x1000
+#define DUMP_MS12_CALLBACK_PROCESS       0x2000
 
 #define AML_PARSED_TRUEHD_FILE           "/data/vendor/audiohal/aml_audio_parsed_truehd.raw"
 #define MS12_OUTPUT_SPEAKER_PCM_FILE     "/data/vendor/audiohal/ms12_speaker_pcm.raw"
@@ -136,6 +137,10 @@
 #define MS12_INPUT_SYS_ASSOCIATE_FILE    "/data/vendor/audiohal/ms12_input_associate.raw"
 #define MS12_INPUT_SYS_APP_FILE          "/data/vendor/audiohal/ms12_input_app.pcm"
 #define MS12_INPUT_SYS_MAIN_IEC_FILE     "/data/vendor/audiohal/ms12_input_main_iec.raw"
+
+#define MS12_CALLBACK_IN_FILE            "/data/vendor/audiohal/ms12_callback_in_stereo_f32.pcm"
+#define MS12_CALLBACK_OUT_FILE           "/data/vendor/audiohal/ms12_callback_out_stereo_f32.pcm"
+
 
 #define MS12_OUTPUT_5_1_DDP "vendor.media.audio.ms12.output.5_1_ddp"
 #define MS12_TV_TUNING "vendor.media.audio.ms12.tv_tuning"
@@ -6577,14 +6582,17 @@ static int ms12_decoder_sound_mode_process(struct aml_stream_out *aml_out, Aml_M
             break;
         case PCM_FLOAT32:
             sample_size = 4;
-            output_format = AUDIO_FORMAT_PCM_32_BIT;
+            output_format = AUDIO_FORMAT_PCM_FLOAT;
             break;
         default:
             output_format = AUDIO_FORMAT_PCM_16_BIT;
             break;
         }
 
-
+        if (adev->debug_flag >= 2) {
+            AM_LOGI("cur_sound_track_mode %d as32Acmod=%#x u32InBufferSize: %#x\n", cur_sound_track_mode, pstProcessInfo->as32Acmod[0], pstProcessInfo->u32InBufferSize);
+            AM_LOGI("output_format=%#x", output_format);
+        }
         if (pstProcessInfo->as32Acmod[0] == AML_DOLBY_ACMOD_STEREO) {
             size_t in_buff_chans = 8;
             size_t out_buff_chans = 2;
@@ -6592,7 +6600,13 @@ static int ms12_decoder_sound_mode_process(struct aml_stream_out *aml_out, Aml_M
                              (void*)pstProcessInfo->pu8InBuffer, out_buff_chans,
                              sample_size, pstProcessInfo->u32InBufferSize);
 
+            if (get_ms12_dump_enable(DUMP_MS12_CALLBACK_PROCESS)) {
+                dump_ms12_output_data((void*)pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize, MS12_CALLBACK_IN_FILE);
+            }
             aml_audio_switch_output_mode((int16_t *)pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize, output_format, cur_sound_track_mode);
+            if (get_ms12_dump_enable(DUMP_MS12_CALLBACK_PROCESS)) {
+                dump_ms12_output_data((void*)pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize, MS12_CALLBACK_OUT_FILE);
+            }
             in_buff_chans = 2;
             out_buff_chans = 8;
             pstProcessInfo->u32InBufferSize = adjust_channels((const void* )pstProcessInfo->pu8InBuffer, in_buff_chans,
