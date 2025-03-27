@@ -1582,7 +1582,7 @@ void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format,
     }
 
     // 2. Enhanced debug logging
-    ALOGV("%s line %d in %p bytes %#x format %#x mode %d",
+    ALOGV("%s line %d in %p bytes %zu format %#x mode %d",
           __func__, __LINE__, in, bytes, format, mode);
     ALOGV("Input buffer first 4 samples: [0]=%d [1]=%d [2]=%d [3]=%d",
           ((int32_t*)in)[0], ((int32_t*)in)[1], ((int32_t*)in)[2], ((int32_t*)in)[3]);
