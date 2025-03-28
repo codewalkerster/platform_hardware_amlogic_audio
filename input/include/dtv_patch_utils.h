@@ -25,7 +25,7 @@
 #define EAC3_IEC61937_FRAME_SIZE 24576
 #define DOLBY_FRAME_PTS_DURATION (32 * 90)
 #define TIME_UNIT90K 90000
-#define DTV_AUDIO_DATA_JITTERMS_THRESHOLD (400)
+#define DTV_AUDIO_DATA_JITTERMS_THRESHOLD (800)
 #define DTV_AUDIO_REPLAY_NEED_CACHE_MS (800 * 90)
 #define DTV_AUDIO_REPLAY_PREMUTE_MS (40)
 
@@ -160,6 +160,7 @@ struct package {
     int split_frame_size;
     uint8_t adfade;
     uint8_t adpan;
+    struct timespec current_timestamp;
 };
 
 typedef struct {

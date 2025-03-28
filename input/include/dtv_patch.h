@@ -115,6 +115,8 @@ typedef struct aml_dtv_audio_instance {
     int update_stable_count;
     struct timespec package_mute_ts;
     bool do_pre_mute_flag;
+    struct aml_stream_out *cbs_stream_out;
+    struct timespec last_timestamp;
 } aml_dtv_audio_instance_t;
 
 typedef struct aml_dtv_audio_context {

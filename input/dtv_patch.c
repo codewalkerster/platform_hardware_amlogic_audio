@@ -656,9 +656,7 @@ void *audio_dtv_patch_input_threadloop(void *data)
     /*affinity the thread to cpu/apu which has few IRQ*/
     aml_audio_set_cpu_affinity(false);
     dtv_package_list_init(list);
-
     while (!dtv_audio_instance->input_thread_exit) {
-
         int nRet = 0;
         demux_handle = dtv_audio_instance->demux_handle;
         dtv_audio_info = &dtv_audio_instance->dtv_audio_info;
@@ -789,6 +787,7 @@ void *audio_dtv_patch_input_threadloop(void *data)
                 dtv_audio_instance->audio_pts_dts_flag = mEsData->pts_dts_flag;
                 ALOGV("patch->audio_pts_dts_flag = %d", mEsData->pts_dts_flag);
             }
+            clock_gettime(CLOCK_MONOTONIC, &dtv_package->current_timestamp);
             aml_audio_free(mEsData);
             mEsData = NULL;
         } else {
@@ -1152,7 +1151,7 @@ void dtv_audio_reset_instance(struct aml_dtv_audio_instance *instance)
     }
 }
 
-int dtv_audio_check_package(struct aml_dtv_audio_instance *instance, struct package *p_package, struct timespec *package_get_ts)
+int dtv_audio_check_package(struct aml_dtv_audio_instance *instance, struct package *p_package)
 {
 
     struct aml_audio_device *aml_dev =  (struct aml_audio_device *)aml_adev_get_handle();
@@ -1194,9 +1193,7 @@ int dtv_audio_check_package(struct aml_dtv_audio_instance *instance, struct pack
     }
     struct timespec current_ts;
     clock_gettime(CLOCK_MONOTONIC, &current_ts);
-    data_arrive_jitter_ms = calc_time_interval_us(package_get_ts, &current_ts) / 1000;
-    package_get_ts->tv_sec = current_ts.tv_sec;
-    package_get_ts->tv_nsec = current_ts.tv_nsec;
+    data_arrive_jitter_ms = calc_time_interval_us(&instance->last_timestamp, &p_package->current_timestamp) / 1000;
     if (package_data_valid) {
         data_pts_jitter_ms = DIFF_ABS(instance->dtvsync.last_package_pts,p_package->pts)/90;
     } else {
@@ -1235,6 +1232,7 @@ int dtv_audio_check_package(struct aml_dtv_audio_instance *instance, struct pack
     if (p_package->pts != DTVSYNC_INVALID_PTS) {
         instance->dtvsync.last_package_pts = p_package->pts;
     }
+    instance->last_timestamp = p_package->current_timestamp;
     return ret;
 
 }
@@ -1249,8 +1247,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
     struct aml_stream_out *aml_out = NULL;
     struct audio_config stream_config = AUDIO_CONFIG_INITIALIZER;
     int ret;
-    struct timespec ts,package_get_ts;
-    clock_gettime(CLOCK_MONOTONIC, &package_get_ts);
+    struct timespec ts;
     ALOGI("[audiohal_kpi]++%s created.", __FUNCTION__);
     stream_config.sample_rate = 48000;
     stream_config.channel_mask = AUDIO_CHANNEL_OUT_STEREO;
@@ -1312,7 +1309,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
             pthread_mutex_unlock(&instance->mutex);
             continue;
         } else {
-            if (dtv_audio_check_package(instance, p_package, &package_get_ts) != 0) {
+            if (dtv_audio_check_package(instance, p_package) != 0) {
                 pthread_mutex_unlock(&instance->mutex);
                 continue;
             }
