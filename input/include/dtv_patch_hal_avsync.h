@@ -75,6 +75,8 @@ void dtv_audio_sync_ms12_raw_check_in (struct audio_stream_out *stream, void *ab
 void dtv_audio_sync_nonms12_pts_update(struct audio_stream_out *stream, dec_data_info_t *dec_pcm_data, int frame_size);
 int64_t lookup_apts_by_data_offset( struct aml_dtv_audio_instance *dtv_audio_instance, int64_t data_offset);
 unsigned int dtv_audio_sync_non_ms12_process(struct audio_stream_out *stream, void *abuffer);
+int get_dtv_sound_channel_mode(struct audio_stream_out *stream);
+
 
 int32_t PtsServ_open();
 int32_t PtsServ_close(int PServerDev);

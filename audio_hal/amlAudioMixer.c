@@ -56,6 +56,7 @@
 #ifdef ENABLE_DVB_PATCH
 #include "dtv_patch_hal_avsync.h"
 #include "dtv_patch_dtvsync.h"
+#include "dtv_patch.h"
 #endif
 
 
@@ -2833,6 +2834,17 @@ static ssize_t aml_out_write_to_mixer(struct audio_stream_out *stream, const voi
         //AM_LOGI("pData:%p size:%zu apts:%"PRIu64" ms", buffer, bytes, apts/90);
         if (out->hw_sync_mode && out->hwsync && out->hwsync->mediasync)
             aml_do_hwsync_action(stream, abuffer);
+
+            AM_AOUT_OutputMode_t cur_sound_track_mode = adev->sound_track_mode;
+#ifdef ENABLE_DVB_PATCH
+            if (is_dtv_stream_out(stream)) {
+                cur_sound_track_mode = get_dtv_sound_channel_mode(stream);
+            }
+#endif
+
+            if (audioBuffer->bufFormat.channelMask == AUDIO_CHANNEL_OUT_STEREO && cur_sound_track_mode > AM_AOUT_OUTPUT_STEREO) {
+                aml_audio_switch_output_mode(audioBuffer->pData, audioBuffer->size, audioBuffer->bufFormat.format, cur_sound_track_mode);
+            }
 
 #ifdef ENABLE_DVB_PATCH
         if (is_dtv_stream_out(stream)) {

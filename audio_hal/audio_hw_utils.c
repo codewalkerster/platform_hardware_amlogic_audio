@@ -1627,7 +1627,7 @@ void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format,
                     buf[i + 1] = tmp2;
                     break;
                 default:
-                    ALOGW("Unknown mode: %d", mode);
+                    //ALOGW("Unknown mode: %d", mode);
                     break;
             }
         }
@@ -1676,7 +1676,7 @@ void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format,
                     break;
                 }
                 default:
-                    ALOGW("Unknown mode: %d", mode);
+                    //ALOGW("Unknown mode: %d", mode);
                     break;
             }
         }
@@ -1716,7 +1716,7 @@ void aml_audio_switch_output_mode(void *in, size_t bytes, audio_format_t format,
                     break;
                 }
                 default:
-                    ALOGW("Unknown mode: %d", mode);
+                    //ALOGW("Unknown mode: %d", mode);
                     break;
             }
         }
