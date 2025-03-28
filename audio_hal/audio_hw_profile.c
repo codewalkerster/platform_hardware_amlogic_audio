@@ -830,8 +830,8 @@ char*  get_hdmi_sink_cap_new(const char *keys, audio_format_t format, struct aml
         /*check dolby truehd*/
         audio_cap_item = get_edid_support_audio_format(AUDIO_FORMAT_MAT);
         if (audio_cap_item) {
-            /*dep_value is only 2 bit*/
-            audio_cap_item->dep_value = audio_cap_item->dep_value & 0x3;
+            /*dep_value is only 5(v1.5, Bit[2:0] in Byte3 will be set 0/1) bit*/
+            audio_cap_item->dep_value = audio_cap_item->dep_value & 0b111;
             /*
              * when cat /sys/class/amhdmitx/amhdmitx0/aud_cap,
              * eg: "AML_MAT, 8 ch, 44.1/48/88.2/96/176.4/192 kHz, DepValue 0x1"
@@ -862,9 +862,10 @@ char*  get_hdmi_sink_cap_new(const char *keys, audio_format_t format, struct aml
                     size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DOLBY_TRUEHD|AUDIO_FORMAT_MAT_1_0");
                 p_hdmi_descs->mat_fmt.is_support = 0;//fixme about the mat_fmt.is_support
 
-            } else if (audio_cap_item->dep_value == 0x3) {
+            } else if ((audio_cap_item->dep_value == 0x3) || (audio_cap_item->dep_value == 0x4)) {
                 //Byte3 bit0:0 bit1:1
                 //eg: "MAT, 8 ch, 48 kHz, DepValue 0x3"
+                //eg: "MAT, 8 ch, 48 kHz, DepValue 0x4"
                 if (report_aml_truehd)
                     size += sprintf(aud_cap + size, "|%s", "AUDIO_FORMAT_DOLBY_TRUEHD|AUDIO_FORMAT_MAT_1_0|AUDIO_FORMAT_MAT_2_0|AUDIO_FORMAT_MAT_2_1");
                 p_hdmi_descs->mat_fmt.is_support = 1;
