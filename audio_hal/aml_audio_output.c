@@ -164,7 +164,7 @@ ssize_t processing_multich_pcm(struct audio_stream_out *stream,
 
             /* apply volume for spk/hp, SPDIF/HDMI keep the max volume */
             float gain_speaker = 1.0;
-            if (adev->enable_soundbar_mode) {
+            if (adev->enable_soundbar_mode || is_SBR(adev)) {
                 gain_speaker = adev->sink_gain[OUTPORT_SPEAKER];
             }
             apply_volume_16to32(gain_speaker, (int16_t *)buffer, adev->out_32_buf, bytes);
