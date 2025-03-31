@@ -470,7 +470,7 @@ void set_ms12_alsa_limit_frame(struct dolby_ms12_desc *ms12, int limit_frame);
 
 void set_ms12_scheduler_sleep(struct dolby_ms12_desc *ms12, bool enable_sleep);
 
-void set_ms12_set_main_start_threshold(struct dolby_ms12_desc *ms12, int start_threshold);
+void set_ms12_set_main_start_threshold(struct audio_stream_out *stream, int start_threshold);
 
 int aml_dap_open(
     struct aml_stream_out *aml_out
