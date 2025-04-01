@@ -1412,8 +1412,7 @@ uint32_t tv_in_read(struct audio_stream_in *stream, void* buffer, size_t bytes)
 
 int aml_deinit_audio_buffer(struct aml_stream_out *out)
 {
-    out->audio_buffer = aml_audio_calloc(1, sizeof(aml_audio_buffer_info_t));
-    if (out->audio_buffer) {
+    if (out && out->audio_buffer) {
         aml_audio_buffer_info_t *pBuffer = out->audio_buffer;
         int index = -1;
         for (index = 0; index < AUDIO_BUFFER_MAX; ++index) {

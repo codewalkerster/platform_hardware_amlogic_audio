@@ -1278,6 +1278,10 @@ int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
 
 DTSX_INIT_FAIL:
     if (dtsx_dec) {
+        if (dtsx_dec->init_argv[0]) {
+            aml_audio_free(dtsx_dec->init_argv[0]);
+            dtsx_dec->init_argv[0] = NULL;
+        }
         if (dtsx_dec->inbuf) {
             aml_audio_free(dtsx_dec->inbuf);
             dtsx_dec->inbuf = NULL;
@@ -1333,6 +1337,10 @@ int dtsx_decoder_release_patch(aml_dec_t *aml_dec)
     _unload_dtsx_function_symbol(dtsx_dec);
 
     if (dtsx_dec) {
+        if (dtsx_dec->init_argv[0]) {
+            aml_audio_free(dtsx_dec->init_argv[0]);
+            dtsx_dec->init_argv[0] = NULL;
+        }
         if (dtsx_dec->inbuf) {
             aml_audio_free(dtsx_dec->inbuf);
             dtsx_dec->inbuf = NULL;
