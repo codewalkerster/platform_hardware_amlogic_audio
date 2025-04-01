@@ -12,7 +12,8 @@ LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libdl \
     libutils \
-    libamaudioutils
+    libamaudioutils \
+    libamaudioutils_boot
 
 LOCAL_C_INCLUDES := \
     $(LOCAL_PATH) \

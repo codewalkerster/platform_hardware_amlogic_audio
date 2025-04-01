@@ -1747,9 +1747,7 @@ static void out_update_source_metadata_v7 (struct audio_stream_out *stream,
             // Sound effect library is not loaded at adev_open function.
             adev = out->dev;
             if (adev && adev->mlock_library_done == false) {
-                aml_load_lock_lib_address();
-                aml_lock_lib_address();
-                adev->mlock_library_done = true;
+                aml_audio_lock_so_memory();
             }
         } else {
             //when source metadata track does not exist, we set is_preempt_system_audio_usage_media_stream as false
@@ -6916,9 +6914,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
     // mlock the necessary library map address, avoid library page fault(stuck a while)
     // out_update_source_metadata_v7 may be not called.
     if (adev && adev->mlock_library_done == false) {
-        aml_load_lock_lib_address();
-        aml_lock_lib_address();
-        adev->mlock_library_done = true;
+        aml_audio_lock_so_memory();
     }
 
     if (aml_out->standby && adev->useAudioMixer) {

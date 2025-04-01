@@ -34,6 +34,64 @@ audio_utils_go_defaults {
     name: "audio_utils_go_defaults",
 }
 
+
+// In order to reduce audiohal mlock memory size, remove some bootup code out of libamaudioutils.so
+cc_library_shared {
+    name: "libamaudioutils_boot",
+    vendor: true,
+    defaults: ["audio_utils_go_defaults"],
+    compile_multilib: "both",
+    header_libs: [
+        "libaudioclient_headers",
+        "libaudio_system_headers",
+        "libbinder_headers",
+        "libhardware_headers",
+        "libutils_headers",
+        "libamaudioutils_headers",
+        "libamaudioutils_boot_headers",
+    ],
+
+    srcs: [
+        "aml_configs/aml_conf_loader.c",
+        "aml_configs/aml_conf_parser.c",
+        "ini/ini.cpp",
+        "ini/IniParser.cpp",
+        "cJSON/cJSON.c",
+        "aml_mlock_library.c",
+    ],
+
+    shared_libs: [
+        "libc",
+        "libcutils",
+        "libutils",
+        "liblog",
+    ],
+
+    local_include_dirs: [
+        "include",
+        "cJSON",
+    ],
+
+    cflags: [
+        "-DBUILD_IN_ANDROID",
+        "-Wno-error",
+        "-Wno-unused-parameter",
+        "-Wno-unused-variable",
+        "-Wno-unused-function",
+    ],
+}
+
+cc_library_headers {
+    name: "libamaudioutils_boot_headers",
+    vendor: true,
+    proprietary: true,
+
+    export_include_dirs: [
+        "ini/include",
+        "cJSON",
+    ],
+}
+
 cc_library_shared {
     name: "libamaudioutils",
     vendor: true,
@@ -46,6 +104,7 @@ cc_library_shared {
         "libhardware_headers",
         "libutils_headers",
         "libamaudioutils_headers",
+        "libamaudioutils_boot_headers",
     ],
 
     srcs: [
@@ -57,8 +116,6 @@ cc_library_shared {
         "aml_android_utils.c",
         "aml_audio_spdifdec.c",
         "aml_buffer_provider.c",
-        "aml_configs/aml_conf_loader.c",
-        "aml_configs/aml_conf_parser.c",
         "aml_data_utils.c",
         "aml_dump_debug.c",
         "aml_echo_reference.c",
@@ -66,15 +123,12 @@ cc_library_shared {
         "aml_malloc_debug.c",
         "aml_ringbuffer.c",
         "aml_volume_utils.c",
-        "ini/ini.cpp",
-        "ini/IniParser.cpp",
         "spdifenc_wrap.cpp",
         "SPDIFEncoderAD.cpp",
         "aml_effects_util.cpp",
         "aml_audio_report.c",
         "aml_audio_sysfs.c",
         "aml_vad_wakeup.cpp",
-        "cJSON/cJSON.c",
         "aml_peq.c",
         "aml_reverb.c",
         "aml_audio_uevent.c",
@@ -89,6 +143,7 @@ cc_library_shared {
         "libaudioutils",
         "libdroidaudiospdif",
         "android.hardware.audio.common-util",
+        "libamaudioutils_boot"
     ],
 
     cflags: [
@@ -107,7 +162,6 @@ cc_library_headers {
 
     export_include_dirs: [
         "include",
-        "ini/include",
         "parser/include",
     ],
 }

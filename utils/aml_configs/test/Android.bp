@@ -20,6 +20,7 @@ cc_binary {
         "libcutils",
         "libc",
         "libamaudioutils",
+        "libamaudioutils_boot",
     ],
 
     header_libs: [

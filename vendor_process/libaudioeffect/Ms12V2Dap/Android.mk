@@ -13,6 +13,7 @@ LOCAL_SHARED_LIBRARIES := \
     libdl \
     libutils \
     libamaudioutils \
+    libamaudioutils_boot \
     android.hardware.audio@4.0 \
     android.hardware.audio.common@4.0 \
     android.hardware.audio.common@4.0-util \

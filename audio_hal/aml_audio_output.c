@@ -176,7 +176,7 @@ ssize_t processing_multich_pcm(struct audio_stream_out *stream,
             /* nchannels 32 bit --> 8 channel 32 bit mapping */
             ret = aml_audio_check_and_realloc((void **)&adev->tmp_buffer_8ch, &adev->tmp_buffer_8ch_size,
                     out_frames * 4 * bd_config->default_alsa_ch);
-            R_CHECK_RET(ret, "alloc tmp_buffer_8ch size:%zu fail", out_frames * 4 * bd_config->default_alsa_ch);
+            R_CHECK_RET(ret, "alloc tmp_buffer_8ch size:%d fail", out_frames * 4 * bd_config->default_alsa_ch);
             //special routing code
             if (nchannels == 5) {
                 /*L R LFE LS RS --> L  R  LS  RS LEF 0 0 0*/

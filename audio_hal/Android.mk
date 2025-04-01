@@ -149,7 +149,7 @@ include $(BUILD_PREBUILT)
     LOCAL_SHARED_LIBRARIES := \
         liblog libcutils libamltinyalsa \
         libaudioutils libdl libaudioroute libutils \
-        libdroidaudiospdif libamaudioutils \
+        libdroidaudiospdif libamaudioutils libamaudioutils_boot \
         libnano \
         libion \
         libamladecs \

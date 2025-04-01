@@ -356,9 +356,6 @@ inline bool is_dts_format(audio_format_t format) {
 
 void aml_audio_stream_migrate_to_apu(struct aml_stream_out *aml_out);
 void aml_audio_stream_delete_migrate_flag(struct aml_stream_out *aml_out);
-void aml_load_lock_lib_address(void);
-void aml_lock_lib_address(void);
-void aml_unlock_lib_address(void);
 bool is_locale_at_United_Kingdom_device();
 
 
@@ -372,5 +369,6 @@ bool is_locale_at_United_Kingdom_device();
 void aml_init_zero_detect_list(void **pp_list);
 void aml_deinit_zero_detect_list(void **pp_list);
 void aml_check_buffer_zero_data(const char *name, const void *buffer, size_t bytes, int data_ch, audio_format_t format);
+void aml_audio_lock_so_memory(void);
 
 #endif

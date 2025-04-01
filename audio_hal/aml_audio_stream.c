@@ -430,6 +430,7 @@ void get_sink_format(struct audio_stream_out *stream)
     }
     struct aml_stream_out *aml_out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = aml_out->dev;
+    adev->sink_format_updating = true;
     /*set default value for sink_audio_format/optical_audio_format*/
     audio_format_t sink_audio_format = AUDIO_FORMAT_PCM_16_BIT;
     audio_format_t optical_audio_format = AUDIO_FORMAT_PCM_16_BIT;
@@ -442,6 +443,8 @@ void get_sink_format(struct audio_stream_out *stream)
 
     adev->bDVEnable = get_sink_dv_capability();
 
+    // After all sink capability updated
+    adev->sink_format_updating = false;
     AM_LOGI("out:%p out devices:%#x cur_out_devices:%#x format:%s(%#x) digital_mode(%s) sink cap:%s(%#x)", aml_out,
           adev->out_device, adev->cur_out_devices, audioFormat2Str(aml_out->hal_internal_format), aml_out->hal_internal_format,
           digitalAudioModeType2Str(adev->digital_audio_mode), audioFormat2Str(sink_capability), sink_capability);

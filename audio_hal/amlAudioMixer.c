@@ -1505,6 +1505,10 @@ static int mixer_config_multich_output(struct amlAudioMixer *audio_mixer, struct
         AM_LOGV("is_bypass_submix_active");
         return 0;
     }
+    if (adev->sink_format_updating) {
+        AM_LOGI("sink_format_updating, skip it");
+        return 0;
+    }
 
     masks = audio_mixer->inportsMasks;
     while (masks) {
