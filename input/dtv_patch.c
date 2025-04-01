@@ -1286,6 +1286,7 @@ void *audio_dtv_patch_output_threadloop(void *data)
     aml_out->volume_l = aml_out->volume_r = 0;
     aml_out->stream.set_volume(&aml_out->stream, aml_out->volume_l, aml_out->volume_r);
     aml_out->hwsync->mediasync = &instance->dtvsync;
+    aml_out->hwsync->use_mediasync = true;
     aml_out->dtvsync_enable =  property_get_int32("vendor.media.dtvsync.enable", 1);
     ALOGI("output_speed=%f,dtvsync_enable=%d\n", aml_out->output_speed, aml_out->dtvsync_enable);
 
