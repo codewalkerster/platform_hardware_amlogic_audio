@@ -5311,6 +5311,17 @@ int dolby_ms12_main_flush(struct audio_stream_out *stream) {
     ALOGI("%s exit", __func__);
     return 0;
 }
+
+void set_ms12_mat_enforce_single_oa_element(struct dolby_ms12_desc *ms12, bool enforce_single_oa_element)
+{
+    char parm[64] = "";
+    snprintf(parm, sizeof(parm), "%s %d", "-enforce_single_oa_element", enforce_single_oa_element);
+
+    if ((strlen(parm)) > 0 && ms12)
+        aml_ms12_update_runtime_params(ms12, parm);
+}
+
+
 /* This API only changes the encoder graph's config, but now we only have ms12->output_config,
  * so when change the output_config, we need keep the continuous graph's config
  */
@@ -5398,6 +5409,15 @@ int dolby_ms12_encoder_reconfig(struct dolby_ms12_desc *ms12) {
     } else {
         set_ms12_mch_enable(ms12, false);
     }
+
+    /*IIDK v281 cmd -enforce_single_oa_element <int> 0|1 */
+    //Enforce single OA element in OAMD for MAT output when
+    //connected downstream AVR requires MAT hashing via HDMI SAD signaling.
+    //Degrades experience, but ensures interoperability with first generation Atmos capable AVR's (default: 0)*/
+    if (output_config & MS12_OUTPUT_MASK_MAT) {
+        //set_ms12_mat_enforce_single_oa_element(ms12, hdmi_descs->mat_fmt.enforce_single_oa_element);
+    }
+
 
     /* SWPL-152241 [legacyDevice] play Dolby_Atmos_ChannelCheck_321_ddp.mp4 Lb/Rb no silent */
     /* dumpsys media.audio_flinger

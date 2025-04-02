@@ -94,6 +94,16 @@ struct format_desc {
      * DTS:X (P2) supports all DTS formats.
      */
     unsigned int dts_vsdb_byte3;
+    /* Table 6: Bits [7:0] of byte 3 of the Dolby MAT and Dolby TrueHD Short Audio Descriptor
+     * Bits of byte 3
+     * |    7    |    6    |    5    |    4    |    3    |    2    |    1    |    0    |
+     * |        F37 – F35 = 0        |  34 = 0 |  33 = 0 |  32 = 0 |  31= 0  |  30= 0  | Dolby MAT profile 1
+     * |        F37 – F35 = 0        |  34 = 0 |  33 = 0 |  32 = 0 |  31= 0  |  30= 1  | Dolby MAT profile 2
+     * |        F37 – F35 = 0        |  34 = 0 |  33 = 0 |  32 = 0 |  31= 1  |  30= 1  | Dolby MAT profile 3
+     * |        F37 – F35 = 0        |  34 = 0 |  33 = 0 |  32 = 1 |  31= 1  |  30= 1  | Dolby MAT profile 4
+     * |        F37 – F35 = 0        |  34 = 0 |  33 = 1 |  32 = 1 |  31= 1  |  30= 1  | Dolby MAT profile 6
+     */
+    bool enforce_single_oa_element;//mat sad byte3 is 0x1
 };
 
 /*
