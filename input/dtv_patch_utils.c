@@ -273,6 +273,7 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
 {
 
     AD_PACK_STATUS_T ad_status = dtv_audio_info->ad_package_status;
+    struct aml_audio_device *aml_dev = aml_adev_get_handle();
 
     if (dtv_audio_info->ad_package_status == -1) {
        ad_status = AD_PACK_STATUS_NORMAL;
@@ -281,8 +282,9 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
     int drop_threshold_ms,drop_start_threshold_ms,hold_start_threshold_ms,hold_threshold_ms;
     bool is_dolby_format = (dtv_audio_info->main_fmt == ACODEC_FMT_AC3 ||
                             dtv_audio_info->main_fmt == ACODEC_FMT_EAC3||
-                            dtv_audio_info->main_fmt == ACODEC_FMT_AC4 ||
-                            dtv_audio_info->main_fmt == ACODEC_FMT_AAC_LATM);
+                            dtv_audio_info->main_fmt == ACODEC_FMT_AC4);
+    bool is_aac_format = (dtv_audio_info->main_fmt == ACODEC_FMT_AAC ||
+                          dtv_audio_info->main_fmt == ACODEC_FMT_AAC_LATM);
 
     if (is_dolby_format) {
        drop_threshold_ms = AD_PACK_STATUS_DROP_THRESHOLD_MS;
@@ -309,7 +311,7 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
     }
 
     if (timems_diff > AD_PACK_STATUS_UNNORMAL_THRESHOLD_MS) {
-        if (is_dolby_format) {
+        if (is_dolby_format || is_aac_format) {
             ALOGI("timems_diff %d it is impossible so drop", timems_diff);
             return AD_PACK_STATUS_DROP;
         } else {
@@ -330,6 +332,12 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
                         ALOGI("main and ad timems_diff %d ms  need hold ", timems_diff);
                         ad_status = AD_PACK_STATUS_HOLD;
                     }
+                } else {
+                    if (is_aac_format) {
+                       if (timems_diff > drop_start_threshold_ms) {
+                            ad_status = AD_PACK_STATUS_DROP;
+                        }
+                    }
                 }
             } else {
                 timems_diff = (ad_pts - main_pts) / 90;
@@ -347,9 +355,16 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
                     ALOGI("main and ad timems_diff %d ms  need drop ", timems_diff);
                     ad_status = AD_PACK_STATUS_DROP;
                 } else {
-                    ad_status = AD_PACK_STATUS_HOLD;
+                    if (is_aac_format) {
+                        if (timems_diff > hold_threshold_ms) {
+                            ad_status = AD_PACK_STATUS_DROP;
+                        } else {
+                            ad_status = AD_PACK_STATUS_HOLD;
+                        }
+                    } else {
+                        ad_status = AD_PACK_STATUS_HOLD;
+                    }
                 }
-
             } else {
                 ad_status = AD_PACK_STATUS_HOLD;
             }
@@ -369,7 +384,15 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
                     && timems_diff < hold_threshold_ms) {
                     ad_status = AD_PACK_STATUS_NORMAL;
                 } else if (timems_diff >= hold_threshold_ms) {
-                    ad_status = AD_PACK_STATUS_DROP;
+                    if (is_aac_format) {
+                        if (timems_diff > drop_start_threshold_ms) {
+                           ad_status = AD_PACK_STATUS_DROP;
+                        } else {
+                           ad_status = AD_PACK_STATUS_NORMAL;
+                        }
+                    } else {
+                       ad_status = AD_PACK_STATUS_DROP;
+                    }
                 } else {
                     ad_status = AD_PACK_STATUS_HOLD;
                 }
@@ -379,7 +402,10 @@ AD_PACK_STATUS_T check_ad_package_status(int64_t main_pts, int64_t ad_pts, aml_d
             ALOGI("invalid status %d ", ad_status);
 
     }
-    ALOGV("main_pts %" PRId64 " ad_pts %" PRId64 " ad_status %d timems_diff %d", main_pts, ad_pts, ad_status, timems_diff);
+    if (aml_dev->debug_flag) {
+        ALOGI("main_pts %" PRId64 " ad_pts %" PRId64 " pre ad status %d now ad_status %d time_diff %d",
+            main_pts, ad_pts, dtv_audio_info->ad_package_status, ad_status, timems_diff);
+    }
 
     return ad_status;
 }
