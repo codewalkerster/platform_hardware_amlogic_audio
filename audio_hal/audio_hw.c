@@ -1306,6 +1306,13 @@ exit:
     pthread_mutex_unlock(&aml_dev->lock);
     aml_audio_trace_int("out_pause_new", 0);
 
+    // already pause stream, should cancel aml_stream_timer_pause_callback,
+    // avoid submix port message confusion.
+    if (!aml_out->is_callback_pending && (aml_out->streamType == STREAM_PCM_HWSYNC)) {
+        AM_LOGI("audio_timer_stop timer_id2 %d", aml_out->timer_id2);
+        audio_timer_stop(aml_out->timer_id2);
+    }
+
     if (is_standby) {
         ALOGD("%s(), stream(%p) already in standby, return INVALID_STATE", __func__, stream);
         ret = INVALID_STATE;
