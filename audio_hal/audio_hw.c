@@ -6794,7 +6794,7 @@ int _get_stream_write_func(struct aml_stream_out *aml_out)
         if (ms12->ms12_scheduler_state != MS12_SCHEDULER_RUNNING) {
             aml_audiohal_sch_state_2_ms12(ms12, MS12_SCHEDULER_RUNNING);
         }
-        if (adev->useAudioMixer) {
+        if (adev->useAudioMixer && aml_get_submix_scheduler_state(audio_mixer) != SUBMIX_SCHEDULER_RUNNING) {
             AM_LOGV("send RUNNING msg to useAudioMixer");
             aml_audiohal_sch_state_2_submix(audio_mixer, SUBMIX_SCHEDULER_RUNNING);
         }

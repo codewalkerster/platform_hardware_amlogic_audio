@@ -190,6 +190,7 @@ int mixer_reset_virtual_buf(void *audio_mixer, bool reset);
 int mixer_get_inport_start_threshold(void *out, struct amlAudioMixer *audio_mixer);
 input_port *mixer_get_inport(struct amlAudioMixer *audio_mixer, uint32_t *pMasks);
 int aml_audiohal_sch_state_2_submix(struct amlAudioMixer *audio_mixer, int sch_state);
+submix_scheduler_state_t aml_get_submix_scheduler_state(struct amlAudioMixer *audio_mixer);
 int aml_set_submix_scheduler_state(struct amlAudioMixer *audio_mixer, int sch_state);
 void set_submix_continuous_state(struct amlAudioMixer *audio_mixer, int state);
 int aml_send_submix_standby_state_2_submix(void);

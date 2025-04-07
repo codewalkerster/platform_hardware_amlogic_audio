@@ -2506,6 +2506,11 @@ void set_submix_continuous_state(struct amlAudioMixer *audio_mixer, int state) {
     }
 }
 
+submix_scheduler_state_t aml_get_submix_scheduler_state(struct amlAudioMixer *audio_mixer)
+{
+    return audio_mixer->submix_scheduler_state;
+}
+
 int aml_set_submix_scheduler_state(struct amlAudioMixer *audio_mixer, int sch_state)
 {
     struct aml_audio_device *adev = aml_adev_get_handle();
