@@ -62,16 +62,24 @@ static void getAudioEsData(AmHwMultiDemuxWrapper* mDemuxWrapper, int fid, const 
 //(void)len;
 (void)user_data;
 
+    if (!mDemuxWrapper || !data) {
+       ALOGE("invalid mDemuxWrapper %p data %p", mDemuxWrapper, data);
+       return;
+    }
     mEsDataInfo* mEsData = (mEsDataInfo*)aml_audio_malloc(sizeof(mEsDataInfo));;
-    dmx_non_sec_es_header *es_header = (struct dmx_non_sec_es_header *)(data);
     if (!mEsData) {
         return;
     }
+    dmx_non_sec_es_header *es_header = (struct dmx_non_sec_es_header *)(data);
     if (len == (es_header->len + sizeof(struct dmx_non_sec_es_header))) {
         const unsigned char *data_es  = data + sizeof(struct dmx_non_sec_es_header);
         mEsData->data = (uint8_t*)aml_audio_malloc(es_header->len);
         if (mEsData->data) {
            memcpy(mEsData->data, data_es, es_header->len);
+        } else {
+           ALOGI("malloc mEsData->data failed");
+           aml_audio_free(mEsData);
+           return;
         }
         mEsData->size = es_header->len;
         mEsData->pts = es_header->pts;
@@ -227,6 +235,8 @@ AmHwMultiDemuxWrapper::AmHwMultiDemuxWrapper() {
     mDemuxPara.security_mem_level = 0;
     mDemuxPara.dsc_fd = NULL;
     Last_AD_EsData = NULL;
+    pthread_mutex_init(&EsDataQueueMutex, NULL);
+    pthread_cond_init(&EsDataQueueCond, NULL);
 }
 
 AmHwMultiDemuxWrapper::~AmHwMultiDemuxWrapper() {
@@ -258,9 +268,6 @@ AM_DmxErrorCode_t AmHwMultiDemuxWrapper::AmDemuxWrapperOpen(Am_DemuxWrapper_Open
     }
     memcpy(&mDemuxPara,mPara,sizeof(Am_DemuxWrapper_OpenPara_t));
     AmDmxDevice->AM_DMX_Open(mDemuxPara.dev_no);
-    pthread_mutex_init(&EsDataQueueMutex, NULL);
-    pthread_cond_init(&EsDataQueueCond, NULL);
-
     return AM_Dmx_SUCCESS;
 }
 
