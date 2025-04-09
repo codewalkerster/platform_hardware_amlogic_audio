@@ -6974,17 +6974,13 @@ ssize_t out_write_new(struct audio_stream_out *stream,
         aml_out->is_sink_format_prepared = true;
     }
 
-    if (aml_out->continuous_mode_check) {
-        if (adev->dolby_lib_type_last == eDolbyMS12Lib) {
-            /*if these format can't be supported by ms12, we can bypass it*/
-            if (is_bypass_dolbyms12(stream)) {
-                switch_to_nonms12_case(adev);
-                aml_out->restore_dolby_lib_type = true;
-                ALOGI("bypass ms12 change dolby dcv lib type");
-            }
-        }
-        aml_out->continuous_mode_check = false;
+    /*if these format can't be supported by ms12, we can bypass it*/
+    if (adev->dolby_lib_type == eDolbyMS12Lib && aml_out->switch_nonms12_check) {
+        switch_to_nonms12_case(adev);
+        aml_out->restore_dolby_lib_type = true;
+        ALOGI("bypass ms12 change dolby dcv lib type");
     }
+
 
     if (adev->ms12.dolby_ms12_enable) {
         if (aml_out->is_mat_changed) {
@@ -7337,7 +7333,7 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
 #endif
 
     aml_out->codec_type = get_codec_type(aml_out->hal_internal_format);
-    aml_out->continuous_mode_check = true;
+    aml_out->switch_nonms12_check = is_bypass_dolbyms12(*stream_out);
 
     aml_get_stream_dump_file_name((int)aml_out->hal_internal_format, aml_out->stream_dump_file);
 
@@ -7406,6 +7402,7 @@ void adev_close_output_stream_new(struct audio_hw_device *dev,
 
     ALOGD("%s: enter streamType = %s", __func__, streamType2Str(aml_out->streamType));
     aml_out->is_closing = true;
+    aml_out->switch_nonms12_check = false;
 
     /* free stream ease resource  */
     aml_audio_ease_close(aml_out->audio_stream_ease);
