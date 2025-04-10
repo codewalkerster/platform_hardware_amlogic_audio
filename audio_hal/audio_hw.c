@@ -3415,14 +3415,14 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         out->restore_hdmitx_selection = false;
     }
     R_CHECK_POINTER_LEGAL(, adev,);
-    stream->common.standby(&stream->common);
+    if (stream->common.standby)
+        stream->common.standby(&stream->common);
 
     pthread_mutex_lock(&out->lock);
 
     if (out->is_ms12_main_decoder) {
         close_ms12_output_main_stream(stream);
     }
-    dolby_ms12_release_dec_handle(stream);
 
     /* After playback for previous dts stream, there is remain data in VirtualX library. It needs to clear data buffer of VirtualX by using
        zero data to replace these remain data. Otherwise it will play this remain data first when start playback next time*/
@@ -3596,6 +3596,9 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
 
     aml_stream_unregister(out);
     AM_LOGI("io %d: out:%p exit ------", out->io_handle, out);
+
+    /*all the ms12 related resource is released, free the handle itself*/
+    dolby_ms12_release_dec_handle(stream);
 
     // for aml_stream_timer_pause_callback is async function,
     // should be very careful when you try to free output stream resource.
@@ -5939,6 +5942,13 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
         return bytes;
     }
 
+    /*for dtv case doesn't call out_write_new*/
+    if (aml_out->is_preempted) {
+        ALOGI("%s drop data size =(%zu)", __func__, bytes);
+        usleep(32*1000);
+        return bytes;
+    }
+
     if (eDolbyMS12Lib == adev->dolby_lib_type) {
 #if 0
         if (ms12->ms12_main_stream_out && ms12->ms12_main_stream_out->stream_status != STREAM_STANDBY) {
@@ -6101,7 +6111,7 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
     }
 
     if (write_bytes > 0) {
-        if ((eDolbyMS12Lib == adev->dolby_lib_type) && continuous_mode(adev)) {
+        if ((eDolbyMS12Lib == adev->dolby_lib_type) && continuous_mode(adev) && ms12_dec) {
             /*SWPL-11531 resume the timer here, because we have data now*/
             /*resume ms12/hwsync here, as we receive the first data*/
             pthread_mutex_lock(&ms12->lock);
@@ -7357,8 +7367,11 @@ int adev_open_output_stream_new(struct audio_hw_device *dev,
     }
     aml_volume_shaper_init(&aml_out->volume_shaper, 0);
 
+    /*special dummy stream for ms12 output*/
     if (address && !strncmp(address, "ms12_stream", 11)) {
         is_ms12_stream = true;
+        /*ms12 dummy stream, doesn't need standby function*/
+        aml_out->stream.common.standby = NULL;
     }
 
     if (!is_ms12_stream) {

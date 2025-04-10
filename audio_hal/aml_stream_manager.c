@@ -225,30 +225,7 @@ static bool _is_main_stream(struct aml_stream_out *amlStream)
 bool aml_get_is_need_hw_mix(struct aml_stream_out *amlStream)
 {
     struct aml_audio_device *adev = (struct aml_audio_device *)amlStream->dev;
-    uint32_t nodeIndex = 0;
-    bool retValue = false;
-
-    if (!list_empty(&adev->stream_ListHead)) {
-        struct listnode *item = NULL, *temp = NULL;
-        struct stream_infos *ptmp = NULL;
-
-        list_for_each_safe(item, temp, &adev->stream_ListHead) {
-            ptmp = (struct stream_infos *)item;
-
-            nodeIndex++;
-            struct aml_stream_out *pOutStream = (struct aml_stream_out *)ptmp->pStream;
-            if (_is_main_stream(pOutStream))
-                break;
-        }
-
-        if (nodeIndex >= 2 && _is_main_stream((struct aml_stream_out *)ptmp->pStream)) {
-            retValue = true;
-        }
-        AM_LOGV(" ptmp:%p  pStream:%p, amlStream:%p, streamCount:%u nodeIndex:%u, retValue:%d",
-            ptmp, ptmp->pStream, amlStream, adev->streamCount, nodeIndex, retValue);
-    }
-
-    return retValue;
+    return adev->is_main_stream_exist;
 }
 
 //check there is active stream or not.
@@ -335,6 +312,7 @@ void aml_check_close_ms12_output_main_stream(struct aml_stream_out *amlStream)
     struct aml_audio_device *adev = (struct aml_audio_device *)amlStream->dev;
     uint32_t nodeIndex = 0;
 
+    pthread_mutex_lock(&adev->streamList_MutexLock);
     if (!list_empty(&adev->stream_ListHead)) {
         struct listnode *item = NULL, *temp = NULL;
         struct stream_infos *ptmp = NULL;
@@ -353,16 +331,14 @@ void aml_check_close_ms12_output_main_stream(struct aml_stream_out *amlStream)
             nodeIndex++;
             struct aml_stream_out *pOutStream = (struct aml_stream_out *)ptmp->pStream;
             if (pOutStream && pOutStream->is_ms12_main_decoder && !pOutStream->is_preempt_system_audio_usage_media_stream && is_asdk_test) {
-                pthread_mutex_lock(&pOutStream->lock);
                 if (pOutStream->is_ms12_main_decoder) {
                     ALOGI("%s() line %d close ms12 main stream", __func__, __LINE__);
                     aml_close_ms12_output_main_stream(pOutStream);
                 }
-                pthread_mutex_unlock(&pOutStream->lock);
             }
         }
     }
-
+    pthread_mutex_unlock(&adev->streamList_MutexLock);
     return ;
 }
 
@@ -411,6 +387,8 @@ int aml_stream_register(struct aml_stream_out *amlStream)
     struct stream_infos *pStreamInfos = NULL;
     int retValue = 0;
     int streamTypeIndex = 0;
+    bool is_main_stream_exist = false;
+    uint32_t nodeIndex = 0;
 
     pthread_mutex_lock(&adev->streamList_MutexLock);
     if (!list_empty(&adev->stream_ListHead)) {
@@ -449,6 +427,29 @@ int aml_stream_register(struct aml_stream_out *amlStream)
         retValue = -1;
         AM_LOGE(" pStreamInfos:%p  alloc failed, then retValue:%d", pStreamInfos, retValue);
     }
+
+    /*update the main stream exist info*/
+    if (!list_empty(&adev->stream_ListHead)) {
+        struct listnode *item = NULL, *temp = NULL;
+        struct stream_infos *ptmp = NULL;
+
+        list_for_each_safe(item, temp, &adev->stream_ListHead) {
+            ptmp = (struct stream_infos *)item;
+
+            nodeIndex++;
+            struct aml_stream_out *pOutStream = (struct aml_stream_out *)ptmp->pStream;
+            if (_is_main_stream(pOutStream))
+                break;
+        }
+
+        if (nodeIndex >= 2 && _is_main_stream((struct aml_stream_out *)ptmp->pStream)) {
+            is_main_stream_exist = true;
+        }
+        AM_LOGV(" ptmp:%p  pStream:%p, amlStream:%p, streamCount:%u nodeIndex:%u, is_main_stream_exist:%d",
+            ptmp, ptmp->pStream, amlStream, adev->streamCount, nodeIndex, is_main_stream_exist);
+        adev->is_main_stream_exist = is_main_stream_exist;
+    }
+
     pthread_mutex_unlock(&adev->streamList_MutexLock);
     return retValue;
 }
@@ -456,6 +457,8 @@ int aml_stream_register(struct aml_stream_out *amlStream)
 void aml_stream_unregister(struct aml_stream_out *amlStream)
 {
     struct aml_audio_device *adev = (struct aml_audio_device *)amlStream->dev;
+    bool is_main_stream_exist = false;
+    uint32_t nodeIndex = 0;
 
     pthread_mutex_lock(&adev->streamList_MutexLock);
     if (!list_empty(&adev->stream_ListHead)) {
@@ -475,6 +478,29 @@ void aml_stream_unregister(struct aml_stream_out *amlStream)
             }
         }
     }
+
+    /*update the main stream exist info*/
+    if (!list_empty(&adev->stream_ListHead)) {
+        struct listnode *item = NULL, *temp = NULL;
+        struct stream_infos *ptmp = NULL;
+
+        list_for_each_safe(item, temp, &adev->stream_ListHead) {
+            ptmp = (struct stream_infos *)item;
+
+            nodeIndex++;
+            struct aml_stream_out *pOutStream = (struct aml_stream_out *)ptmp->pStream;
+            if (_is_main_stream(pOutStream))
+                break;
+        }
+
+        if (nodeIndex >= 2 && _is_main_stream((struct aml_stream_out *)ptmp->pStream)) {
+            is_main_stream_exist = true;
+        }
+        AM_LOGV(" ptmp:%p  pStream:%p, amlStream:%p, streamCount:%u nodeIndex:%u, is_main_stream_exist:%d",
+            ptmp, ptmp->pStream, amlStream, adev->streamCount, nodeIndex, is_main_stream_exist);
+        adev->is_main_stream_exist = is_main_stream_exist;
+    }
+
     pthread_mutex_unlock(&adev->streamList_MutexLock);
 
     return ;

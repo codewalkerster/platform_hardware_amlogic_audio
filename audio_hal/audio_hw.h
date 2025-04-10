@@ -617,6 +617,7 @@ struct aml_audio_device {
     struct listnode stream_ListHead;
     pthread_mutex_t streamList_MutexLock;
     uint32_t streamCount;
+    bool is_main_stream_exist;
     bool reset_hdmitx_audio;
     bool is_dtg_case;//dtg case at the UK
     void *zero_data_detect_list;

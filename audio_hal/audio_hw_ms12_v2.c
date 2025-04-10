@@ -2397,6 +2397,8 @@ static void close_all_ms12_dec() {
     struct aml_stream_out *amlStream = NULL;
     bool retValue = false;
     ALOGI("%s close all ms12 decoder", __func__);
+    /*we will check all the stream, need lock it first*/
+    pthread_mutex_lock(&adev->streamList_MutexLock);
     if (!list_empty(&adev->stream_ListHead)) {
         struct listnode *item = NULL, *temp = NULL;
         struct stream_infos *ptmp = NULL;
@@ -2411,6 +2413,7 @@ static void close_all_ms12_dec() {
             }
         }
     }
+    pthread_mutex_unlock(&adev->streamList_MutexLock);
 
     return;
 }
@@ -5186,8 +5189,6 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
     /*after the mutex, we need check whether it is released*/
     if (aml_out->is_ms12_main_decoder) {
 
-        aml_out->is_ms12_main_decoder = false;
-
         if (aml_out->virtual_buf_handle) {
             audio_virtual_buf_close(&aml_out->virtual_buf_handle);
         }
@@ -5198,10 +5199,6 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
         }
 
         aml_ms12_decoder_unregister_callback(ms12, aml_out->ms12_dec_handle, MS12_CODEC_CALLBACK_TEMPO);
-        if (speed_info->speed_handle) {
-            aml_audio_speed_close(speed_info->speed_handle);
-            speed_info->speed_handle = NULL;
-        }
 
         aml_truehd_parser_close(ms12_dec->truehd_parser_handle);
         ms12_dec->truehd_parser_handle = NULL;
@@ -5242,6 +5239,8 @@ int dolby_ms12_main_close(struct audio_stream_out *stream) {
                 , AUDIO_FORMAT_PCM_16_BIT //treat as PCM format when stream is end.
                 );
         }
+        /*all ms12 resource is released, set the flag to false*/
+        aml_out->is_ms12_main_decoder = false;
     }
 
     pthread_mutex_unlock(&ms12_dec->main_lock);
