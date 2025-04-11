@@ -2461,11 +2461,11 @@ int get_dolby_ms12_cleanup(struct dolby_ms12_desc *ms12, bool set_non_continuous
     ALOGI("%s() dolby_ms12_set_quit_flag %d", __FUNCTION__, is_quit);
     dolby_ms12_set_quit_flag(is_quit);
 
-    if (ms12->ms12_continuous_state == MS12_SCHEDULER_STANDBY) {
-        sem_post(&ms12->standby_sem);
-    }
     if (ms12->dolby_ms12_threadID != 0) {
         ms12->dolby_ms12_thread_exit = true;
+        if (ms12->ms12_continuous_state == MS12_SCHEDULER_STANDBY) {
+            sem_post(&ms12->standby_sem);
+        }
         pthread_join(ms12->dolby_ms12_threadID, NULL);
         ms12->dolby_ms12_threadID = 0;
         ALOGI("%s() dolby_ms12_threadID reset to %ld\n", __FUNCTION__, ms12->dolby_ms12_threadID);
