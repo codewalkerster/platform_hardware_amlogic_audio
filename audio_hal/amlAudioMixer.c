@@ -2024,7 +2024,7 @@ int aml_send_submix_standby_state_2_submix(void)
     struct amlAudioMixer *audio_mixer = adev->mixerData;
     int sch_state = SUBMIX_SCHEDULER_STANDBY;
     pthread_mutex_lock(&audio_mixer->lock);
-    if (audio_mixer->last_scheduler_state == SUBMIX_SCHEDULER_RUNNING) {
+    if (audio_mixer->last_scheduler_state == SUBMIX_SCHEDULER_RUNNING || aml_get_is_exist_active_stream()) {
         ALOGI("[%s:%d] submix is running.", __FUNCTION__, __LINE__);
         pthread_mutex_unlock(&audio_mixer->lock);
         return 0;
