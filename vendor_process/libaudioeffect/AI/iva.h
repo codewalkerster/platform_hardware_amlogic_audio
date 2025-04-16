@@ -25,5 +25,10 @@ typedef enum
     IVA_STATUS_OUT_OF_MEMORY = -2,
 } IVA_STATUS_E;
 
+//IVA audio prebuilt library
+#define AUDIO_AI_LIB_PATH     "/vendor/lib/libaaisdk.so"
+#define AUDIO_AI_LIB64_PATH   "/vendor/lib64/libaaisdk.so"
+
+#define AUDIO_ENHANCMENT_MODEL_PATH "/vendor/etc/"
 
 #endif

@@ -17,60 +17,65 @@
 #ifndef _IVA_AUDIO_ENHANCEMENT_COMMON_H_
 #define _IVA_AUDIO_ENHANCEMENT_COMMON_H_
 
-/**
- * @brief audio enhancement handle class
+/*
+ * audio enhancement handle class
  */
 typedef struct Audio_EnhancementImplement_t *Audio_EnhancementImplement_handle_t;
 
-/**
- * @brief audio enhancement context struct
+/*
+ * audio enhancement context struct
  */
 typedef struct iva_audio_enhancement_strut
 {
-    /**
+    /*
     * @brief audio enhancement context
     */
     Audio_EnhancementImplement_handle_t ctx_audio_enhancement;
 } iva_audio_enhancement_strut_t;
 
-/**
- * @brief  audio enhancement parameter struct
+/*
+ * audio enhancement parameter struct
  */
 typedef struct
 {
-     /**
-      * @brief
-      * fs:input audio sample rate,only support 16000Hz,44100Hz,48000Hz,96000Hz.
-      */
+    /* @brief
+     * fs: input audio sample rate,only support 48000Hz.
+     * bits_per_sample: only support 16 or 32.
+     * chunk_size: the sample numbers ,process evry time. only support 480 or 512
+     * model_path: dir for model files
+     * value: -15-15db for enhance.
+     */
     int fs;
     int bits_per_sample;
     int chunk_size;
     char model_path[256];
+    int value;
 } aai_iva_audio_enhancement_param_t;
 
-/**
- * 2. audio enhancement input struct
+/*
+ * audio enhancement input struct
  */
 typedef struct
 {
-    /**
-    * @brief
-    * samples:input PCM samples buffer
-    *
-    */
+    /*
+     * @brief
+     * samples:input PCM samples buffer
+     *
+     */
     short *samples;
     int   *int_samples;
     int   enable;
 } aai_iva_audio_enhancement_input_t;
 
-/**
- * @brief audio enhancement output struct
+/*
+ * audio enhancement output struct
  */
 typedef struct
 {
-    /**
-    * @brief // output PCM samples buffer
-    */
+    /*
+     * @brief
+     * samples:output PCM samples buffer
+     */
     short *samples;
     int *int_samples;
 } aai_iva_audio_enhancement_output_t;

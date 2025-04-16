@@ -32,11 +32,6 @@
 #define AUDIO_ENHANCE_DUMP_BEFORE   "/data/vendor/audiohal/before_audio_enhance.pcm"
 #define AUDIO_ENHANCE_DUMP_OUTPUT   "/data/vendor/audiohal/after_audio_enhance.pcm"
 
-//IVA audio enhancement prebuilt library
-#define AUDIO_AI_LIB_PATH     "/vendor/lib/libaaisdk.so"
-#define AUDIO_AI_LIB64_PATH   "/vendor/lib64/libaaisdk.so"
-#define AUDIO_ENHANCMENT_MODEL_PATH "/vendor/etc/"
-
 #define STEREO_PROCESS_CHANNEL_LAYOUT               (0x3)   // L/R channel
 #define MULTICH_PROCESS_CHANNEL_LAYOUT              (0x4)   // center channel
 #define MAX_AUDIO_ENHANCEMENT_CHANNEL               (8)     // max support channel
@@ -75,6 +70,30 @@ static int iva_libraries_open(audio_enhancement_libraries_context_t *ivaLibConte
         goto exit;
     }
 
+    ivaLibContext->iva_enable = dlsym(dl_handle, "aai_iva_audio_enhancement_enable");
+    if (!ivaLibContext->iva_enable) {
+        ALOGE("%s() dlsym() aai_iva_audio_enhancement_enable error:%d", __func__, errno);
+        goto exit;
+    }
+
+    ivaLibContext->iva_clear = dlsym(dl_handle, "aai_iva_audio_enhancement_clear");
+    if (!ivaLibContext->iva_clear) {
+        ALOGE("%s() dlsym() aai_iva_audio_enhancement_clear error:%d", __func__, errno);
+        goto exit;
+    }
+
+    ivaLibContext->iva_setparam = dlsym(dl_handle, "aai_iva_audio_enhancement_setparam");
+    if (!ivaLibContext->iva_setparam) {
+        ALOGE("%s() dlsym() aai_iva_audio_enhancement_setparam error:%d", __func__, errno);
+        goto exit;
+    }
+
+    ivaLibContext->iva_getparam = dlsym(dl_handle, "aai_iva_audio_enhancement_getparam");
+    if (!ivaLibContext->iva_getparam) {
+        ALOGE("%s() dlsym() aai_iva_audio_enhancement_getparam error:%d", __func__, errno);
+        goto exit;
+    }
+
     ivaLibContext->dl_handle = dl_handle;
     ALOGI("%s() parse iva library symbol SUCCESS!", __func__);
     return 0;
@@ -97,6 +116,18 @@ static int iva_libraries_close(audio_enhancement_libraries_context_t *ivaLibCont
     }
     if (ivaLibContext->iva_process_int32) {
         ivaLibContext->iva_process_int32 = NULL;
+    }
+    if (ivaLibContext->iva_enable) {
+        ivaLibContext->iva_enable = NULL;
+    }
+    if (ivaLibContext->iva_clear) {
+        ivaLibContext->iva_clear = NULL;
+    }
+    if (ivaLibContext->iva_setparam) {
+        ivaLibContext->iva_setparam = NULL;
+    }
+    if (ivaLibContext->iva_getparam) {
+        ivaLibContext->iva_getparam = NULL;
     }
     if (ivaLibContext->dl_handle) {
         dlclose(ivaLibContext->dl_handle);
@@ -157,18 +188,9 @@ int aml_open_audio_enhancement_module(struct aml_native_postprocess *native_post
 
     aml_audio_enhancement_module_t *pAudioEnhancementModule = NULL;
     audio_enhancement_libraries_context_t *pstIvaEnhancementHandle = NULL;
-    aai_iva_audio_enhancement_param_t stEnhancementParam;
-
     int i = 0, ret = 0;
 
-    stEnhancementParam.fs = audio_config->sample_rate;
-    stEnhancementParam.chunk_size = AUDIO_ENHANCEMENT_FRAMECOUNT;
-    if (audio_config->format == AUDIO_FORMAT_PCM_32_BIT) {
-        stEnhancementParam.bits_per_sample = 32;
-    } else {
-        stEnhancementParam.bits_per_sample = 16;
-    }
-    strcpy(stEnhancementParam.model_path, AUDIO_ENHANCMENT_MODEL_PATH);
+
 
     pAudioEnhancementModule = (aml_audio_enhancement_module_t *)calloc(1, sizeof(aml_audio_enhancement_module_t));
     if (!pAudioEnhancementModule) {
@@ -177,6 +199,15 @@ int aml_open_audio_enhancement_module(struct aml_native_postprocess *native_post
     }
 
     memcpy(&pAudioEnhancementModule->audio_config, audio_config, sizeof(audio_config_base_t));
+
+    pAudioEnhancementModule->stEnhancementParam.fs = audio_config->sample_rate;
+    pAudioEnhancementModule->stEnhancementParam.chunk_size = AUDIO_ENHANCEMENT_FRAMECOUNT;
+    if (audio_config->format == AUDIO_FORMAT_PCM_32_BIT) {
+        pAudioEnhancementModule->stEnhancementParam.bits_per_sample = 32;
+    } else {
+        pAudioEnhancementModule->stEnhancementParam.bits_per_sample = 16;
+    }
+    strcpy(pAudioEnhancementModule->stEnhancementParam.model_path, AUDIO_ENHANCMENT_MODEL_PATH);
 
     // iva library dlopen/dlsym
     pstIvaEnhancementHandle = &pAudioEnhancementModule->iva_enhancement_handle;
@@ -192,7 +223,7 @@ int aml_open_audio_enhancement_module(struct aml_native_postprocess *native_post
     }
 
     for (i = 0; i < MAX_AUDIO_ENHANCEMENT_INSTANCE; i++) {
-        pstIvaEnhancementHandle->nnans_imple[i] = pstIvaEnhancementHandle->iva_init(&stEnhancementParam);
+        pstIvaEnhancementHandle->nnans_imple[i] = pstIvaEnhancementHandle->iva_init(&pAudioEnhancementModule->stEnhancementParam);
         if (pstIvaEnhancementHandle->nnans_imple[i] == NULL) {
             ALOGE("%s() iva audio enhancement init failed", __func__);
             goto iva_audio_enhancement_open_exit;
@@ -264,11 +295,20 @@ int aml_set_audio_enhancement_enable(struct aml_native_postprocess *native_postp
     }
 
     aml_audio_enhancement_module_t *pAudioEnhancementModule = (aml_audio_enhancement_module_t *)native_postprocess->audio_enhancment_handle;
+    audio_enhancement_libraries_context_t *pstIvaEnhancementHandle = &pAudioEnhancementModule->iva_enhancement_handle;
     pAudioEnhancementModule->audio_enhancement_enable = enable;
-    /*if (enable) {
+    if (enable) {
         ring_buffer_reset(&pAudioEnhancementModule->input_rbuffer);
         ring_buffer_reset(&pAudioEnhancementModule->output_rbuffer);
-    }*/
+    }
+
+    if (pstIvaEnhancementHandle) {
+        for (int i = 0; i < MAX_AUDIO_ENHANCEMENT_INSTANCE; i++) {
+            if (pstIvaEnhancementHandle->nnans_imple[i] && pstIvaEnhancementHandle->iva_enable) {
+                pstIvaEnhancementHandle->iva_enable(pstIvaEnhancementHandle->nnans_imple[i], pAudioEnhancementModule->audio_enhancement_enable);
+            }
+        }
+    }
 
     return 0;
 }
@@ -296,7 +336,17 @@ int aml_set_audio_enhancement_gain(struct aml_native_postprocess *native_postpro
     }
 
     aml_audio_enhancement_module_t *pAudioEnhancementModule = (aml_audio_enhancement_module_t *)native_postprocess->audio_enhancment_handle;
+    audio_enhancement_libraries_context_t *pstIvaEnhancementHandle = &pAudioEnhancementModule->iva_enhancement_handle;
     pAudioEnhancementModule->audio_enhancement_gain = gain_db;
+    pAudioEnhancementModule->stEnhancementParam.value = gain_db;
+
+    if (pstIvaEnhancementHandle) {
+        for (int i = 0; i < MAX_AUDIO_ENHANCEMENT_INSTANCE; i++) {
+            if (pstIvaEnhancementHandle->nnans_imple[i] && pstIvaEnhancementHandle->iva_setparam) {
+                pstIvaEnhancementHandle->iva_setparam(pstIvaEnhancementHandle->nnans_imple[i], &pAudioEnhancementModule->stEnhancementParam);
+            }
+        }
+    }
 
     return 0;
 }
@@ -334,7 +384,6 @@ int aml_audio_enhancement_module_process(void *handle, audio_buffer_t *inBuf, au
 
     aml_audio_enhancement_module_t *pAudioEnhancementModule = (aml_audio_enhancement_module_t *)handle;
     audio_enhancement_libraries_context_t *pstIvaEnhancementHandle = &pAudioEnhancementModule->iva_enhancement_handle;
-    int gain = pAudioEnhancementModule->audio_enhancement_gain;
     aai_iva_audio_enhancement_input_t t_audio_enhancement_input;
     aai_iva_audio_enhancement_output_t t_audio_enhancement_output;
 
@@ -351,12 +400,12 @@ int aml_audio_enhancement_module_process(void *handle, audio_buffer_t *inBuf, au
     }
 
     // bypass audio enhancement processing
-    /*if (!pAudioEnhancementModule->audio_enhancement_enable) {
+    if (!pAudioEnhancementModule->audio_enhancement_enable) {
         if (inBuf->raw != outBuf->raw) {
             memcpy(outBuf->raw, inBuf->raw, src_data_bytes);
         }
         return 0;
-    }*/
+    }
 
     struct ring_buffer *input_rbuffer = &pAudioEnhancementModule->input_rbuffer;
     struct ring_buffer *output_rbuffer = &pAudioEnhancementModule->output_rbuffer;
@@ -420,9 +469,9 @@ int aml_audio_enhancement_module_process(void *handle, audio_buffer_t *inBuf, au
 
                     t_audio_enhancement_input.int_samples = (int *)pAudioEnhancementModule->input_samples;
                     t_audio_enhancement_output.int_samples = (int *)pAudioEnhancementModule->output_samples;
-                    t_audio_enhancement_input.enable = (int)pAudioEnhancementModule->audio_enhancement_enable;
-                    pstIvaEnhancementHandle->iva_process_int32(&t_audio_enhancement_input, &t_audio_enhancement_output,
-                                        pstIvaEnhancementHandle->nnans_imple[n], gain);
+
+                    pstIvaEnhancementHandle->iva_process_int32(pstIvaEnhancementHandle->nnans_imple[n],
+                        &t_audio_enhancement_input, &t_audio_enhancement_output);
 
                     for (int j = 0; j < AUDIO_ENHANCEMENT_FRAMECOUNT; j++) {
                         s32PackedOutBuf[i + j * nChannels] = output_samples[j];
@@ -446,9 +495,9 @@ int aml_audio_enhancement_module_process(void *handle, audio_buffer_t *inBuf, au
 
                     t_audio_enhancement_input.samples = (short *)pAudioEnhancementModule->input_samples;
                     t_audio_enhancement_output.samples = (short *)pAudioEnhancementModule->output_samples;
-                    t_audio_enhancement_input.enable = (int)pAudioEnhancementModule->audio_enhancement_enable;
-                    pstIvaEnhancementHandle->iva_process(&t_audio_enhancement_input, &t_audio_enhancement_output,
-                                        pstIvaEnhancementHandle->nnans_imple[n], gain);
+
+                    pstIvaEnhancementHandle->iva_process(pstIvaEnhancementHandle->nnans_imple[n],
+                        &t_audio_enhancement_input, &t_audio_enhancement_output);
 
                     for (int j = 0; j < AUDIO_ENHANCEMENT_FRAMECOUNT; j++) {
                         s16PackedOutBuf[i + j * nChannels] = output_samples[j];

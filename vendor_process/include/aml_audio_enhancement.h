@@ -23,7 +23,7 @@
 
 // max the processed channels
 #define MAX_AUDIO_ENHANCEMENT_INSTANCE              (2)
-#define MAX_AUDIO_ENHANCEMENT_GAIN                  (16)
+#define MAX_AUDIO_ENHANCEMENT_GAIN                  (15)
 #define MIN_AUDIO_ENHANCEMENT_GAIN                  (-15)
 
 typedef struct audio_enhancement_libraries_context_s {
@@ -35,15 +35,24 @@ typedef struct audio_enhancement_libraries_context_s {
     aai_iva_audio_enhancement_output_t t_audio_enhancement_output;
 
     iva_audio_enhancement_strut_t *(*iva_init)(aai_iva_audio_enhancement_param_t *pt_enhancement_param);
-    void (*iva_process)(aai_iva_audio_enhancement_input_t *pt_enhancement_input,
-        aai_iva_audio_enhancement_output_t *pt_enhancement_output, iva_audio_enhancement_strut_t *enhancement_imple, int db);
-    void (*iva_process_int32)(aai_iva_audio_enhancement_input_t *pt_enhancement_input,
-        aai_iva_audio_enhancement_output_t *pt_enhancement_output, iva_audio_enhancement_strut_t *enhancement_imple, int db);
-    void (*iva_deinit)(iva_audio_enhancement_strut_t *nnans_imple);
+    void (*iva_deinit)(iva_audio_enhancement_strut_t *enhancement_imple);
+    void (*iva_process)(iva_audio_enhancement_strut_t *enhancement_imple,
+        aai_iva_audio_enhancement_input_t *pt_enhancement_input,
+        aai_iva_audio_enhancement_output_t *pt_enhancement_output);
+    void (*iva_process_int32)(iva_audio_enhancement_strut_t *enhancement_imple,
+        aai_iva_audio_enhancement_input_t *pt_enhancement_input,
+        aai_iva_audio_enhancement_output_t *pt_enhancement_output);
+    void (*iva_enable)(iva_audio_enhancement_strut_t *enhancement_imple, bool enable);
+    void (*iva_clear)(iva_audio_enhancement_strut_t *enhancement_imple);
+    void (*iva_setparam)(iva_audio_enhancement_strut_t *enhancement_imple,
+        aai_iva_audio_enhancement_param_t *pt_enhancement_param);
+    void (*iva_getparam)(iva_audio_enhancement_strut_t *enhancement_imple,
+        aai_iva_audio_enhancement_param_t *pt_enhancement_param);
 } audio_enhancement_libraries_context_t;
 
 typedef struct aml_audio_enhancement_module_s {
     audio_enhancement_libraries_context_t iva_enhancement_handle;
+    aai_iva_audio_enhancement_param_t stEnhancementParam;
 
     audio_config_base_t audio_config;
     /* channel width 2ch for non-ms12 and 8ch for ms12 */

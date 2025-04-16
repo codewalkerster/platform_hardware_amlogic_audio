@@ -43,9 +43,6 @@
 #include "audio_post_process.h"
 #include "aml_dump_debug.h"
 
-//IVA AI prebuilt library
-static const char *AI_LIB_PATH = "/vendor/lib/libamlogic_ai_audio.so";
-
 /*
 IVA AI lib required condition:
   - input data format must be: 1ch/16bit/16000
@@ -533,7 +530,11 @@ int aml_ai_audio_module_init(struct aml_ai_audio_module *aiModule)
     struct ai_audio_libraries_context *aiLibContext = &aiModule->aiLib;
     int ret;
 
-    ret = iva_libraries_open(aiLibContext, AI_LIB_PATH);
+    ret = iva_libraries_open(aiLibContext, AUDIO_AI_LIB_PATH);
+    if (ret < 0) {
+        ALOGI("%s() try to dlopen() %s!", __func__, AUDIO_AI_LIB64_PATH);
+        ret = iva_libraries_open(aiLibContext, AUDIO_AI_LIB64_PATH);
+    }
     if (ret < 0) {
         ALOGE("%s() iva_libraries_open fail, return!",__func__);
         return ret;
