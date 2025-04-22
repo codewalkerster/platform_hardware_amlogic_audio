@@ -194,15 +194,9 @@ static dtsx_config_params_t _dtsx_config_params = {
     .limiter_type[DTSX_OUTPUT_SPK] = 0,
     .limiter_type[DTSX_OUTPUT_RAW] = 0,
     .limiter_type[DTSX_OUTPUT_HP] = 1,
-#ifndef TV_AUDIO_OUTPUT
     .drc_enable[DTSX_OUTPUT_SPK] = 0,   // PCM data route to hdmi.
     .drc_enable[DTSX_OUTPUT_RAW] = 0,   // Raw data route to spdif/hdmi.
     .drc_enable[DTSX_OUTPUT_HP] = 0,    // PCM data route to headphone/hdmi.
-#else
-    .drc_enable[DTSX_OUTPUT_SPK] = 1,   // PCM data route to speaker and headphone.
-    .drc_enable[DTSX_OUTPUT_RAW] = 0,   // Raw data route to spdif/(e)ARC.
-    .drc_enable[DTSX_OUTPUT_HP] = 0,    // PCM data route to spdif/(e)ARC.
-#endif
     .drc_profile[DTSX_OUTPUT_SPK] = DTSX2_DEC_DRC_PROFILE_LOW,
     .drc_profile[DTSX_OUTPUT_RAW] = DTSX2_DEC_DRC_PROFILE_LOW,
     .drc_profile[DTSX_OUTPUT_HP] =  DTSX2_DEC_DRC_PROFILE_LOW,
@@ -215,15 +209,9 @@ static dtsx_config_params_t _dtsx_config_params = {
     .drc_boost_value[DTSX_OUTPUT_SPK] = 100,
     .drc_boost_value[DTSX_OUTPUT_RAW] = 100,
     .drc_boost_value[DTSX_OUTPUT_HP] = 100,
-#ifndef TV_AUDIO_OUTPUT
     .loudness_enable[DTSX_OUTPUT_SPK] = 0,  // PCM data route to hdmi.
     .loudness_enable[DTSX_OUTPUT_RAW] = 0,  // Raw data route to spdif/hdmi.
     .loudness_enable[DTSX_OUTPUT_HP] = 0,   // PCM data route to headphone/hdmi.
-#else
-    .loudness_enable[DTSX_OUTPUT_SPK] = 1,  // PCM data route to speaker and headphone.
-    .loudness_enable[DTSX_OUTPUT_RAW] = 0,  // Raw data route to spdif/(e)ARC.
-    .loudness_enable[DTSX_OUTPUT_HP] = 0,   // PCM data route to spdif/(e)ARC.
-#endif
     .loudness_target[DTSX_OUTPUT_SPK] = -20,
     .loudness_target[DTSX_OUTPUT_RAW] = -31,
     .loudness_target[DTSX_OUTPUT_HP] = -20,
@@ -485,7 +473,7 @@ static int _dtsx_frame_scan(dtsx_dec_t *dts_dec)
                                 }
                             }
                         } else {
-                            if (read_pointer[3] != 0x1 && read_pointer[3] != 0x2) {
+                            if (read_pointer[1] != 0x1 && read_pointer[1] != 0x2) {
                                 ALOGV("NON DTS-HD Audio chunk\n");
                                 frame_size = 0;
                             } else {
@@ -1183,11 +1171,14 @@ int dtsx_decoder_init_patch(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_config)
     dec_pcm_data->buf = (unsigned char *)aml_audio_malloc(dec_pcm_data->buf_size);
     dec_raw_data->buf_size = MAX_DTS_RAW_OUTPUT_LENGTH * 2;
     dec_raw_data->buf = (unsigned char *)aml_audio_malloc(dec_raw_data->buf_size);
+    dtsx_dec->sample_convert_buf_size = dec_pcm_data->buf_size;
+    dtsx_dec->sample_convert_buf = (unsigned char *)aml_audio_malloc(dtsx_dec->sample_convert_buf_size);
     if (!dec_pcm_data->buf || !dec_raw_data->buf || !dtsx_dec->inbuf) {
         ALOGE("%s malloc memory failed!", __func__);
         goto DTSX_INIT_FAIL;
     }
     memset(dec_pcm_data->buf, 0, dec_pcm_data->buf_size);
+    memset(dtsx_dec->sample_convert_buf, 0, dtsx_dec->sample_convert_buf_size);
     memset(dec_raw_data->buf , 0, dec_raw_data->buf_size);
     memset(dtsx_dec->inbuf, 0, dtsx_dec->inbuf_size);
     memset(raw_in_data, 0, sizeof(dec_data_info_t));  ///< no use in DTSX
@@ -1319,6 +1310,8 @@ DTSX_INIT_FAIL:
 
 int dtsx_decoder_release_patch(aml_dec_t *aml_dec)
 {
+    if (!aml_dec)
+        return -1;
     dtsx_dec_t *dtsx_dec = (dtsx_dec_t *)aml_dec;
     struct aml_audio_device *adev = NULL;
     dec_data_info_t *dec_pcm_data = &aml_dec->dec_pcm_data;
@@ -1336,66 +1329,37 @@ int dtsx_decoder_release_patch(aml_dec_t *aml_dec)
     }
     _unload_dtsx_function_symbol(dtsx_dec);
 
-    if (dtsx_dec) {
-        if (dtsx_dec->init_argv[0]) {
-            aml_audio_free(dtsx_dec->init_argv[0]);
-            dtsx_dec->init_argv[0] = NULL;
-        }
-        if (dtsx_dec->inbuf) {
-            aml_audio_free(dtsx_dec->inbuf);
-            dtsx_dec->inbuf = NULL;
-        }
-        if (dec_pcm_data->buf) {
-            aml_audio_free(dec_pcm_data->buf);
-            dec_pcm_data->buf = NULL;
-        }
-        if (dec_raw_data->buf) {
-            aml_audio_free(dec_raw_data->buf);
-            dec_raw_data->buf = NULL;
-        }
-        if (dtsx_dec->resample_handle) {
-            aml_audio_resample_close(dtsx_dec->resample_handle);
-            dtsx_dec->resample_handle = NULL;
-        }
-        ring_buffer_release(&dtsx_dec->input_ring_buf);
-        ring_buffer_release(&dtsx_dec->spdif_ring_buffer);
 
-        if (_dtsx_debug.fp_input_raw) {
-            fclose(_dtsx_debug.fp_input_raw);
-            _dtsx_debug.fp_input_raw = NULL;
-        }
+    if (dtsx_dec->init_argv[0]) {
+        aml_audio_free(dtsx_dec->init_argv[0]);
+        dtsx_dec->init_argv[0] = NULL;
+    }
+    if (dtsx_dec->inbuf) {
+        aml_audio_free(dtsx_dec->inbuf);
+        dtsx_dec->inbuf = NULL;
+    }
+    if (dec_pcm_data->buf) {
+        aml_audio_free(dec_pcm_data->buf);
+        dec_pcm_data->buf = NULL;
+    }
+    if (dec_raw_data->buf) {
+        aml_audio_free(dec_raw_data->buf);
+        dec_raw_data->buf = NULL;
+    }
+    if (dtsx_dec->resample_handle) {
+        aml_audio_resample_close(dtsx_dec->resample_handle);
+        dtsx_dec->resample_handle = NULL;
+    }
+    if (dtsx_dec->sample_convert_buf) {
+        aml_audio_free(dtsx_dec->sample_convert_buf);
+        dtsx_dec->sample_convert_buf = NULL;
+    }
+    ring_buffer_release(&dtsx_dec->input_ring_buf);
+    ring_buffer_release(&dtsx_dec->spdif_ring_buffer);
 
-        if (_dtsx_debug.fp_dec_in_raw) {
-            fclose(_dtsx_debug.fp_dec_in_raw);
-            _dtsx_debug.fp_dec_in_raw = NULL;
-        }
-
-        if (_dtsx_debug.fp_decode_pcm) {
-            fclose(_dtsx_debug.fp_decode_pcm);
-            _dtsx_debug.fp_decode_pcm = NULL;
-        }
-
-        if (_dtsx_debug.fp_output_raw) {
-            fclose(_dtsx_debug.fp_output_raw);
-            _dtsx_debug.fp_output_raw = NULL;
-        }
-
-        if (_dtsx_debug.fp_spk_pcm) {
-            fclose(_dtsx_debug.fp_spk_pcm);
-            _dtsx_debug.fp_spk_pcm = NULL;
-        }
-
-        if (_dtsx_debug.fp_hp_pcm) {
-            fclose(_dtsx_debug.fp_hp_pcm);
-            _dtsx_debug.fp_hp_pcm = NULL;
-        }
-
-        adev = (struct aml_audio_device *)(aml_dec->dev);
-        memset(&adev->dts_x, 0, sizeof(dtsx_dec_t));
-        aml_dec->frame_cnt = 0;
-
-        aml_audio_free(dtsx_dec);
-        dtsx_dec = NULL;
+    if (_dtsx_debug.fp_input_raw) {
+        fclose(_dtsx_debug.fp_input_raw);
+        _dtsx_debug.fp_input_raw = NULL;
     }
 
     if (_dtsx_debug.fp_dec_in_raw) {

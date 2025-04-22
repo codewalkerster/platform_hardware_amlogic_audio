@@ -734,6 +734,10 @@ error:
             aml_audio_free(dec_raw_data->buf);
             dec_raw_data->buf = NULL;
         }
+        if (dts_dec->sample_convert_buf) {
+            aml_audio_free(dts_dec->sample_convert_buf);
+            dts_dec->sample_convert_buf = NULL;
+        }
         ring_buffer_release(&dts_dec->input_ring_buf);
         aml_audio_free(dts_dec);
         aml_dec = NULL;
@@ -765,6 +769,10 @@ int dca_decoder_release_patch(aml_dec_t *aml_dec)
         if (dec_raw_data->buf) {
             aml_audio_free(dec_raw_data->buf);
             dec_raw_data->buf = NULL;
+        }
+        if (dts_dec->sample_convert_buf) {
+            aml_audio_free(dts_dec->sample_convert_buf);
+            dts_dec->sample_convert_buf = NULL;
         }
         ring_buffer_release(&dts_dec->input_ring_buf);
 
