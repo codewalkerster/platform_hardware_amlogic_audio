@@ -140,7 +140,8 @@ void dtv_audio_sync_prepare (aml_dec_t *aml_dec, aml_audio_buffer_t *audioBuffer
 {
     if (aml_dec) {
         if (audioBuffer->apts != DTVSYNC_INVALID_PTS) {
-            if (audioBuffer->apts != 0) {
+            if (audioBuffer->apts != 0 &&
+                aml_dec->in_frame_pts != audioBuffer->apts) {
                 aml_dec->in_frame_pts = audioBuffer->apts;
                 aml_dec->out_frames = 0;
             }

@@ -885,7 +885,7 @@ int aml_audio_hwsync_lookup_apts(audio_hwsync_t *p_hwsync, uint64_t offset, uint
     if ((ret == 0) && audio_is_linear_pcm(hal_internal_format)) {
         int diff = 0;
         int pts_diff = 0;
-        uint32_t frame_size = out->hal_frame_size;
+        uint32_t frame_size = audio_bytes_per_frame(out->hal_ch, hal_internal_format);;
         uint32_t sample_rate  = out->hal_rate;
         diff = (offset >= nearest_offset) ? (offset - nearest_offset) : 0;
         if ((frame_size != 0) && (sample_rate != 0)) {
