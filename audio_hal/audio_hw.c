@@ -5933,10 +5933,9 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
 
     //this is a temp solution for DTS dca
     //dca not support multi instance, drop these data
-    if ((AUDIO_FORMAT_DTS == aml_out->hal_internal_format || AUDIO_FORMAT_DTS_HD == aml_out->hal_internal_format)
-        && (AML_WRITE_POLICY_REJECTION == aml_stream_check_dts_write_policy(aml_out))) {
+    if (is_dts_format(aml_out->hal_internal_format) && (AML_WRITE_POLICY_REJECTION == aml_stream_check_dts_write_policy(aml_out))) {
         AM_LOGW(" out stream:%p  drop this buffer.", aml_out);
-        aml_audio_sleep(32*1000);//sleep 32ms,one full frame/packet size
+        aml_audio_sleep(10*1000);//sleep 10ms,dts minimum frame is 10.66ms.
         return bytes;
     }
 

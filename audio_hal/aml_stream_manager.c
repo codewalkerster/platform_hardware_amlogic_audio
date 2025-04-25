@@ -133,11 +133,6 @@ int aml_stream_check_dts_write_policy(struct aml_stream_out *amlStream)
     aml_write_policy_type_t policyValue = AML_WRITE_POLICY_INVALID;
     uint32_t nodeIndex = 0;
 
-    //DTSX support multi instance.
-    if (eDTSXLib == adev->dts_lib_type) {
-        return AML_WRITE_POLICY_APPROVAL;
-    }
-
     //we need check if there is multi dts stream.
     //if yes, just the first stream can send data to decoder.
     if (!list_empty(&adev->stream_ListHead)) {
