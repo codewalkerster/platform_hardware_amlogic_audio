@@ -312,7 +312,10 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
 {
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
     struct aml_audio_device *adev = aml_out->dev;
+    /* The code logic isn't used now. Comment them first and will optimize it in future. */
+#if 0
     struct aml_audio_patch *patch = get_dev_patch(adev);
+#endif
     size_t out_frames = 0;
     size_t buffer_need_size = bytes + EFFECT_PROCESS_BLOCK_SIZE;
     int ch = audio_channel_count_from_out_mask(in_data_info->channel_mask);
@@ -540,7 +543,8 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
             out_data_info->channel_mask = AUDIO_CHANNEL_OUT_STEREO;
         }
     }
-
+    /* The code logic isn't used now. Comment them first and will optimize it in future. */
+#if 0
     if (adev->dev2mix_patch) {
         if (patch && (patch->need_do_avsync == true) && (patch->input_signal_stable == false) &&
             ((adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) || (adev->out_device & AUDIO_DEVICE_OUT_ALL_USB)) &&
@@ -553,7 +557,7 @@ ssize_t audio_hal_data_processing(struct audio_stream_out *stream,
            memset(adev->tmp_buffer_8ch, 0, (*output_buffer_bytes));
         }
     }
-
+#endif
     //AM_LOGI("-stream:%p bytes:%d hal_format:%x",aml_out, bytes, aml_out->hal_format);
     return 0;
 }
