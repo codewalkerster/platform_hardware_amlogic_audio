@@ -32,7 +32,7 @@
 #define AVSYNC_MS12_TUNNEL_VIDEO_DELAY                  (90)
 
 
-#define  AVSYNC_MS12_NONTUNNEL_PCM_LATENCY               (10)
+#define  AVSYNC_MS12_NONTUNNEL_PCM_LATENCY               (-20)
 #define  AVSYNC_MS12_NONTUNNEL_DDP_LATENCY               (20)
 #define  AVSYNC_MS12_NONTUNNEL_ATMOS_LATENCY             (15)
 #define  AVSYNC_MS12_NONTUNNEL_AC4_LATENCY               (40)
