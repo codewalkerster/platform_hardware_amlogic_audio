@@ -256,6 +256,8 @@ static int stdev_load_sound_model(const struct sound_trigger_hw_device *dev,
     ALOGI("%s stdev %p", __func__, stdev);
     int status = 0;
     set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
+    // Notify DSP that ffv has been turned on
+    aml_enable_ffv_to_dsp(true);
     pthread_mutex_lock(&stdev->lock);
     if (handle == NULL || sound_model == NULL) {
         pthread_mutex_unlock(&stdev->lock);
@@ -325,6 +327,8 @@ static int stdev_unload_sound_model(const struct sound_trigger_hw_device *dev,
     int status = 0;
     ALOGI("unload_sound_model:%d", handle);
     set_sound_trigger_cmd(SOUND_TRIGGER_CLOSE_DEVICE);
+    // Notify DSP that ffv has been turned off
+    aml_enable_ffv_to_dsp(false);
     pthread_mutex_lock(&stdev->lock);
 
     struct recognition_context *model_context = NULL;

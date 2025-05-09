@@ -62,10 +62,11 @@ int alsa_device_update_pcm_index_dsp(int alsaPORT, int stream);
 int pcm_read_dsp(void* hdl, void *data, unsigned int bytes);
 int fetch_suspend_data_from_dsp(void* buf);
 uint64_t pcm_get_timestamp_dsp(int sound_trigger_hdl_num, uint32_t sample_rate, unsigned int isOutput, uint64_t total_read, struct timespec ts);
-void switch_to_suspend(int sound_trigger_hdl_num);
+void send_ffv_suspend_status(int sound_trigger_hdl_num, bool ffv_status);
 
 void set_sound_trigger_cmd(int x);
 int get_sound_trigger_cmd(void);
 void callback_wakeup_event(void);
+void aml_enable_ffv_to_dsp(bool enable_ffv);
 
 #endif

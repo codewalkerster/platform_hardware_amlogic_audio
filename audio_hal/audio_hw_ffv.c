@@ -72,7 +72,7 @@ int sound_trigger_to_suspend(struct aml_stream_in *in)
         return 0;
     }
     if ((in->dsp_ffv_in_t->sound_trigger_handle > 0) && (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC)) {
-        switch_to_suspend(in->dsp_ffv_in_t->sound_trigger_handle);
+        send_ffv_suspend_status(in->dsp_ffv_in_t->sound_trigger_handle, true);
         adev->dsp_ffv->signal_thread = true;
         set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
     }

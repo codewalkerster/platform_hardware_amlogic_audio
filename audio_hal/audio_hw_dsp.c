@@ -63,9 +63,12 @@ void* pcm_open_dsp(unsigned int card,
     rpc_config.start_threshold = config->start_threshold;
     rpc_config.stop_threshold = config->stop_threshold;
     rpc_config.silence_threshold = config->silence_threshold;
-    rpc_config.period_count = 30; // dma buffer is 2s
+    rpc_config.period_count = 60; // dma buffer is 4s
     ALOGI("%s, %d, card=%u device=%u flags=%x channel=%d rate=%d card = %u format=%u period_size=%d period_count=%d\n",
             __func__, __LINE__, card, device, flags, rpc_config.channels, rpc_config.rate, card, rpc_config.format, rpc_config.period_size, rpc_config.period_count);
+
+    if (get_sound_trigger_cmd() == SOUND_TRIGGER_DEFAULT)
+        send_ffv_suspend_status(0, false);
 
     if (sound_trigger_hdl != NULL) {
         ALOGE("sound_trigger_hdl is exist %p\n", sound_trigger_hdl);
@@ -339,17 +342,33 @@ int get_sound_trigger_cmd(void)
     return sound_trigger_cmd;
 }
 
-void switch_to_suspend(int sound_trigger_hdl_num)
+void send_ffv_suspend_status(int sound_trigger_hdl_num, bool ffv_suspend_status)
 {
     vad_awe_wakeup_dsp param = {1, 1, 1, 0};
-    void* hdl = open_config->dsp_pcm_handles[sound_trigger_hdl_num];
-    struct tAmlPcmCtx* pcm_hdl = (struct tAmlPcmCtx*)hdl;
-    param.hdl = pcm_hdl->pcm_srv_hdl;
+
+    if (ffv_suspend_status) {
+        void* hdl = open_config->dsp_pcm_handles[sound_trigger_hdl_num];
+        struct tAmlPcmCtx* pcm_hdl = (struct tAmlPcmCtx*)hdl;
+
+        param.hdl = pcm_hdl->pcm_srv_hdl;
+    } else {
+        param.times = 0;
+        param.is_dsp_clk = 0;
+        param.is_arm_on = 0;
+    }
+    ALOGD("%s ffv_suspend_status=%d\n", __func__, ffv_suspend_status);
+
     int h = xAudio_Ipc_init();
+
     if (h < 0)
         return;
     xAIPC_SEND(h, MBX_CMD_VAD_AWE_WAKEUP, &param, sizeof(param));
     xAudio_Ipc_Deinit(h);
 }
 
+void aml_enable_ffv_to_dsp(bool enable_ffv)
+{
+    ALOGD("%s %d enable_ffv=%d\n", __func__, __LINE__, enable_ffv);
+    enable_ffv_to_dsp(enable_ffv);
+}
 
