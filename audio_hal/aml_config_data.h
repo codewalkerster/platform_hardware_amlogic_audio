@@ -95,6 +95,9 @@ struct audio_board_config {
     */
     int effect_DPE_Audio_Config;
     /*
+    */
+   int effect_aml_peq_Audio_Config;
+    /*
       0: hide Dolby DRC UI
       1: Display Dolby DRC UI
     */
@@ -121,10 +124,21 @@ struct audio_board_config {
     */
     int passthrough_Audio_Config;
     /*
+      0: hide EQ Volume UI
+      1: display EQ Volume UI
+    */
+    int volume_eq_config;
+    /*
       0: hide AI DE UI
       1: display AI DE UI
     */
     int ai_de_config;
+    /*
+      0: hide AI AQ UI
+      1: display AI AQ UI
+    */
+    int ai_aq_config;
+
     /*
       0: hide engineer Mode UI
       1: display engineer Mode UI
@@ -135,6 +149,19 @@ struct audio_board_config {
     struct karaoke_config usb_kara_config; /* usb karaoke config */
     struct karaoke_config linein_kara_config; /* linein karaoke config */
 #endif
+
+    /*
+      0: hide VAD Switch UI
+      1: display VAD Switch UI
+    */
+   int vad_Switch_Audio_Config;
+    /*
+      Currently, the OTT MS12 config X differs from the general MS12 config X
+      -1: Not support MS12
+      1: config with X but there are functional differences
+    */
+   int ott_dolby_ms12_audio_config;
+
 };
 
 int aml_audio_config_parser();
