@@ -3509,7 +3509,7 @@ int stereo_pcm_output(void *buffer, void *priv_data, size_t size, aml_ms12_dec_i
         //will not call the dap_pcm_output().
         if  (focus_stream_out && (adev->ms12.focus_audioformat == AUDIO_FORMAT_AC4)) {
             if (is_AC4_stream_with_pcm_sink_on_stb(focus_stream_out)) {
-                apply_volume(get_ac4_stream_volume(focus_stream_out), buffer, sizeof(uint16_t), size);
+                apply_volume(get_ac4_stream_volume(focus_stream_out), buffer, audio_bytes_per_sample(output_format), size);
             }
         }
         aml_audio_trace_int("stereo_output", size);
@@ -6587,7 +6587,17 @@ static bool ms12_config_decoder_volume(struct aml_stream_out *aml_out, aml_data_
     ms12_dec = aml_out->ms12_dec_handle;
     current_volume = aml_audio_ease_get_current_volume(&aml_out->volume_easing);
     target_volume = aml_out->volume_easing.target_volume;
-    next_volume = aml_out->volume_l;
+    //when Dolby MS12 use not 1.0 volume
+    //the PCM Render can not output at a same volume for both DDP and AC4.
+    //AC4 should use the 1.0 volume and control the volume through the PCM output.
+    //In the STB, PCM output will be always without DAP device processing.
+    //will not call the dap_pcm_output().
+    if (!is_AC4_stream_with_pcm_sink_on_stb(aml_out)) {
+        next_volume = aml_out->volume_l;
+    }
+    else {
+        next_volume = 1.0f;
+    }
 
     if (ms12_dec->is_muted) {
         next_volume = 0.0f;
