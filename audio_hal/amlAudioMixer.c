@@ -2878,7 +2878,7 @@ static ssize_t aml_out_write_to_mixer(struct audio_stream_out *stream, const voi
         || STREAM_PCM_HWSYNC == out->streamType
         || (STREAM_RAW_HWSYNC == out->streamType && adev->dolby_decode_enable)
         || (STREAM_RAW_DIRECT == out->streamType && adev->dolby_decode_enable))) {
-        out->audio_data_max_detect_time_ms = NETFLIX_FADEIN_MAX_DETECT_TIME_MS;
+        out->data_handle_info.max_detect_time_ms = NETFLIX_FADEIN_MAX_DETECT_TIME_MS;
         aml_audio_data_handle(stream, buffer, bytes);
     }
 

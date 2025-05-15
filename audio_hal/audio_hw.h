@@ -646,6 +646,15 @@ typedef enum audio_data_handle_state {
     AUDIO_DATA_HANDLE_MAX
 } audio_data_handle_state_t;
 
+typedef struct audio_data_handle_info {
+    audio_data_handle_state_t state;
+    uint64_t has_detected_bytes;
+    int max_detect_time_ms;
+    int easing_time;
+    int16_t *pcm16_buf;
+    size_t pcm16_buf_size;
+} audio_data_handle_info_st;
+
 typedef struct aml_stream_speed_info {
     float speed;
     float mPitch;
@@ -826,10 +835,7 @@ struct aml_stream_out {
     uint64_t alsa_write_frames;
     aml_audio_ease_t  *audio_stream_ease;
 	aml_audio_ease_config_t ease_config;
-    audio_data_handle_state_t audio_data_handle_state;
-    uint64_t audio_data_detected_bytes;
-    int audio_data_max_detect_time_ms;
-    uint16_t easing_time;
+    audio_data_handle_info_st data_handle_info;
     float output_speed;
     int dtvsync_enable;
 
@@ -888,6 +894,7 @@ struct aml_stream_out {
     bool enable_soundbar_mode;
     bool b_migrate_check;
     bool migrated_on_apu;
+    bool b_priority_check;
     pthread_mutex_t dec_MutexLock;
     void *aml_parser;
     pthread_mutex_t parser_MutexLock;

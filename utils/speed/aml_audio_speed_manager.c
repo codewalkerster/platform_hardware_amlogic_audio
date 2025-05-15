@@ -489,6 +489,13 @@ int aml_audio_speed_flush(aml_audio_speed_t *aml_audio_speed)
     if (speed_func) {
         speed_func->speed_flush(aml_audio_speed->speed_handle);
     }
+    aml_audio_speed->total_in = 0;
+    aml_audio_speed->total_out = 0;
+    aml_audio_speed->curr_speed_in_frames = 0;
+    aml_audio_speed->curr_speed_out_frames = 0;
+    aml_audio_speed->last_latency_frames = 0;
+    aml_audio_speed->bypass_mode = false;
+
     return 0;
 }
 

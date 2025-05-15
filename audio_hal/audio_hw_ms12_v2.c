@@ -204,6 +204,7 @@ typedef struct Aml_MS12_TempoInfo_s {
     char *pu8OutBuffer;
     unsigned int u32OutBufferSize;
     float f32TempoSpeed;
+    int s32InBufferAllocSize;
 } Aml_MS12_TempoInfo_t;
 
 static int ms12_update_decoded_info_process(struct audio_stream_out *stream, void *input_buffer, size_t input_bytes, int *ddp_1st_frame_size, int *ddp_1st_numblks);
@@ -778,6 +779,25 @@ void set_ms12_content_dialogue_enhancer(struct audio_stream_out *stream, int* co
     }
     ALOGI("stream:%p ms12_dec_handle:%p set content_de to %d,%d. ret %d",
              stream, aml_out->ms12_dec_handle, content_de[0], content_de[1], ret);
+}
+
+void set_ms12_decoder_sleep_time(struct audio_stream_out *stream, int time_us)
+{
+    struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
+    struct aml_audio_device *adev = aml_out->dev;
+    struct dolby_ms12_desc *ms12 = &(adev->ms12);
+    int ret = -1;
+
+    if (time_us <= 0 && time_us > 10*1000) {
+        ALOGE("%s : invalid time_us %d, use default value 1000", __func__, time_us);
+        time_us = 1000;
+    }
+
+    if (ms12 && aml_out->ms12_dec_handle) {
+        ret = aml_ms12_decoder_setparameter(ms12, aml_out->ms12_dec_handle, MS12_CODEC_PARAMETER_SLEEP_TIME_US, &time_us, sizeof(int));
+    }
+    ALOGI("stream:%p ms12_dec_handle:%p set sleeptime us %d. ret %d",
+             stream, aml_out->ms12_dec_handle, time_us, ret);
 }
 
 void set_ms12_decoder_parameters(struct aml_audio_device *adev, char * parm)
@@ -5201,6 +5221,10 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
 
     aml_ms12_decoder_register_callback(ms12, aml_out->ms12_dec_handle, MS12_CODEC_CALLBACK_PROCESS, ms12_process_callback, (void *)stream);
 
+    if (aml_out->is_netflix_src_stream) {
+        set_ms12_decoder_sleep_time(stream, 2000);
+    }
+
     if (is_asdk_test) {
         aml_volume_shaper_set_delay_frames(&aml_out->volume_shaper, 96 * 48);
     } else {
@@ -6584,6 +6608,7 @@ static int ms12_decoder_volume_process(struct aml_stream_out *aml_out, Aml_MS12_
     const int PROCESS_FRAMES = 256;  // process 256 samples each time, so that zero data detect more accurate.
     int debug_value = get_debug_value(AML_DEBUG_AUDIOHAL_VOLUME_SHAPER);
     char dump_path[64];
+    aml_audio_ease_t *p_volume_ease = &aml_out->volume_easing;
 
     memset(&data_format, 0, sizeof(data_format));
     data_format.sr = pstProcessInfo->s32SampleRate;
@@ -6626,10 +6651,16 @@ static int ms12_decoder_volume_process(struct aml_stream_out *aml_out, Aml_MS12_
             }
         }
 
+        // About 2.1s(256*400 frames) print once stream volume information.
+        aml_out->volume_shaper.s32RunCount++;
+        if ((aml_out->volume_shaper.s32RunCount % 400) == 0) {
+            debug_value |= 1;
+        }
+
         if (debug_value != 0) {
-            float current = aml_audio_ease_get_current_volume(&aml_out->volume_easing);
-            float next = aml_out->volume_easing.target_volume;
-            int ease_frames = aml_out->volume_easing.ease_frames;
+            float current = aml_audio_ease_get_current_volume(p_volume_ease);
+            float next = p_volume_ease->target_volume;
+            int ease_frames = p_volume_ease->ease_frames;
             AM_LOGD("stream:%p mute %d, current %f, next %f, s32InFrameType %d, s32Channel %d, ease_frames %d", aml_out,
                 ms12_dec->is_muted, current, next, pstProcessInfo->s32InFrameType, pstProcessInfo->s32Channel, ease_frames);
         }
@@ -6644,7 +6675,26 @@ static int ms12_decoder_volume_process(struct aml_stream_out *aml_out, Aml_MS12_
         if ((debug_value & AML_VOLUME_DEBUG_BYPASS_MASK) == AML_VOLUME_DEBUG_BYPASS_MASK) {
             AM_LOGD("stream:%p volume debug bypass enable ! (volume or mute request are ignored)", aml_out);
         } else {
-            aml_audio_ease_process(&aml_out->volume_easing, pu8Data, handle_frames * frame_size, true);
+            // reduce cpu loading
+            bool skip_easing = false;
+            if (is_float_equal(p_volume_ease->start_volume, p_volume_ease->target_volume) || aml_audio_ease_done(p_volume_ease)) {
+                if (is_float_equal(p_volume_ease->target_volume, 1.0f)) {
+                    skip_easing = true;
+                    if (debug_value) {
+                        ALOGD("%s stream %p volume is 1.0f, skip easing !", __func__, aml_out);
+                    }
+                } else if (is_float_equal(p_volume_ease->target_volume, 0.0f)) {
+                    skip_easing = true;
+                    memset(pu8Data, 0, handle_frames * frame_size);
+                }
+            }
+
+            if (skip_easing) {
+                p_volume_ease->ease_frames_elapsed = p_volume_ease->ease_frames;
+                p_volume_ease->do_easing = false;
+            } else {
+                aml_audio_ease_process(p_volume_ease, pu8Data, handle_frames * frame_size, true);
+            }
         }
 
         if (debug_value & AML_VOLUME_DEBUG_DUMP_MASK) {

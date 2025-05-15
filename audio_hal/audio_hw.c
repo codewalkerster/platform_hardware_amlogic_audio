@@ -108,6 +108,7 @@
 #include "tv_private_object.h"
 #include "hdmirx_utils.h"
 #include "aml_audio_enhancement.h"
+#include <sys/resource.h>
 
 #define ENABLE_NANO_NEW_PATH 1
 #if ENABLE_NANO_NEW_PATH
@@ -174,6 +175,7 @@
 #define DIRECT_DDP_BUFSIZE                              (768)
 
 #define NETFLIX_DDP_BUFSIZE                             (768)
+#define NETFLIX_DDP_ATMOS_BUFSIZE                       (1792)
 #define OUTPUT_PORT_MAX_COEXIST_NUM                     (3)
 
 /*Tunnel sync HEADER is 20 bytes*/
@@ -564,10 +566,15 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
          *every process time is too long, it will cause such case failed SWPL-41439
          */
         if (adev->is_netflix) {
+            int ddp_buffer_size = NETFLIX_DDP_BUFSIZE;
+            if (out->hal_format == AUDIO_FORMAT_E_AC3_JOC) {
+                ddp_buffer_size = NETFLIX_DDP_ATMOS_BUFSIZE;
+            }
+
             if (out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC) {
-                size = NETFLIX_DDP_BUFSIZE + TUNNEL_SYNC_HEADER_SIZE;
+                size = ddp_buffer_size + TUNNEL_SYNC_HEADER_SIZE;
             } else {
-                size = NETFLIX_DDP_BUFSIZE;
+                size = ddp_buffer_size;
             }
         }
         break;
@@ -3239,7 +3246,6 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->b_migrate_check = false;
     out->migrated_on_apu = false;
     out->audiomixer_standby = true;
-    out->audio_data_handle_state = AUDIO_DATA_HANDLE_START;
     out->last_timestamp_valid = false;
     out->is_ms12_main_decoder_disable = false;
     out->output_speed = 1.0f;
@@ -3320,6 +3326,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     aml_audio_speed_init_start_ts(&out->speed_info.start_ts);
     aml_stream_clear_speed_aux_info(out);
     aml_audio_speed_init_post_delay(&speed_info->post_delay, 48000);
+    aml_audio_data_handle_init((struct audio_stream_out *)out);
 
     out->current_digital_audio_format = adev->digital_audio_mode;
 
@@ -3561,6 +3568,11 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         ring_buffer_release(out->input_cache_rbuffer);
         aml_audio_free(out->input_cache_rbuffer);
         out->input_cache_rbuffer = NULL;
+    }
+    if (out->data_handle_info.pcm16_buf) {
+        aml_audio_free(out->data_handle_info.pcm16_buf);
+        out->data_handle_info.pcm16_buf = NULL;
+        out->data_handle_info.pcm16_buf_size = 0;
     }
 
     if (out->resample_outbuf) {
@@ -6003,6 +6015,14 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
             aml_audio_stream_migrate_to_apu(aml_out);
             aml_out->b_migrate_check = true;
         }
+        if (!aml_out->b_priority_check && aml_out->is_netflix_src_stream) {
+            if (aml_out->hal_format == AUDIO_FORMAT_E_AC3_JOC) {
+                // Atmos decoder needs more cpu, apply the highest priority in normal schedule class.
+                const int ANDROID_PRIORITY_HIGHEST = -20;
+                setpriority(PRIO_PROCESS, 0, ANDROID_PRIORITY_HIGHEST);
+            }
+            aml_out->b_priority_check = true;
+        }
     }
 
     if (aml_out->standby && (eDolbyMS12Lib == adev->dolby_lib_type_last || adev->useAudioMixer)) {
@@ -6011,6 +6031,7 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
         if (adev->is_netflix) {
             fadein_detect_time_ms = NETFLIX_FADEIN_MAX_DETECT_TIME_MS;
         }
+        aml_audio_data_handle_init(stream);
         set_ms12_fadein_max_detect_time_ms(fadein_detect_time_ms);
 
         aml_out->standby = false;
@@ -6524,7 +6545,7 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
         } else {
             /* audio zero data detect, and do fade in */
             if (adev->is_netflix && (STREAM_PCM_NORMAL == aml_out->streamType || STREAM_PCM_DEEP_BUF == aml_out->streamType)) {
-                aml_out->audio_data_max_detect_time_ms = fadein_detect_time_ms;
+                aml_out->data_handle_info.max_detect_time_ms = fadein_detect_time_ms;
                 aml_audio_data_handle(stream, buffer, bytes);
             }
 
@@ -6821,7 +6842,7 @@ ssize_t process_buffer_write(struct audio_stream_out *stream,
     }
 
     if ((eDolbyMS12Lib != adev->dolby_lib_type) && (STREAM_PCM_NORMAL == aml_out->streamType)) {
-        aml_out->audio_data_max_detect_time_ms = fadein_detect_time_ms;
+        aml_out->data_handle_info.max_detect_time_ms = fadein_detect_time_ms;
         aml_audio_data_handle(stream, buffer, bytes);
     }
 

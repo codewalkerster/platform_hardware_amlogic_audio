@@ -86,6 +86,8 @@ typedef enum {
     MS12_CODEC_PARAMETER_DEC_INFO = 25,
     MS12_CODEC_PARAMETER_CONTENT_VOLUME_LEVELER = 26,
     MS12_CODEC_PARAMETER_CONTENT_DIALOGUE_ENHANCER = 27,
+    MS12_CODEC_PARAMETER_HEAAC_DEFAULT_DIALNORM = 28,
+    MS12_CODEC_PARAMETER_SLEEP_TIME_US = 29,
     MS12_CODEC_PARAMETER_MAX,
 } ms12_codec_parameter_type_t;
 
@@ -140,7 +142,8 @@ typedef struct Aml_MS12_ProcessInfo_s {
     char *pu8OutBuffer;
     unsigned int u32OutBufferSize;
     int as32Acmod[2];
-    int as32Reserved[8];
+    int s32InBufferAllocSize;
+    int as32Reserved[7];
 } Aml_MS12_ProcessInfo_t;
 
 typedef struct Aml_MS12_DecInfo_s {

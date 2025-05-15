@@ -61,6 +61,7 @@ LOCAL_SHARED_LIBRARIES += \
     liblog                \
     libaudioutils         \
     libamaudioutils       \
+    libamaudioutils_boot  \
     libamavutils          \
     libam_adp
 

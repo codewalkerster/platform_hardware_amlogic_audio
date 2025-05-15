@@ -165,6 +165,18 @@ int aml_audio_ease_close(aml_audio_ease_t * ease_handle) {
     return 0;
 }
 
+int aml_audio_ease_done(aml_audio_ease_t * ease_handle)
+{
+    if (ease_handle == NULL) {
+        return 0;
+    }
+
+    if (ease_handle->ease_frames_elapsed >= ease_handle->ease_frames) {
+        return 1;
+    }
+    return 0;
+}
+
 int aml_audio_ease_config(aml_audio_ease_t * ease_handle, ease_setting_t *setting) {
 
     if (ease_handle == NULL || setting == NULL) {

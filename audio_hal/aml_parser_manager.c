@@ -233,6 +233,77 @@ static void _get_pParserFunc_and_Handle_from_pAmlParser(aml_parser_t *pAmlParser
     return;
 }
 
+static void* aml_parser_alloc_memory(aml_parser_t *pAmlParser, size_t require_size)
+{
+    int i = 0;
+    void *pBuffer = NULL;
+    parser_memory_item_t *pMemoryItem = NULL;
+
+    pthread_mutex_lock(&pAmlParser->memoryLock);
+    for (i = 0; i < AML_PARSER_CACHE_MEMORY_NUM; i++) {
+        pMemoryItem = &pAmlParser->memoryPool[i];
+        if (pMemoryItem->inUsed) {
+            continue;
+        } else {
+            if (aml_audio_check_and_realloc(&pMemoryItem->pBuffer, &pMemoryItem->bufferSize, require_size) == 0) {
+                pMemoryItem->inUsed = true;
+                pBuffer = pMemoryItem->pBuffer;
+            } else {
+                ALOGE("%s realloc size %zu fail !", __func__, require_size);
+            }
+            break;
+        }
+    }
+    pthread_mutex_unlock(&pAmlParser->memoryLock);
+
+    if (pBuffer == NULL) {
+        pBuffer = aml_audio_malloc(require_size);
+    }
+    return pBuffer;
+}
+
+static void aml_parser_free_memory(aml_parser_t *pAmlParser, void *buffer)
+{
+    int i = 0;
+    bool found = false;
+    parser_memory_item_t *pMemoryItem = NULL;
+
+    pthread_mutex_lock(&pAmlParser->memoryLock);
+    for (i = 0; i < AML_PARSER_CACHE_MEMORY_NUM; i++) {
+        pMemoryItem = &pAmlParser->memoryPool[i];
+        if (pMemoryItem->pBuffer == buffer) {
+            pMemoryItem->inUsed = false;
+            found = true;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&pAmlParser->memoryLock);
+
+    // this memory is not cached, just free directly
+    if (!found) {
+        aml_audio_free(buffer);
+    }
+}
+
+static void aml_parser_destroy_cache_memory(aml_parser_t *pAmlParser)
+{
+    int i = 0;
+    parser_memory_item_t *pMemoryItem = NULL;
+
+    pthread_mutex_lock(&pAmlParser->memoryLock);
+    for (i = 0; i < AML_PARSER_CACHE_MEMORY_NUM; i++) {
+        parser_memory_item_t *pMemoryItem = &pAmlParser->memoryPool[i];
+        if (pMemoryItem->pBuffer) {
+            ALOGD("%s i = %d, pBuffer = %p, bufferSize = %zu", __func__, i, pMemoryItem->pBuffer, pMemoryItem->bufferSize);
+            aml_audio_free(pMemoryItem->pBuffer);
+            pMemoryItem->pBuffer = NULL;
+            pMemoryItem->bufferSize = 0;
+            pMemoryItem->inUsed = false;
+        }
+    }
+    pthread_mutex_unlock(&pAmlParser->memoryLock);
+}
+
 //maybe there are multilevel parser invoked.
 //so add this parser callbak that can handle it.
 int parser_data_callback(void *priObject, void *aBuffer, void *pParserHandle)
@@ -279,7 +350,7 @@ int parser_data_callback(void *priObject, void *aBuffer, void *pParserHandle)
 #ifndef USE_CALLBACK_FOR_PARSER_TO_STREAM
     struct buffer_infos *pBuffInfos = (struct buffer_infos *)aml_audio_calloc(1, sizeof(struct buffer_infos));
     struct aml_audio_buffer *tmpABuffer = (struct aml_audio_buffer *)aml_audio_calloc(1, sizeof(aml_audio_buffer_t));
-    void *tmpbuf  = aml_audio_calloc(1, AUDIO_BUFFER_DATA_SIZE);
+    void *tmpbuf = aml_parser_alloc_memory(pAmlParser, inAudioBuffer->size*2);
     if (pBuffInfos && tmpABuffer && tmpbuf) {
         memcpy(tmpABuffer, inAudioBuffer, sizeof(aml_audio_buffer_t));
         tmpABuffer->pData = tmpbuf;
@@ -296,7 +367,7 @@ int parser_data_callback(void *priObject, void *aBuffer, void *pParserHandle)
             aml_audio_free(tmpABuffer);
         }
         if (tmpbuf) {
-            aml_audio_free(tmpbuf);
+            aml_parser_free_memory(pAmlParser, tmpbuf);
         }
     }
 #else
@@ -368,7 +439,7 @@ int aml_parser_flush(aml_parser_t *pAmlParser)
             struct aml_audio_buffer *audioBuffer = (struct aml_audio_buffer *)ptmp->pBuffer;
 
             //free audioBuffer mallocked in parser_data_callback.
-            aml_audio_free(audioBuffer->pData);
+            aml_parser_free_memory(pAmlParser, audioBuffer->pData);
             aml_audio_free(audioBuffer);
 
             //free buffer_infos
@@ -390,6 +461,7 @@ int aml_parser_flush(aml_parser_t *pAmlParser)
                 pParserFunc->f_flush(pAmlParser->parserInfos[i].pHandle);
             }
         }
+        aml_parser_destroy_cache_memory(pAmlParser);
     }
 
     return 0;
@@ -411,7 +483,7 @@ int aml_parser_get_buffer(aml_parser_t *pAmlParser, aml_audio_buffer_t **outBuff
             retValue = AML_AUDIO_BUFFER_VALID;
 
             //free audioBuffer mallocked in parser_data_callback.
-            aml_audio_free(audioBuffer->pData);
+            aml_parser_free_memory(pAmlParser, audioBuffer->pData);
             aml_audio_free(audioBuffer);
 
             //free buffer_infos
@@ -581,6 +653,7 @@ int aml_parser_init(aml_parser_t **ppAmlParser, parser_config_t *pConfig)
     }
 
     list_init(&pAmlParser->bufListHead);
+    pthread_mutex_init(&pAmlParser->memoryLock, NULL);
 
     *ppAmlParser = pAmlParser;
     retValue = 0;

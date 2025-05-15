@@ -572,9 +572,6 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
     struct aml_stream_out  *out = p_hwsync->aout;
     struct timespec ts;
     int pcr_pts_gap = 0;
-    int alsa_pcm_delay_frames = 0;
-    int alsa_bitstream_delay_frames = 0;
-    int ms12_pipeline_delay_frames = 0;
     bool amaster_mode = true;
     aml_stream_speed_info_t *speed_info = NULL;
 
@@ -610,9 +607,6 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
     }
     if (adev && (eDolbyMS12Lib == adev->dolby_lib_type)) {
         latency_frames = aml_audio_get_ms12_tunnel_latency(stream);
-        alsa_pcm_delay_frames = out_get_ms12_latency_frames(stream);
-        alsa_bitstream_delay_frames = out_get_ms12_bitstream_latency_ms(stream) * 48;
-        ms12_pipeline_delay_frames = dolby_ms12_main_pipeline_latency_frames(stream);
     } else {
         latency_frames = (int32_t)out_get_latency_frames(stream);
     }
@@ -624,7 +618,6 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
         if (p_hwsync->first_apts_flag == false && (apts >= abs(latency_pts) || latency_pts <= 0)) {
 
             ALOGI("%s apts =%" PRIx64 "", __func__, apts);
-            ALOGI("%s alsa pcm delay =%d bitstream delay =%d pipeline =%d", __func__, alsa_pcm_delay_frames, alsa_bitstream_delay_frames, ms12_pipeline_delay_frames);
             ALOGI("%s apts = 0x%" PRIx64 " (%" PRIu64 " ms) latency=0x%x (%d ms)", __func__, apts, apts / 90, latency_pts, latency_pts/90);
             ALOGI("%s aml_audio_hwsync_set_first_pts = 0x%" PRIx64 " (%" PRIu64 " ms)", __func__, apts - latency_pts, (apts - latency_pts)/90);
             apts64 = apts - latency_pts;
@@ -693,11 +686,6 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
 
                 if (debug_enable || abs(pcr_pts_gap) > 20) {
                     ALOGI("%s apts =%#" PRIx64 " %" PRIu64 " ms", __func__, apts, apts/90);
-                    ALOGI("%s alsa pcm delay =%d bitstream delay =%d pipeline =%d total =%d", __func__,
-                        alsa_pcm_delay_frames,
-                        alsa_bitstream_delay_frames,
-                        ms12_pipeline_delay_frames,
-                        latency_frames);
                     ALOGI("%s pcr =%" PRIu64 " ms pts =0x%" PRIx64 " %" PRIu64 " ms gap =%d ms", __func__, pcr / 90, apts64, apts64/90, pcr_pts_gap);
                     ALOGI("latency_frames =%d ms=%d", latency_frames, latency_frames / 48);
                     ALOGI("pts last =0x%" PRIx64 " now =0x%" PRIx64 " diff =%d ms time diff =%d ms jitter =%d ms",
@@ -730,12 +718,7 @@ int aml_audio_hwsync_audio_process(audio_hwsync_t *p_hwsync, uint64_t apts, int 
             }
 
         } else {
-            ALOGI("%s not ready  apts =%" PRIx64 "", __func__, apts);
-            ALOGI("%s alsa pcm delay =%d bitstream delay =%d pipeline =%d total =%d", __func__,
-                alsa_pcm_delay_frames,
-                alsa_bitstream_delay_frames,
-                ms12_pipeline_delay_frames,
-                latency_frames);
+            ALOGI("%s not ready  apts =%" PRIx64 ", latency_frames =%d", __func__, apts, latency_frames);
         }
     } else {
         //do nothing

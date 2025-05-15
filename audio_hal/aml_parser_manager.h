@@ -28,6 +28,8 @@
 //current not use callback, between parser and stream.
 //#define USE_CALLBACK_FOR_PARSER_TO_STREAM
 
+#define AML_PARSER_CACHE_MEMORY_NUM      4
+
 typedef enum aml_parser_type {
     AML_PARSER_INVALID = -1,
     AML_PARSER_HWSYNC = 0,
@@ -64,6 +66,12 @@ typedef struct parser_info {
     int  type;
 } parser_info_t;
 
+typedef struct parser_memory_item {
+    void *pBuffer;
+    bool inUsed;
+    size_t bufferSize;
+} parser_memory_item_t;
+
 typedef struct data_format {
     uint32_t sampleRate;
     audio_format_t format;
@@ -85,6 +93,8 @@ typedef struct aml_parser {
     data_format_t parsedFormat;
     uint64_t outApts;
     struct listnode bufListHead;
+    pthread_mutex_t memoryLock;
+    parser_memory_item_t memoryPool[AML_PARSER_CACHE_MEMORY_NUM];
 } aml_parser_t;
 
 

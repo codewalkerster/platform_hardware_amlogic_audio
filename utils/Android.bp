@@ -58,6 +58,7 @@ cc_library_shared {
         "ini/IniParser.cpp",
         "cJSON/cJSON.c",
         "aml_mlock_library.c",
+        "aml_malloc_debug.c",
     ],
 
     shared_libs: [
@@ -120,7 +121,6 @@ cc_library_shared {
         "aml_dump_debug.c",
         "aml_echo_reference.c",
         "aml_hw_mixer.c",
-        "aml_malloc_debug.c",
         "aml_ringbuffer.c",
         "aml_volume_utils.c",
         "spdifenc_wrap.cpp",
@@ -184,6 +184,7 @@ compile_multilib: "32",
         "libamaudioutils",
         "libcutils",
         "liblog",
+        "libamaudioutils_boot",
     ],
 
     header_libs: [

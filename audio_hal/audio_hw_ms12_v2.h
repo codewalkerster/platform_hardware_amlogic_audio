@@ -492,4 +492,6 @@ int get_ms12_codec_format_info(struct audio_stream_out *stream, struct codec_for
 int get_ms12_main_dec_info(struct audio_stream_out *stream, Aml_MS12_DecInfo_t *dec_info);
 int set_ms12_fadein_max_detect_time_ms(int time_ms);
 
+void set_ms12_decoder_sleep_time(struct audio_stream_out *stream, int time_us);
+
 #endif //end of _AUDIO_HW_MS12_H_

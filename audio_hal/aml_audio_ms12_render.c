@@ -296,6 +296,14 @@ int aml_audio_ms12_render(struct audio_stream_out *stream, void *abuffer)
          aml_out->hwsync->payload_offset += bytes;
     }
 
+    // system/deep buffer audio already handled in mixer_aux_buffer_write function
+    if (aml_out->is_netflix_src_stream
+        && audio_is_linear_pcm(aml_out->hal_format)
+        && (aml_out->flags & AUDIO_OUTPUT_FLAG_HW_AV_SYNC)) {
+        aml_out->data_handle_info.max_detect_time_ms = NETFLIX_FADEIN_MAX_DETECT_TIME_MS;
+        aml_audio_data_handle(stream, buffer, bytes);
+    }
+
     if (bypass_aml_dec) {
 #ifdef ENABLE_DVB_PATCH
         if (dtv_stream_flag) {

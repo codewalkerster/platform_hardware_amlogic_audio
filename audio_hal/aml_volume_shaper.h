@@ -39,6 +39,7 @@ typedef struct aml_volume_shaper {
     uint64_t          u64StartTimeUs;
 
     int               s32WriteTimeMs;
+    int               s32RunCount;
 } aml_volume_shaper_t;
 
 

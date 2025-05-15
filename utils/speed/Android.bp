@@ -45,5 +45,6 @@ cc_library_shared {
         "libutils",
         "libamaudioutils",
         "libsonic_ext",
+        "libamaudioutils_boot",
     ],
 }

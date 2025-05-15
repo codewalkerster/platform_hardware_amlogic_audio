@@ -87,6 +87,8 @@ int aml_audio_ease_init(aml_audio_ease_t ** ppease_handle);
 
 int aml_audio_ease_close(aml_audio_ease_t * ease_handle);
 
+int aml_audio_ease_done(aml_audio_ease_t * ease_handle);
+
 int aml_audio_ease_config(aml_audio_ease_t * ease_handle, ease_setting_t *setting);
 
 int aml_audio_ease_config_frame(aml_audio_ease_t * ease_handle, ease_setting_t *setting, aml_data_format_t *pdata_format);
