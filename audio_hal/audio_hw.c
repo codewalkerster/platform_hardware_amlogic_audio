@@ -109,6 +109,7 @@
 #include "hdmirx_utils.h"
 #include "aml_audio_enhancement.h"
 #include <sys/resource.h>
+#include "audio_mediasync_wrap.h"
 
 #define ENABLE_NANO_NEW_PATH 1
 #if ENABLE_NANO_NEW_PATH
@@ -2934,6 +2935,9 @@ int output_stream_hwsync_prepare(struct aml_stream_out *out, int hw_sync_id)
                 int retryCount = 0;
                 while (pMediaSyncHandle == NULL) {
                     pMediaSyncHandle = aml_audio_hwsync_create();
+                    if (pMediaSyncHandle) {
+                        aml_add_mediasync_info(adev->mediasync, pMediaSyncHandle, hw_sync_id);
+                    }
                     if (retryCount > 3) {
                         AM_LOGW(" create hwsync retryCount more than:%d", retryCount);
                         break;
@@ -4668,15 +4672,13 @@ static char *adev_get_parameters(const struct audio_hw_device *dev,
     if (!strcmp (keys, AUDIO_PARAMETER_HW_AV_SYNC) ) {
         ALOGI ("get hw_av_sync id\n");
         {
-            void *pMediaSync = aml_audio_hwsync_create();
+            void *pMediaSync = mediasync_wrap_create();
             if (pMediaSync != NULL) {
                 int32_t id = -1;
-                bool ret = aml_hwsync_wrap_get_id(pMediaSync, &id);
+                bool ret = mediasync_wrap_allocInstance(pMediaSync, 0, 0, &id);
+                mediasync_wrap_destroy(pMediaSync);
                 ALOGI ("ret: %d, id:%d\n", ret, id);
                 if (ret && id != -1) {
-                    pthread_mutex_lock(&adev->mediasync_lock);
-                    aml_add_mediasync_info(adev->mediasync, pMediaSync, id);
-                    pthread_mutex_unlock(&adev->mediasync_lock);
                     adev->hw_sync_id = id;
                     sprintf (temp_buf, "hw_av_sync=%d", id);
                     return strdup (temp_buf);

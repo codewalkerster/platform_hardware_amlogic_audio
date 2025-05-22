@@ -75,7 +75,7 @@
 #define HWSYNC_MAX_BODY_SIZE  (32768)  ///< Will do fine tune according to the bitstream.
 #define HWSYNC_MAX_METADATA_UNIT_SIZE  (16384) ///< Will do fine tune according to the bitstream.
 
-#define HW_SYNC_MAX 4
+#define HW_SYNC_MAX 10
 
 enum hwsync_status {
     CONTINUATION,  // good sync condition
