@@ -72,19 +72,6 @@ typedef struct parser_memory_item {
     size_t bufferSize;
 } parser_memory_item_t;
 
-typedef struct data_format {
-    uint32_t sampleRate;
-    audio_format_t format;
-    audio_format_t subFormat;
-    uint32_t channelCount;
-    audio_channel_mask_t channelMask;
-} data_format_t;
-
-typedef struct parser_config {
-    bool isHwsyncFlag;
-    void *pAmlStream;
-    data_format_t dataFormat;
-} parser_config_t;
 
 typedef struct aml_parser {
     parser_info_t parserInfos[AML_PARSER_MAX];

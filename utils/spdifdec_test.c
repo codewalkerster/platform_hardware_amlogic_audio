@@ -61,7 +61,7 @@ int main(int argc, char * argv[])
         goto ERROR;
     }
 
-    ret = aml_spdif_decoder_open((void **)&p_spdifdec);
+    ret = aml_spdif_decoder_open((void **)&p_spdifdec, NULL);
     if (ret) {
         fprintf(stderr, "SPDIF decoder initialization failed!");
         ALOGE("SPDIF decoder initialization failed!");

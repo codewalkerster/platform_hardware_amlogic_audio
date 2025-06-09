@@ -41,12 +41,14 @@ struct aml_dts_parser {
     int32_t buf_remain;
     uint32_t status;
     int32_t framesize;
+    bool is_sub_parser;
 };
 
 
-int aml_dts_parser_open(void **pparser_handle)
+int aml_dts_parser_open(void **pparser_handle, void *pParserConfig)
 {
     struct aml_dts_parser *aml_parser_handle = NULL;
+    parser_config_t *pConfig = (parser_config_t *)pParserConfig;
 
     aml_parser_handle = (struct aml_dts_parser *)aml_audio_calloc(1, sizeof(struct aml_dts_parser));
     if (aml_parser_handle == NULL) {
@@ -64,6 +66,9 @@ int aml_dts_parser_open(void **pparser_handle)
     }
     //aml_parser_handle->status = PARSER_SYNCING;
     aml_parser_handle->buf_remain = 0;
+    if (pConfig) {
+        aml_parser_handle->is_sub_parser = pConfig->isSubParser;
+    }
     *pparser_handle = aml_parser_handle;
     AM_LOGI("%s exit =%p", __func__, aml_parser_handle);
     return 0;
@@ -144,9 +149,9 @@ int dts_parsing_data_process(void *phandle, const void *inABuffer, void *outABuf
     int32_t usedBytes = 0, totalUsedBytes = 0;
     int32_t inSize = (int32_t)inBytes;
     char *inBuf = (char *)inBuffer;
-    //AM_LOGI("phandle:%p inBuffer:%p inBytes:%zu parser_callback:%p", phandle, inBuffer, inBytes, parser_callback);
+    struct aml_dts_parser *pParserHanle = (struct aml_dts_parser *)phandle;
+    bool is_sub_parser = pParserHanle->is_sub_parser;
 
-    //keep parsing the inBuffer until parse finished.
     do {
         aml_dts_parser_process(phandle, inBuf, inSize, &usedBytes, &outBuffer, &outBytes, &dts_info);
         totalUsedBytes += usedBytes;
@@ -162,15 +167,22 @@ int dts_parsing_data_process(void *phandle, const void *inABuffer, void *outABuf
             outAudioBuffer->pData = outBuffer;
             outAudioBuffer->size = outBytes;
             outAudioBuffer->apts = audioBuffer->apts;
-            //outAudioBuffer->bufFormat.format = audioBuffer->bufFormat.format;
             memcpy(&outAudioBuffer->bufFormat, &audioBuffer->bufFormat, sizeof(buffer_data_format_t));
 
             retValue = (*__callback)(pCallback->common.pAmlParser, outAudioBuffer, phandle);
         }
-        //AM_LOGI("phandle:%p inBuf:%p inSize(leftBytes):%d %d,  used_bytes:%d totalUsedBytes:%d outBuffer:%p out_frame_size:%d  dts_info.frame_size:%d",
-        //    phandle, inBuf, inSize, leftBytes, usedBytes, totalUsedBytes, outBuffer, outBytes, dts_info.frame_size);
-    } while (inSize > 0);
+        AM_LOGV(" is_sub_parser:%d, phandle:%p inBuf:%p inSize(leftBytes):%d %d,  used_bytes:%d totalUsedBytes:%d outBuffer:%p out_frame_size:%d  dts_info.frame_size:%d",
+            is_sub_parser, phandle, inBuf, inSize, leftBytes, usedBytes, totalUsedBytes, outBuffer, outBytes, dts_info.frame_size);
 
+        /*if it is sub parser, shouldn't break directly.
+         *one hwsync packet maybe contains multi data frames,
+         *so it should loop parse all frames.
+         */
+        if (!is_sub_parser) {
+            retValue = usedBytes;
+            break;
+        }
+    } while (inSize > 0);
 
     return retValue;
 }

@@ -18,7 +18,24 @@
 #ifndef _AML_PARSER_COMMON_H_
 #define _AML_PARSER_COMMON_H_
 
+#include <system/audio.h>
+
 typedef int (*Func_Write_CallBack)(void *priObject, void *aBuffer, void *pHandle);
+
+typedef struct data_format {
+    uint32_t sampleRate;
+    audio_format_t format;
+    audio_format_t subFormat;
+    uint32_t channelCount;
+    audio_channel_mask_t channelMask;
+} data_format_t;
+
+typedef struct parser_config {
+    bool isHwsyncFlag;
+    void *pAmlStream;
+    data_format_t dataFormat;
+    bool isSubParser;
+} parser_config_t;
 
 typedef struct aml_parser_data_callback {
     union {
@@ -29,7 +46,7 @@ typedef struct aml_parser_data_callback {
 } aml_parser_data_callback_t;
 
 
-typedef int (*F_Parser_Init)(void **ppParserHandle);
+typedef int (*F_Parser_Init)(void **ppParserHandle, void *pParserConfig);
 typedef int (*F_Parser_DeInit)(void *pParserHandle);
 typedef int (*F_Parser_Process)(void *pParserHandle, const void *inABuffer, void *outABuffer, void *parser_callback);
 typedef int (*F_Parser_Reset)(void *pParserHandle);

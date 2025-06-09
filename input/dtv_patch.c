@@ -310,12 +310,12 @@ int audio_dtv_patch_parser_process_write(struct package *p_package,
     if (instance->aformat == AUDIO_FORMAT_AC3 ||
         instance->aformat == AUDIO_FORMAT_E_AC3) {
         if (!instance->ac3_parser_handle) {
-            aml_ac3_parser_open(&instance->ac3_parser_handle);
-            ALOGI("instance->ac3_parser_handle %p", instance->ac3_parser_handle);
+            aml_ac3_parser_open(&instance->ac3_parser_handle, NULL);
+            AM_LOGI("instance->ac3_parser_handle %p", instance->ac3_parser_handle);
         }
         if (dtv_audio_info->dual_decoder_support) {
             if (!instance->ad_ac3_parser_handle) {
-                aml_ac3_parser_open(&instance->ad_ac3_parser_handle);
+                aml_ac3_parser_open(&instance->ad_ac3_parser_handle, NULL);
             }
         } else {
             if (instance->ad_ac3_parser_handle) {
@@ -466,7 +466,7 @@ int audio_dtv_patch_parser_process_write(struct package *p_package,
         }
     } else if (instance->aformat == AUDIO_FORMAT_AC4) {
         if (!instance->ac4_parser_handle) {
-            aml_ac4_parser_open(&instance->ac4_parser_handle);
+            aml_ac4_parser_open(&instance->ac4_parser_handle, NULL);
         }
         void *main_frame_buffer = p_package->data;
         int main_frame_size = p_package->size;

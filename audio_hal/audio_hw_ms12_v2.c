@@ -2716,7 +2716,7 @@ int ac3_and_eac3_bypass_process(struct audio_stream_out *stream, void *buffer, s
         int32_t bytes_left = bytes;
 
         if (!aml_out->ac3_parser_init) {
-            aml_ac3_parser_open(&aml_out->ac3_parser_handle);
+            aml_ac3_parser_open(&aml_out->ac3_parser_handle, NULL);
             aml_out->ac3_parser_init = true;
         }
 
@@ -5259,11 +5259,11 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
     }
     aml_volume_shaper_enable_debug(&aml_out->volume_shaper, get_debug_value(AML_DEBUG_AUDIOHAL_VOLUME_SHAPER) != 0 ? true : false);
 
-    aml_ac3_parser_open(&ms12_dec->ac3_parser_handle);
-    aml_ac3_parser_open(&ms12_dec->info_ac3_parser_handle);
+    aml_ac3_parser_open(&ms12_dec->ac3_parser_handle, NULL);
+    aml_ac3_parser_open(&ms12_dec->info_ac3_parser_handle, NULL);
     aml_truehd_parser_open(&ms12_dec->truehd_parser_handle);
-    aml_spdif_decoder_open(&ms12_dec->spdif_dec_handle);
-    aml_spdif_decoder_open(&ms12_dec->info_spdif_dec_handle);
+    aml_spdif_decoder_open(&ms12_dec->spdif_dec_handle, NULL);
+    aml_spdif_decoder_open(&ms12_dec->info_spdif_dec_handle, NULL);
     aml_ms12_bypass_open(&ms12_dec->ms12_bypass_handle);
 
     adev->focus_ms12_stream = aml_out;

@@ -407,7 +407,7 @@ int aml_parser_process(aml_parser_t *pAmlParser, const void *aBuffer, void *pCal
             .callback = parser_data_callback,
         };
 
-        pParserFunc->f_process(pParserHandle, aBuffer, outAudioBuffer, (void *)(&parserCallback));
+        ret = pParserFunc->f_process(pParserHandle, aBuffer, outAudioBuffer, (void *)(&parserCallback));
     }
 
     return ret;
@@ -571,7 +571,7 @@ static int _create_parser_and_config_parserinfo(aml_parser_t *pAmlParser, audio_
         if (pParserConfig->isHwsyncFlag) {
             pParserHandle = (void *)pParserConfig->pAmlStream;
         }
-        retValue = pParserFunc->f_init(&pParserHandle);
+        retValue = pParserFunc->f_init(&pParserHandle, pParserConfig);
     } else {
         AM_LOGE("get pParserFunc failed, errno:%d %s\n", errno, strerror(errno));
         retValue = -1;
@@ -629,19 +629,27 @@ int aml_parser_init(aml_parser_t **ppAmlParser, parser_config_t *pConfig)
     parser_config_t *pParserConfig = &(pAmlParser->parserConfig);
     audio_format_t inFormat = pParserConfig->dataFormat.format;
     bool isHwsyncParser = pParserConfig->isHwsyncFlag;
+    bool isHwsyncParserCreated = false;
 
     /*check whether hwsync need first*/
     if (isHwsyncParser) {
+        pParserConfig->isSubParser = false;
         retValue = _create_parser_and_config_parserinfo(pAmlParser, inFormat, isHwsyncParser);
         if (retValue < 0) {
             AM_LOGE("_create_parser_and_config_parserinfo failed, errno:%d %s\n", errno, strerror(errno));
             retValue = -1;
             goto err_create_parser;
         }
+        isHwsyncParserCreated = true;
     }
 
     /*if it is we only need parser IEC format, not need to parser more*/
     if (is_raw_parser_support(pParserConfig->dataFormat.format)) {
+        if (isHwsyncParserCreated) {
+            pParserConfig->isSubParser = true;
+        } else {
+            pParserConfig->isSubParser = false;
+        }
         inFormat = pParserConfig->dataFormat.format;
         isHwsyncParser = false;//sub parser can't be hwsync type.
         retValue = _create_parser_and_config_parserinfo(pAmlParser, inFormat, isHwsyncParser);

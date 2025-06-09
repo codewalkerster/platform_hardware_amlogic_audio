@@ -3321,7 +3321,7 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     }
 
     if (out->hal_format == AUDIO_FORMAT_AC4) {
-        aml_ac4_parser_open(&out->ac4_parser_handle);
+        aml_ac4_parser_open(&out->ac4_parser_handle, NULL);
     }
     aml_audio_speed_init_start_ts(&out->speed_info.start_ts);
     aml_stream_clear_speed_aux_info(out);
@@ -7142,13 +7142,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
      * pthread_mutex_unlock(&aml_out->lock);
      */
     pthread_mutex_lock(&adev->lock);
-    ret = _get_stream_write_func(aml_out);
-    if (ret < 0) {
-        AM_LOGE("%s() failed", __func__);
-        pthread_mutex_unlock(&adev->lock);
-        aml_audio_trace_int("out_write_new", 0);
-        return ret;
-    }
+    _get_stream_write_func(aml_out);
     pthread_mutex_unlock(&adev->lock);
 
 
@@ -7165,8 +7159,6 @@ ssize_t out_write_new(struct audio_stream_out *stream,
         audioBuffer->bufFormat.channelMask = aml_out->hal_channel_mask;
         audioBuffer->bufFormat.format = aml_out->hal_internal_format;
         audioBuffer->bufFormat.sampleRate = aml_out->hal_rate;
-
-        //audioBuffer->isPassthroughMode
     } else {
         AM_LOGW(" audio_buffer:%p, please check it.", aml_out->audio_buffer);
     }
@@ -7192,10 +7184,9 @@ ssize_t out_write_new(struct audio_stream_out *stream,
             pthread_mutex_unlock(&aml_out->parser_MutexLock);
             return ret;
         }
-
         do {
-            int ret = aml_parser_get_buffer(aml_out->aml_parser, &tmpABuffer, &tmpbuf);
-            if (tmpABuffer) {
+            int retValue = aml_parser_get_buffer(aml_out->aml_parser, &tmpABuffer, &tmpbuf);
+            if (tmpABuffer && retValue == AML_AUDIO_BUFFER_VALID) {
                 tmpABuffer->pData = tmpbuf;
                 //AM_LOGI(" buffer:%p bytes:%zu outApts:0x%" PRIx64 " (%" PRIu64 " ms) ",
                 //    tmpABuffer->pData, tmpABuffer->size, tmpABuffer->apts, tmpABuffer->apts/90);
@@ -7205,9 +7196,14 @@ ssize_t out_write_new(struct audio_stream_out *stream,
                 }
             }
 
-            if (ret == AML_AUDIO_BUFFER_VALID) {
+            if (retValue == AML_AUDIO_BUFFER_VALID) {
                 aml_out->write(stream, tmpABuffer);
             } else {
+                break;
+            }
+
+            if (aml_out->is_insert_zero_data) {
+                AM_LOGD("insert_zero_data state,exit the loop");
                 break;
             }
         } while (!aml_out->pause_status);
@@ -7249,7 +7245,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
     }
 
     if (adev->debug_flag > 1) {
-        ALOGI("--- write_count:%d, ret %zd,%p total_write_size:%"PRIu64", hwsync_parsed_frames_sum:%"PRIu64"",
+        AM_LOGI("--- write_count:%d, ret %zd, %p total_write_size:%"PRIu64", hwsync_parsed_frames_sum:%"PRIu64"",
             aml_out->write_count, ret, stream, aml_out->total_write_size, aml_out->hwsync_parsed_frames_sum);
     }
 

@@ -995,12 +995,11 @@ static int aml_hwsync_data_process(void *pHwsync, const void *inABuffer, void *o
     int retValue = 0;
     int consumed_bytes = 0, parsed_size = 0;
 
-hwsync_rewrite:
     consumed_bytes = aml_audio_hwsync_data_parser(pHwsync, inBuffer, inBytes, parsed_size, &outBuffer, &outBytes, &outPts);
     parsed_size += consumed_bytes;
 
-    //AM_LOGI("  inBytes:%zu  parsed_size:%d  consumed_bytes:%d  outBuffer:%p outBytes:%zu outPts:%"PRIu64" ",
-    //    inBytes, parsed_size, consumed_bytes, outBuffer, outBytes, outPts);
+    AM_LOGV("  inBytes:%zu  parsed_size:%d  consumed_bytes:%d  outBuffer:%p outBytes:%zu outPts:%"PRIu64" ",
+        inBytes, parsed_size, consumed_bytes, outBuffer, outBytes, outPts);
     if (parser_callback && outBytes && outBuffer) {
         aml_parser_data_callback_t *pCallback = (aml_parser_data_callback_t *)parser_callback;
         Func_Write_CallBack __callback = pCallback->callback;
@@ -1013,32 +1012,11 @@ hwsync_rewrite:
         retValue = (*__callback)(pCallback->common.pAmlParser, outAudioBuffer, pHwsync);
     }
 
-
-    if (consumed_bytes > 0 &&  inBytes > parsed_size) {//need to keep parser
-
-        /* We need to wait for Google to fix the issue:
-         * Issue: After pause, there will be residual sound in AF, which will cause NTS fail.
-         * Now we need to judge whether the current format is DTS */
-        // this dts decoding more frames logic should be put to decoder module.
-        if (false && is_dts_format(aml_out->hal_internal_format)) {
-            // For some low bitrate streams, we need to decode more frames to avoid underrun.
-            // (DTSHD_PERIOD_SIZE) is the value after tuning.
-            if (parsed_size < DTSHD_PERIOD_SIZE) {
-                goto hwsync_rewrite;
-            } else {
-                return parsed_size;
-            }
-        } else {
-            goto hwsync_rewrite;
-        }
-    } else {//input data was parsed completely.
-        ret = parsed_size;
-    }
-
+    ret = parsed_size;
     return ret;
 }
 
-static int aml_get_hwsync_parser_instance(void **pphandle)
+static int aml_get_hwsync_parser_instance(void **pphandle, void *pParserConfig __unused)
 {
     *pphandle;
     struct aml_stream_out *pAmlStream = (struct aml_stream_out *)*pphandle;

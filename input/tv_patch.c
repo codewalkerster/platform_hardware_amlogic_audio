@@ -848,8 +848,25 @@ void *audio_patch_output_threadloop(void *data)
                 stream_check_reconfig_param(stream_out);
             }
 
-            out_write_new(stream_out, patch->out_buf, ret);
-
+            {//loop write buff data
+                int32_t left_bytes = ret;
+                ssize_t used_bytes = 0;
+                int retry_count = 0;
+                char *buff = (char *)patch->out_buf;
+                do {
+                    used_bytes = out_write_new(stream_out, buff, left_bytes);
+                    if (used_bytes > 0) {
+                        buff = buff + used_bytes;
+                        left_bytes -= used_bytes;
+                    } else {
+                        retry_count++;
+                        if (used_bytes < 0 || retry_count > 10) {
+                            AM_LOGW("  used_bytes:%d  retry_count:%d", (int)used_bytes, retry_count);
+                            break;
+                        }
+                    }
+                } while (left_bytes > 0);
+            }
         } else {
             ALOGV("%s(), no enough data in ring buffer, available data size:%d, need data size:%d", __func__,
                 get_buffer_read_space(ringbuffer), (write_bytes * period_mul));
