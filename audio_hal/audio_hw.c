@@ -3828,6 +3828,10 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
                 }
                 adev->address = str_parms_to_str(parms);
                 AM_LOGI("tag=usb update address=%p/'%s'", adev->address, adev->address);
+                //mute hdmi-out when usb connect
+                if (device & AUDIO_DEVICE_OUT_ALL_USB) {
+                    _control_hdmi_mute_state(adev, AUDIO_DEVICE_OUT_USB_DEVICE, true);
+                }
             }
         }
     } else {
@@ -3851,6 +3855,10 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
             } else if (device &  AUDIO_DEVICE_OUT_ALL_USB ||
                        device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE||
                        device & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
+                //unmute hdmi-out when usb disconnect
+                if (device & AUDIO_DEVICE_OUT_ALL_USB) {
+                    _control_hdmi_mute_state(adev, AUDIO_DEVICE_OUT_USB_DEVICE, false);
+                }
                 adev->out_device &= (~device);
                 AM_LOGI("tag=usb disconnect address=%p", adev->address);
                 free(adev->address);
