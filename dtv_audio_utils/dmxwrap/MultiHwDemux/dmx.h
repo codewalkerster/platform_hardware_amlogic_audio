@@ -87,6 +87,8 @@ typedef enum dmx_input
 #define ACODEC_FMT_WMAVOI 28
 #define ACODEC_FMT_AC4 29
 
+#define ACODEC_FMT_MHAS 38   /*MPEGH format define*/
+
 
 typedef enum dmx_ts_pes
 {
@@ -204,6 +206,7 @@ enum dmx_audio_format {
         MEDIA_PES_SUB = 7,  /* PES format subtitle/audio stream */
         MEDIA_PTS_PACK = 8, /* PTS pack in proprietary format */
         AUDIO_AC4 = 9,      /* AC4 */
+        AUDIO_MHAS = 10,      /* MPEGH */
         AUDIO_MAX,
 };
 

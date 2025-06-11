@@ -2376,6 +2376,8 @@ int android_fmt_convert_to_dmx_fmt(audio_format_t android_fmt) {
             return ACODEC_FMT_EAC3;
         case AUDIO_FORMAT_MP3:
             return ACODEC_FMT_MPEG;
+        case AUDIO_FORMAT_MPEGH:
+            return ACODEC_FMT_MHAS;
         case AUDIO_FORMAT_PCM:
             return ACODEC_FMT_PCM_S16LE;
         case AUDIO_FORMAT_AC4:
@@ -2406,7 +2408,7 @@ audio_format_t tunerhal_fmt_to_native_fmt(int audioFormat) {
     case TUNERHAL_MPEG2:
         return AUDIO_FORMAT_MP3;
     case TUNERHAL_MPEGH:
-        return AUDIO_FORMAT_MP3;
+        return AUDIO_FORMAT_MPEGH;
     case TUNERHAL_AAC:
     case TUNERHAL_AAC_ADTS:
     case TUNERHAL_AAC_HE_ADTS:

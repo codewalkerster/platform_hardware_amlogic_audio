@@ -499,6 +499,8 @@ audio_format_t aml_fmt_convert_to_android_fmt(int aml_fmt)
         case ACODEC_FMT_MPEG1:
         case ACODEC_FMT_MPEG2:
             return AUDIO_FORMAT_MP2;
+        case ACODEC_FMT_MHAS:
+            return AUDIO_FORMAT_MPEGH;
         case ACODEC_FMT_PCM_S16LE:
             return AUDIO_FORMAT_PCM;
         case ACODEC_FMT_AC4:

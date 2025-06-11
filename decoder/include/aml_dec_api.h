@@ -57,6 +57,8 @@
 #define ACODEC_FMT_AC4    29
 #define ACODEC_FMT_HEAAC_V1  35
 #define ACODEC_FMT_HEAAC_V2  36
+#define ACODEC_FMT_MHAS    38   /*MPEGH format define*/
+
 #define DDP_DECODER_CACHE 32 * 90 /* ddp decoder cache es data one frame 32ms */
 
 typedef enum {
