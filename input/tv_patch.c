@@ -186,7 +186,7 @@ static bool reconfig_stream_param(struct aml_stream_in *stream_in, struct aml_au
         patch->input_sample_rate = 48000;
         if (type == MULTICH_LPCM) {
             channel = 8;
-            buf_size = DEFAULT_PLAYBACK_PERIOD_SIZE * PLAYBACK_PERIOD_COUNT * 4;
+            buf_size = patch->in_buf_size * 3;
             if (patch->input_sample_rate > 96000) {
                 period_size = DEFAULT_CAPTURE_PERIOD_SIZE * 4;
             } else if (patch->input_sample_rate > 48000) {
@@ -572,8 +572,18 @@ void *audio_patch_input_threadloop(void *data)
                     retry = 1;
                     first_start = true;
                     /* if ringbuffer is full enough but no output, reset ringbuffer, wait a short while, go to read once more */
-                    ALOGD("%s(), ring buffer no space to write, buffer free size:%d, need write size:%d", __func__,
-                        get_buffer_write_space(ringbuffer), bytes_avail);
+                    ALOGD("%s(), ring buffer no space to write, buffer free size:%d, need write size:%d, total buffer size:%d", __func__,
+                        get_buffer_write_space(ringbuffer), bytes_avail, ringbuffer->size);
+                    if (bytes_avail >= ringbuffer->size) {
+                        AM_LOGE("****FATAL**** error(buffer too small): write size: %d >= buffer_size:%d, TEMP enlarge buffer size. Please check patch src: %#x, format: %#x buffer config",
+                                bytes_avail, ringbuffer->size, patch->input_src, patch->aformat);
+                        ret = ring_buffer_realloc(ringbuffer, bytes_avail * 2);
+                        if (ret < 0) {
+                            AM_LOGE("NO memory!");
+                            break;
+                        }
+                    }
+
                     ring_buffer_reset(ringbuffer);
                     usleep(3000);
                 }
