@@ -41,11 +41,9 @@
 #define RET_FAIL -1
 #endif
 
-#ifndef MS12_V24_ENABLE
-    #define MS12_VERSION    "1.3"
-#else
-    #define MS12_VERSION    "2.4"
-#endif
+#define MS12_VERSION_V24    "2.4"
+
+#define MS12_DEV_VERSION_V242    "2.4.2"
 
 #define SOURCE_FILE    DOLBY_MS12_LIB_PATH_A
 #define MID_DEV         "/dev/audio_utils"
@@ -57,6 +55,13 @@
 #define AUDIO_UTILS_IOC_FREE_LIB           _IOW(AUDIO_UTILS_IOC_MAGIC, 0x02, uint32_t)
 static bool b_dolby_written = 0;
 static aml_so_type_t s_aml_so_type = AML_SO_TYPE_NONE;
+
+#define SUPPORT_MS12_DEV_NUM (1)
+static aml_ms12_version_t support_dolby_version[] = {
+    {MS12_DEV_VERSION_V242, MS12_VERSION_V24, eDolbyMS12_V2, eDolbyMS12Lib, 2},
+};
+
+static aml_ms12_version_t *cur_dolby_version = NULL;
 
 static bool get_dev_audio_utils_node()
 {
@@ -114,29 +119,38 @@ char * get_ms12_path (void)
 #endif
 }
 
-bool is_ms12_lib_match(void *hDolbyMS12LibHandle) {
-    bool b_match = false;
+aml_ms12_version_t *is_ms12_lib_match(void *hDolbyMS12LibHandle) {
     char * (*FunDolbMS12GetVersion)(void) = NULL;
+    char * (*FunDolbMS12GetDevVersion)(void) = NULL;
+    aml_ms12_version_t *match_ms12_version = NULL;
 
     /*get dolby version*/
     if (hDolbyMS12LibHandle) {
         FunDolbMS12GetVersion = (char * (*)(void)) dlsym(hDolbyMS12LibHandle, "ms12_get_version");
-        if (FunDolbMS12GetVersion) {
-            if (strstr((*FunDolbMS12GetVersion)(), MS12_VERSION) != NULL) {
-                b_match = true;
-            }
-            if (b_match == false) {
-                ALOGE("ms12 doesn't match build version =%s lib %s", MS12_VERSION, (*FunDolbMS12GetVersion)());
-            } else {
-                ALOGI("ms12 match build version =%s lib %s", MS12_VERSION, (*FunDolbMS12GetVersion)());
+        FunDolbMS12GetDevVersion = (char * (*)(void)) dlsym(hDolbyMS12LibHandle, "aml_ms12_dev_version");
+        ALOGD("FunDolbMS12GetVersion %p, FunDolbMS12GetDevVersion %p", FunDolbMS12GetVersion, FunDolbMS12GetDevVersion);
+        if (FunDolbMS12GetVersion && FunDolbMS12GetDevVersion) {
+            for (int i = 0; i < SUPPORT_MS12_DEV_NUM; i++) {
+                if (strstr((*FunDolbMS12GetVersion)(), support_dolby_version[i].version) != NULL && strstr((*FunDolbMS12GetDevVersion)(), support_dolby_version[i].dev_version) != NULL) {
+                    match_ms12_version = &support_dolby_version[i];
+                    ALOGI("ms12 match version =%s", (*FunDolbMS12GetVersion)());
+                    ALOGI("ms12 match dev version =%s", (*FunDolbMS12GetDevVersion)());
+                }
             }
         } else {
-            b_match = false;
             ALOGE("ms12 version not found, try ddp lib");
         }
+        if (match_ms12_version == NULL) {
+            ALOGI("ms12 version match fail");
+            ALOGI("current ms12 version:%s", FunDolbMS12GetVersion != NULL ? (*FunDolbMS12GetVersion)() : "");
+            ALOGI("current ms12 dev version:%s", FunDolbMS12GetDevVersion != NULL ? (*FunDolbMS12GetDevVersion)() : "");
+            ALOGI("ms12 support version:");
+            for (int i = 0; i < SUPPORT_MS12_DEV_NUM; i++) {
+                ALOGI("ms12 version: %s, ms12 dev version: %s", support_dolby_version[i].version, support_dolby_version[i].dev_version);
+            }
+        }
     }
-    return b_match;
-
+    return match_ms12_version;
 }
 
 
@@ -287,14 +301,17 @@ enum eDolbyLibType detect_dolby_lib_type(void) {
 
         if (hDolbyMS12LibHandle != NULL)
         {
-            bool b_match = is_ms12_lib_match(hDolbyMS12LibHandle);
+            cur_dolby_version = is_ms12_lib_match(hDolbyMS12LibHandle);
             dlclose(hDolbyMS12LibHandle);
             hDolbyMS12LibHandle = NULL;
 
             /*check ms12 version*/
-            if (b_match) {
+            if (cur_dolby_version) {
                 ALOGI("%s,FOUND libdolbyms12 lib\n", __FUNCTION__);
                 return eDolbyMS12Lib;
+            } else {
+                ALOGE("%s,wrong libdolbyms12 lib\n", __FUNCTION__);
+                return eDolbyMS12WrongLib;
             }
         }
         else {

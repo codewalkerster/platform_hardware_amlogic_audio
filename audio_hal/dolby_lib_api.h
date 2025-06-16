@@ -44,10 +44,11 @@ typedef enum eDolbyLibType {
     eDolbyNull  = 0,
     eDolbyDcvLib  = 1,
     eDolbyMS12Lib = 2,
+    eDolbyMS12WrongLib = 0xff,
 } eDolbyLibType_t;
 
 /** ms12 version used in Current System */
-typedef enum eDolbyMS12Version {
+typedef enum eDolbyMS12DevVersion {
     eDolbyMS12_V1  = 1,
     eDolbyMS12_V2  = 2,
 } eDolbyMS12Version_t;
@@ -69,6 +70,14 @@ typedef enum aml_so_type {
 
     AML_SO_TYPE_MAX = 0x0f,
 }aml_so_type_t;
+
+typedef struct aml_ms12_version {
+    const char *dev_version;
+    const char *version;
+    eDolbyMS12Version_t eDevVersion;
+    eDolbyLibType_t eVersionType;
+    int share_type;
+} aml_ms12_version_t;
 
 enum eDolbyLibType detect_dolby_lib_type(void);
 eDTSLibType_t detect_dts_lib_type(void);

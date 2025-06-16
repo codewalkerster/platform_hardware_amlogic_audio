@@ -6899,6 +6899,13 @@ ssize_t out_write_new(struct audio_stream_out *stream,
     struct aml_audio_device *adev = aml_out->dev;
     int64_t enter_time_us = 0;
 
+    if (eDolbyMS12WrongLib == adev->dolby_lib_type) {
+        ALOGE("%s,wrong libdolbyms12 lib\n", __FUNCTION__);
+        usleep(20 * 1000);
+        return bytes;
+    }
+
+
     if ((aml_out->flags & AUDIO_OUTPUT_FLAG_COMPRESS_OFFLOAD) &&
         ((aml_out->hal_format == AUDIO_FORMAT_AC3) || (aml_out->hal_format == AUDIO_FORMAT_E_AC3) || (aml_out->hal_format == AUDIO_FORMAT_E_AC3_JOC)) &&
         !adev->is_netflix && !aml_out->hw_sync_mode &&
