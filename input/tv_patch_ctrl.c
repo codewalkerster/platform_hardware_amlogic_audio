@@ -205,30 +205,6 @@ void *input_stream_do_resample(struct audio_stream_in *stream, void *buffer, int
     return buf_ret;
 }
 
-bool is_HBR_stream(struct audio_stream_in *stream)
-{
-    struct aml_stream_in *in = (struct aml_stream_in *) stream;
-    struct aml_audio_device *aml_dev = in->dev;
-    bool ret = false;
-
-    if (aml_dev->in_device & AUDIO_DEVICE_IN_HDMI && get_dev_patch(aml_dev)) {
-        struct aml_audio_patch *audio_patch = get_dev_patch(aml_dev);
-        if (!audio_patch) {
-            AM_LOGE("%s(),get_dev_patch is fail",__func__);
-            return ret;
-        }
-        audio_type_parse_t *audio_type_status = (audio_type_parse_t *)audio_patch->audio_parse_para;
-        if (audio_type_status && audio_type_status->soft_parser != 1) {
-            if (audio_patch->param_config.last_audio_packet_type == AUDIO_PACKET_HBR) {
-                ret = true;
-            }
-        }
-    } else if (in->device == AUDIO_DEVICE_IN_HDMI_ARC) {
-        return (in->spdif_fmt_hw == MAT);
-    }
-    return ret;
-}
-
 bool is_game_mode(struct aml_audio_device *aml_dev)
 {
     if (!is_same_patch_src(aml_dev, SRC_HDMIIN) ||

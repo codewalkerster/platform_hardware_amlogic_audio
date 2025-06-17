@@ -385,7 +385,7 @@ void *audio_patch_input_threadloop(void *data)
 
         /* For HBR audio from hdmiin/earcin device, set read bytes size to 4 times */
         if (IS_DIGITAL_IN_HW(patch->input_src) &&
-                (audio_parse_get_audio_packet_type(patch->audio_parse_para) == AUDIO_PACKET_HBR || in->spdif_fmt_hw == MAT)) {
+                (audio_parse_get_audio_packet_type(patch->audio_parse_para) == AUDIO_PACKET_HBR || patch->param_config.spdif_fmt_hw == MAT)) {
             period_mul = 4;
             if (!is_same_patch_src(aml_dev, SRC_ARCIN))
                 in->tv_param.read_mul_factor = EAC3_MULTIPLIER;

@@ -475,7 +475,6 @@ struct aml_audio_device {
     bool is_has_video;
     struct aml_stream_out *ms12_out;
     struct aml_stream_out *focus_ms12_stream;
-    int spdif_fmt_hw;
     int system_app_mixing_status;
     int audio_type;
     struct aml_mixer_handle alsa_mixer;
@@ -968,8 +967,6 @@ struct aml_stream_in {
     size_t ref_buf_size;
     size_t ref_frames_in;
     int read_status;
-    /* HW parser audio format */
-    int spdif_fmt_hw;
     /* SW parser audio format */
     audio_format_t spdif_fmt_sw;
     bool mute_flag;
