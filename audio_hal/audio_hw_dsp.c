@@ -199,7 +199,7 @@ void adjustData(int frames, int16_t* input, int16_t* output)
     }
 }
 
-dumper_t *dumper_thread(void *t)
+void *dumper_thread(void *t)
 {
     dumper_t *p = (dumper_t *)t;
     int ret = 0;
