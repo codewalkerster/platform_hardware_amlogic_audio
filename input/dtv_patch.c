@@ -483,6 +483,16 @@ int audio_dtv_patch_parser_process_write(struct package *p_package,
             instance->in_read_frame_size = ac4_info.frame_size;
         }
         ret = dtv_stream_out_write(stream_out, p_package->data, p_package->size);
+    } else if (instance->aformat == AUDIO_FORMAT_MPEGH) {
+        while (p_package->size > used_size && !instance->input_thread_exit) {
+            ret = aml_out->stream.write(stream_out,(const void *)(p_package->data + used_size), p_package->size);
+            if (ret > 0) {
+                used_size += ret;
+            } else {
+                AM_LOGW("used_size %d p_package->size %d ret %d", used_size, p_package->size, ret);
+                break;
+            }
+        }
     } else {
          ret = dtv_stream_out_write(stream_out, p_package->data, p_package->size);
          if (ad_data_size) {
