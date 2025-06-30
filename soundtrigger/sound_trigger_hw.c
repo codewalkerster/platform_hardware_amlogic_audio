@@ -197,7 +197,7 @@ static sound_model_handle_t generate_sound_model_handle(const struct sound_trigg
         stdev->next_sound_model_id = 1;
     }
 
-    ALOGE("%s %d new_id handle=%d\n", __func__, __LINE__, new_id);
+    ALOGI("%s %d new_id handle=%d\n", __func__, __LINE__, new_id);
     return (sound_model_handle_t) new_id;
 }
 
@@ -240,8 +240,10 @@ static int stdev_get_properties(const struct sound_trigger_hw_device *dev,
     struct amlogic_sound_trigger_device *stdev = (struct amlogic_sound_trigger_device *)dev;
 
     ALOGI("%s", __func__);
-    if (properties == NULL)
+    if (properties == NULL) {
+        ALOGE("%s properties is NULL", __func__);
         return -EINVAL;
+    }
     memcpy(properties, &hw_properties_extended.base, sizeof(struct sound_trigger_properties));
     return 0;
 }
@@ -253,28 +255,33 @@ static int stdev_load_sound_model(const struct sound_trigger_hw_device *dev,
                                   sound_model_handle_t *handle)
 {
     struct amlogic_sound_trigger_device *stdev = (struct amlogic_sound_trigger_device *)dev;
-    ALOGI("%s stdev %p", __func__, stdev);
-    int status = 0;
+    int ret = 0;
     set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
-    // Notify DSP that ffv has been turned on
-    aml_enable_ffv_to_dsp(true);
     pthread_mutex_lock(&stdev->lock);
     if (handle == NULL || sound_model == NULL) {
-        pthread_mutex_unlock(&stdev->lock);
-        return -EINVAL;
+        ALOGE("%s NULL pointer", __func__);
+        ret = -EINVAL;
+        goto exit;
     }
     if (sound_model->data_size == 0 ||
             sound_model->data_offset < sizeof(struct sound_trigger_sound_model)) {
-        pthread_mutex_unlock(&stdev->lock);
-        return -EINVAL;
+        ALOGE("%s sound_model is error", __func__);
+        ret = -EINVAL;
+        goto exit;
+    }
+
+    if (sound_model->type != SOUND_MODEL_TYPE_KEYPHRASE) {
+        ALOGE("Unsupported sound model type: %d", sound_model->type);
+        ret = -EINVAL;
+        goto exit;
     }
 
     struct recognition_context *model_context;
     model_context = malloc(sizeof(struct recognition_context));
     if (!model_context) {
-        ALOGW("Could not allocate recognition_context");
-        pthread_mutex_unlock(&stdev->lock);
-        return -ENOSYS;
+        ALOGE("Could not allocate recognition_context");
+        ret = -ENOMEM;
+        goto exit;
     }
 
     // Add the new model context to the recognition_context linked list
@@ -288,8 +295,8 @@ static int stdev_load_sound_model(const struct sound_trigger_hw_device *dev,
             if (model_count >= hw_properties_extended.base.max_sound_models) {
                 ALOGW("Can't load model: reached max sound model limit");
                 free(model_context);
-                pthread_mutex_unlock(&stdev->lock);
-                return -ENOSYS;
+                ret = -EINVAL;
+                goto exit;
             }
         }
         current_model_context->next = model_context;
@@ -302,7 +309,7 @@ static int stdev_load_sound_model(const struct sound_trigger_hw_device *dev,
     model_context->model_type = sound_model->type;
 
     char *data = (char *)sound_model + sound_model->data_offset;
-    ALOGE("%s data size %d data %d - %d", __func__,
+    ALOGI("%s data size %d data %d - %d", __func__,
           sound_model->data_size, data[0], data[sound_model->data_size - 1]);
     model_context->model_uuid = sound_model->uuid;
     model_context->model_callback = callback;
@@ -312,17 +319,17 @@ static int stdev_load_sound_model(const struct sound_trigger_hw_device *dev,
     model_context->recognition_cookie = NULL;
     model_context->next = NULL;
     model_context->model_started = false;
-    ALOGE("Sound model loaded: Handle %d ", *handle);
+    ALOGI("Sound model loaded: Handle %d ", *handle);
 
+exit:
     pthread_mutex_unlock(&stdev->lock);
-    return status;
+    return ret;
 }
 
 static int stdev_unload_sound_model(const struct sound_trigger_hw_device *dev,
                                     sound_model_handle_t handle)
 {
     // If recognizing, stop_recognition must be called for a sound model before unload_sound_model
-    ALOGI("%s", __func__);
     struct amlogic_sound_trigger_device *stdev = (struct amlogic_sound_trigger_device *)dev;
     int status = 0;
     ALOGI("unload_sound_model:%d", handle);
@@ -437,12 +444,13 @@ static int stdev_start_recognition(const struct sound_trigger_hw_device *dev,
     pthread_mutex_lock(&stdev->lock);
     /* If other models running with callbacks, don't start trigger thread */
     bool other_callbacks_found = recognition_callback_exists(stdev);
+    int ret = 0;
 
     stdev->root_model_context = get_model_context(stdev, handle);
     if (!stdev->root_model_context) {
         ALOGW("Can't find sound model handle %d in registered list", handle);
-        pthread_mutex_unlock(&stdev->lock);
-        return -ENOSYS;
+        ret = -ENOSYS;
+        goto exit;
     }
 
     free(stdev->root_model_context->config);
@@ -451,18 +459,19 @@ static int stdev_start_recognition(const struct sound_trigger_hw_device *dev,
         stdev->root_model_context->config = malloc(sizeof(*config));
         if (!stdev->root_model_context->config) {
             ALOGW("Can't find sound model handle %d in registered list", handle);
-            pthread_mutex_unlock(&stdev->lock);
-            return -ENOMEM;
+            ret = -ENOMEM;
+            goto exit;
         }
         memcpy(stdev->root_model_context->config, config, sizeof(*config));
     }
     stdev->root_model_context->recognition_callback = callback;
     stdev->root_model_context->recognition_cookie = cookie;
     stdev->root_model_context->model_started = true;
-
-    pthread_mutex_unlock(&stdev->lock);
     ALOGI("%s done for handle %d", __func__, handle);
-    return 0;
+
+exit:
+    pthread_mutex_unlock(&stdev->lock);
+    return ret;
 }
 
 static int stdev_stop_recognition(const struct sound_trigger_hw_device *dev,
@@ -491,7 +500,7 @@ static int stdev_stop_recognition(const struct sound_trigger_hw_device *dev,
     ALOGI("%s done for handle %d", __func__, handle);
 
 exit:
-    return 0;
+    return status;
 }
 
 static int stdev_stop_all_recognitions(const struct sound_trigger_hw_device *dev)
@@ -604,6 +613,7 @@ static int stdev_close(hw_device_t *device)
     // would register a signal handler for the control thread so that any
     // blocking socket calls can be interrupted. We would send that signal here
     // to interrupt and quit the thread.
+    ALOGI("%s", __func__);
     free(device);
     return 0;
 }
@@ -611,10 +621,7 @@ static int stdev_close(hw_device_t *device)
 static const struct sound_trigger_properties_header* stdev_get_properties_extended(
                             const struct sound_trigger_hw_device *dev __unused)
 {
-    char* uuid = NULL;
-
-    str_to_uuid(uuid, &hw_properties_extended.base.uuid);
-
+    ALOGI("%s", __func__);
     return &hw_properties_extended.header;
 }
 
@@ -636,7 +643,7 @@ static int stdev_set_parameter(
                            int32_t value __unused)
 {
     ALOGW("%s: NOT SUPPORTED", __func__);
-    return -EINVAL;
+    return 0;
 }
 
 static int stdev_get_parameter(
@@ -646,7 +653,7 @@ static int stdev_get_parameter(
                            int32_t* value __unused)
 {
     ALOGW("%s: NOT SUPPORTED", __func__);
-    return -EINVAL;
+    return 0;
 }
 
 static int stdev_start_recognition_extended(

@@ -165,7 +165,7 @@ void dsp_ffv_dev_init(struct aml_audio_device *adev)
             ALOGE("%s: DLOPEN failed for %s", __func__,
                   SOUND_TRIGGER_HAL_LIBRARY_PATH);
         } else {
-            ALOGE("%s: DLOPEN successful for %s", __func__,
+            ALOGV("%s: DLOPEN successful for %s", __func__,
                   SOUND_TRIGGER_HAL_LIBRARY_PATH);
             adev->dsp_ffv->sound_trigger_open_for_streaming =
                     (int (*)(void))dlsym(adev->dsp_ffv->sound_trigger_lib,

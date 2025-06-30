@@ -67,10 +67,10 @@ void* pcm_open_dsp(unsigned int card,
     ALOGI("%s, %d, card=%u device=%u flags=%x channel=%d rate=%d card = %u format=%u period_size=%d period_count=%d\n",
             __func__, __LINE__, card, device, flags, rpc_config.channels, rpc_config.rate, card, rpc_config.format, rpc_config.period_size, rpc_config.period_count);
 
-    if (get_sound_trigger_cmd() == SOUND_TRIGGER_DEFAULT)
-        send_ffv_suspend_status(0, false);
-
     if (sound_trigger_hdl != NULL) {
+        if (get_sound_trigger_cmd() == SOUND_TRIGGER_DEFAULT)
+            send_ffv_suspend_status(0, false);
+
         ALOGE("sound_trigger_hdl is exist %p\n", sound_trigger_hdl);
         return sound_trigger_hdl;
     }
