@@ -2316,7 +2316,7 @@ int mixer_get_presentation_position(
     *timestamp = in_port->timestamp;
     if (!is_inport_pts_valid(in_port)) {
         AM_LOGW("not valid now");
-        ret = -EINVAL;
+        ret = -ENODATA;
     }
     pthread_mutex_unlock(&audio_mixer->inport_lock);
     return ret;
