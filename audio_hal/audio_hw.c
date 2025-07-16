@@ -109,6 +109,7 @@
 #include "hdmirx_utils.h"
 #include "aml_audio_enhancement.h"
 #include <sys/resource.h>
+#include "audio_mpegh.h"
 #include "audio_mediasync_wrap.h"
 
 #define ENABLE_NANO_NEW_PATH 1
@@ -505,7 +506,7 @@ static int out_set_sample_rate(struct audio_stream *stream __unused, uint32_t ra
     return 0;
 }
 
-static size_t out_get_buffer_size (const struct audio_stream *stream)
+static size_t out_get_buffer_size(const struct audio_stream *stream)
 {
     struct aml_stream_out *out = (struct aml_stream_out *) stream;
     struct aml_audio_device *adev = out->dev;
@@ -664,6 +665,14 @@ static size_t out_get_buffer_size (const struct audio_stream *stream)
             return size;
         }
     }
+    case AUDIO_FORMAT_MPEGH:
+    case AUDIO_FORMAT_MPEGH_BL_L3:
+    case AUDIO_FORMAT_MPEGH_BL_L4:
+    case AUDIO_FORMAT_MPEGH_LC_L3:
+    case AUDIO_FORMAT_MPEGH_LC_L4:
+        size = DEFAULT_PLAYBACK_PERIOD_SIZE << 4;
+        ALOGI("%s MPEG-H buffer size = %zu frames", __FUNCTION__, size);
+        return size;
     default:
         if (adev->continuous_audio_mode && audio_is_linear_pcm(out->hal_internal_format)) {
             /*Tunnel sync HEADER is 20 bytes*/
@@ -3541,7 +3550,13 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
         out->aml_parser = NULL;
         pthread_mutex_unlock(&out->parser_MutexLock);
     }
-
+    if (out->mpegh_uimanager_handle) {
+        aml_uimanager_close(adev, out->mpegh_uimanager_handle);
+        //notify droid audio
+        ALOGI("%s mpegh stream will close,notify droid audio", __func__);
+        aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_AUDIO_HAL_FORMAT, TYPE_MPEGH_CLOSE);
+        out->mpegh_uimanager_handle = NULL;
+    }
     if (out->aml_dec) {
         pthread_mutex_lock(&out->dec_MutexLock);
         aml_decoder_release(out->aml_dec);
@@ -4627,6 +4642,13 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
         goto exit;
     }
 
+    /* deal with mpegh cmd */
+    ret = set_MPEGH_parameters(adev, parms);
+    if (ret >= 0) {
+        ALOGD("get MPEGH param(kv: %s)", kvpairs);
+        goto exit;
+    }
+
 exit:
     str_parms_destroy (parms);
     /* always success to pass VTS */
@@ -4896,6 +4918,19 @@ static char *adev_get_parameters(const struct audio_hw_device *dev,
 #endif
         ALOGV("temp_buf %s", temp_buf);
         return strdup(temp_buf);
+    } else if (strstr(keys, "mpegh_audiosceneconfig")) {
+        char *xmlbuf = aml_mpegh_getxmlsceneinfo(adev);
+        if (xmlbuf) {
+            int xmlsize = strlen(xmlbuf);
+            //aml_dump_audio_bitstreams("/data/vendor/audiohal/mpegh_audiosceneconfig.xml", xmlbuf, xmlsize);
+            return strdup (xmlbuf);
+        }
+    } else if (strstr(keys, "mpegh_persistency_ctx")) {
+        if (adev->mpegh_ui_persistencemem) {
+            base64_encode(adev->mpegh_ui_persistencemem, adev->mpegh_ui_persistencememsize, adev);
+            //aml_dump_audio_bitstreams("/data/vendor/audiohal/get_mpegh_persistency_ctx.xml", adev->mpegh_base64_encode_mem, BASE64_BUFSIZE);
+            return strdup (adev->mpegh_base64_encode_mem);
+        }
     }
 
     if (eDTSXLib == adev->dts_lib_type) {
@@ -7129,6 +7164,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
         parserConfig.dataFormat.format = aml_out->hal_format;
         parserConfig.dataFormat.subFormat = aml_out->hal_internal_format;
         parserConfig.isTvFlag = aml_out->is_tv_src_stream || aml_out->is_dtv_src_stream;
+        parserConfig.isDtvFlag = aml_out->is_dtv_src_stream;
         pthread_mutex_lock(&aml_out->parser_MutexLock);
         aml_parser_init((aml_parser_t **)&aml_out->aml_parser, &parserConfig);
         pthread_mutex_unlock(&aml_out->parser_MutexLock);
@@ -7194,6 +7230,25 @@ ssize_t out_write_new(struct audio_stream_out *stream,
                     if (AUDIO_FORMAT_INVALID != tmpABuffer->bufFormat.format && AUDIO_FORMAT_DEFAULT != tmpABuffer->bufFormat.format)
                         aml_out->hal_format = aml_out->hal_internal_format = tmpABuffer->bufFormat.format;
                 }
+
+                if (is_mpegh_format(aml_out->hal_internal_format)) {
+                    int asiupdate = 0;
+                    if (get_debug_value(AML_DUMP_AUDIOHAL_IN)) {
+                        aml_dump_audio_bitstreams(AML_MPEGH_UIMANAGER_INPUT_FILE_DUMP_DIR, tmpABuffer->pData, tmpABuffer->size);
+                    }
+                    int val = aml_mpegh_uimanager_process(stream, tmpABuffer, &asiupdate);
+                    if (val != 0) {
+                        AM_LOGE("aml_mpegh_uimanager_process error");
+                        break;
+                    }
+                    if (asiupdate == 1) {
+                        ALOGI("%s Audio Scene Information has changed! asiupdate:%d", __func__, asiupdate);
+                        aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_AUDIO_HAL_FORMAT, TYPE_MPEGH_ASI_UPDATE);
+                    }
+                    if (get_debug_value(AML_DUMP_AUDIOHAL_IN)) {
+                        aml_dump_audio_bitstreams(AML_MPEGH_UIMANAGER_OUTPUT_FILE_DUMP_DIR, tmpABuffer->pData, tmpABuffer->size);
+                    }
+                }
             }
 
             if (retValue == AML_AUDIO_BUFFER_VALID) {
@@ -7251,7 +7306,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
 
     if (get_debug_value(AML_DUMP_AUDIOHAL_IN)) {
         if (buffer && (bytes > 0)) {
-            aml_dump_audio_bitstreams(aml_out->stream_dump_file, buffer, bytes);
+            aml_dump_audio_bitstreams(aml_out->stream_dump_file, buffer, ret);
         }
     }
     return ret;
@@ -7914,6 +7969,17 @@ static int adev_close(hw_device_t *device)
     destroy_async_write_thread();
     aml_deinit_zero_detect_list(&adev->zero_data_detect_list);
 
+    if (adev->mpegh_ui_persistencemem) {
+        aml_audio_free(adev->mpegh_ui_persistencemem);
+        adev->mpegh_ui_persistencememsize = 0;
+        adev->mpegh_ui_persistencemem = NULL;
+
+    }
+    if (adev->mpegh_base64_encode_mem) {
+        aml_audio_free(adev->mpegh_base64_encode_mem);
+        adev->mpegh_ui_persistencemem = NULL;
+    }
+
     g_adev = NULL;
 
     aml_audio_free(device);
@@ -8326,6 +8392,9 @@ static int adev_open(const hw_module_t* module, const char* name, hw_device_t** 
         ret = -EINVAL;
         goto err_adev;
     }
+
+    adev->mpegh_ui_persistencemem = aml_audio_malloc(PERSISTENCE_BUFSIZE);
+    adev->mpegh_ui_persistencememsize = PERSISTENCE_BUFSIZE;
 
     /* Set the default route before the PCM stream is opened */
     adev->mode = AUDIO_MODE_NORMAL;

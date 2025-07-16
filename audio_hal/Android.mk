@@ -70,6 +70,7 @@ include $(BUILD_PREBUILT)
         aml_hfp.c \
         audio_hw_utils.c \
         audio_hwsync.c \
+        audio_mpegh.cpp \
         audio_hw_profile.c \
         alsa_manager.c \
         audio_bt_hw.cpp \

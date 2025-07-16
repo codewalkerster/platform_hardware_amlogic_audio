@@ -265,3 +265,12 @@ int aml_dump_audio_bitstreams(const char *path, const void *buf, size_t bytes)
 
     return 0;
 }
+
+int aml_dump_audio_bitstreams_with_id(const char *filename, const void *buf, size_t bytes, int stream_id)
+{
+    int ret = 0;
+    char file_name[256] = { 0 };
+    snprintf(file_name, 256, "/data/vendor/audiohal/ID_%d_%s", stream_id, filename);
+    ret = aml_dump_audio_bitstreams(file_name, buf, bytes);
+    return ret;
+}

@@ -516,6 +516,34 @@ void aml_init_stream_manager(struct aml_audio_device *amlDev)
     return ;
 }
 
+bool aml_get_is_exist_active_mpegh_stream(void)
+{
+    struct aml_audio_device *adev = aml_adev_get_handle();
+    struct aml_stream_out *amlStream = NULL;
+    uint32_t nodeIndex = 0;
+    bool retValue = false;
+
+    if (!list_empty(&adev->stream_ListHead)) {
+        struct listnode *item = NULL, *temp = NULL;
+        struct stream_infos *ptmp = NULL;
+
+        list_for_each_safe(item, temp, &adev->stream_ListHead) {
+            ptmp = (struct stream_infos *)item;
+            amlStream = (struct aml_stream_out *)ptmp->pStream;
+            nodeIndex++;
+            if ((!amlStream->standby) && is_mpegh_format(amlStream->hal_internal_format)) {
+                retValue = true;
+                break;
+            }
+        }
+
+        AM_LOGI(" ptmp:%p  pStream:%p, amlStream:%p, streamCount:%u nodeIndex:%u, retValue:%d",
+            ptmp, ptmp->pStream, amlStream, adev->streamCount, nodeIndex, retValue);
+    }
+
+    return retValue;
+}
+
 void aml_destroy_stream_manager(struct aml_audio_device *amlDev)
 {
     pthread_mutex_lock(&amlDev->streamList_MutexLock);

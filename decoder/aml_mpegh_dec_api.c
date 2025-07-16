@@ -107,7 +107,9 @@ static int unload_mpegh_decoder_lib(mpegh_dec_t *mpegh_dec) {
         mpegh_op->release = NULL;
         mpegh_op->getinfo = NULL;
     }
-
+    if (mpegh_dec->set_mpegh_debug_level) {
+        mpegh_dec->set_mpegh_debug_level = NULL;
+    }
     if (mpegh_dec->mpeghLibHandler) {
         dlclose(mpegh_dec->mpeghLibHandler);
         mpegh_dec->mpeghLibHandler = NULL;
@@ -151,6 +153,11 @@ static int load_mpegh_decoder_lib(mpegh_dec_t *mpegh_dec) {
         goto fail;
     }
     AM_LOGV("[audio_dec_getinfo dlsym success]");
+    mpegh_dec->set_mpegh_debug_level = (void (*)(int)) dlsym(mpegh_dec->mpeghLibHandler, "set_mpegh_debug_level");
+    if (!mpegh_dec->set_mpegh_debug_level) {
+        goto fail;
+    }
+    AM_LOGV("[set_mpegh_debug_level dlsym success]");
     return 0;
 
 fail:
@@ -186,7 +193,7 @@ static int mpegh_decoder_release(aml_dec_t *aml_dec) {
         dec_raw_data->buf = NULL;
     }
 
-    if (!mpegh_dec->encoder_handle) {
+    if (mpegh_dec->encoder_handle) {
       iec61937_encode_close(mpegh_dec->encoder_handle);
       mpegh_dec->encoder_handle = NULL;
     }
@@ -253,7 +260,9 @@ static int mpegh_decoder_init(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_confi
         AM_LOGE("load_mpegh_decoder_lib, mpegh_dec:%p, failed!", mpegh_dec);
         goto fail;
     }
-
+    if (mpegh_dec->set_mpegh_debug_level) {
+        mpegh_dec->set_mpegh_debug_level(get_debug_value(AML_DEBUG_AUDIOHAL_DEBUG));
+    }
     mpegh_config = &dec_config->mpegh_config;
     memcpy(&mpegh_dec->mpegh_config, mpegh_config, sizeof(aml_mpegh_config_t));
     AM_LOGI("MPEGH samplerate:%d ch:%d\n", mpegh_config->samplerate, mpegh_config->channel);

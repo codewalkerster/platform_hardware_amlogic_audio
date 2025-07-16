@@ -60,6 +60,7 @@ typedef struct mpegh_dec {
     unsigned long total_pcm_size;
     unsigned long total_time;
     void *mpeghLibHandler;
+    void (*set_mpegh_debug_level)(int);
     HANDLE_IEC61937_ENCODER encoder_handle;
     int rate_factor;
     int output_bw;

@@ -26,6 +26,7 @@
 #include <cutils/log.h>
 #include <inttypes.h>
 #include <aml_dump_debug.h>
+#include <cutils/properties.h>
 #include "aml_audio_bitsparser.h"
 #include "aml_audio_mpeghparser.h"
 #include "aml_malloc_debug.h"
@@ -44,7 +45,7 @@ typedef struct {
     struct audio_bit_parser bit_parser;
     mpegh_parser_info parser_info;
     bool is_sub_parser;
-    bool is_tv_src_flag;       //tv src or dtv src
+    bool is_dtv_src_flag;       //dtv src
 } aml_mpegh_parser;
 
 static uint64_t read_escaped_int(struct audio_bit_parser *bit_parser, int nBits1, int nBits2, int nBits3, int *total)
@@ -225,7 +226,7 @@ fail:
     return false;
 }
 
-void mpegh_reset_parser (aml_mpegh_parser *parser)
+static void mpegh_reset_parser (aml_mpegh_parser *parser)
 {
     unsigned char *working_tmp = parser->working_buf;
     ParseState current_state = parser->current_state;
@@ -233,14 +234,50 @@ void mpegh_reset_parser (aml_mpegh_parser *parser)
     int32_t sample_lens = parser->active_header.sample_lens;
     int32_t sample_rate = parser->active_header.sample_rate;
     int debug_enable = parser->debug_enable;
+    bool is_sub_parser = parser->is_sub_parser;
+    bool is_dtv_src_flag = parser->is_dtv_src_flag;
     memset(parser, 0, sizeof(aml_mpegh_parser));
     parser->active_header.sample_lens = sample_lens;
     parser->active_header.sample_rate = sample_rate;
     parser->debug_enable = debug_enable;
     parser->working_buf = working_tmp;
+    parser->is_sub_parser = is_sub_parser;
+    parser->is_dtv_src_flag = is_dtv_src_flag;
     parser->current_state = STATE_FINDING_SYNC;//STATE_READING_HEADER;
+    if (property_get_bool("vendor.media.audiohal.bypass.mpeghparser", false)) {
+        parser->current_state = STATE_READING_HEADER;
+    }
     return;
 }
+
+static int aml_mpegh_parser_save_data(aml_mpegh_parser *parser, const void *input, int32_t input_len) {
+    int working_remain = 0;
+    int debug = parser->debug_enable;
+    if (0 != parser->working_start) {
+        if (debug) {
+            AM_LOGI("start:%d, pos:%d, size:%d", parser->working_start, parser->working_pos, parser->working_end);
+        }
+        working_remain = parser->working_end - parser->working_start;
+        memmove(parser->working_buf, parser->working_buf + parser->working_start, working_remain);
+        parser->working_pos  -= parser->working_start;
+        parser->working_start = 0;
+        parser->working_end   = working_remain;
+    }
+
+    if (MAX_MPEGH_FRAME_LENGTH < (input_len + parser->working_end)) {
+        AM_LOGE("working_buf overflow, input_len:%d + working_end:%d > %d, drop lens:%d!", input_len, parser->working_end, MAX_MPEGH_FRAME_LENGTH, input_len);
+        mpegh_reset_parser(parser);
+        return -1;
+    }
+    memcpy((parser->working_buf + parser->working_end), input, input_len);
+    parser->working_end += input_len;
+    parser->need_input = 0;
+    if (debug) {
+        AM_LOGI("start:%d, pos:%d, size:%d", parser->working_start, parser->working_pos, parser->working_end);
+    }
+    return 0;
+}
+
 
 /**
  * MHAS protocol stream parser
@@ -263,39 +300,6 @@ int aml_mpegh_parser_internal (aml_mpegh_parser *parser, const void *input, int3
     *output_len = 0;
     int debug   = parser->debug_enable;
     AM_LOGV("enter");
-
-    /*
-    1.for local play,new data input need cache into working buffer first.
-    2.for dtv/hdmi in,always save the data first.
-    */
-    if (parser->need_input || parser->is_tv_src_flag) {
-        if (0 != parser->working_start) {
-            if (debug) {
-                AM_LOGI("start:%d, pos:%d, size:%d", parser->working_start, parser->working_pos, parser->working_end);
-            }
-            working_remain = parser->working_end - parser->working_start;
-            memmove(parser->working_buf, parser->working_buf + parser->working_start, working_remain);
-            parser->working_pos  -= parser->working_start;
-            parser->working_start = 0;
-            parser->working_end   = working_remain;
-        }
-
-        if (MAX_MPEGH_FRAME_LENGTH < (input_len + parser->working_end)) {
-            if (debug) {
-                AM_LOGI("working_buf overflow, input_len:%d + working_end:%d > %d, drop lens:%d!", input_len, parser->working_end, MAX_MPEGH_FRAME_LENGTH, input_len);
-            }
-            processed = input_len;
-            mpegh_reset_parser(parser);
-            ret = -1;
-            goto finish;
-        }
-        memcpy((parser->working_buf + parser->working_end), input, input_len);
-        parser->working_end += input_len;
-        parser->need_input = 0;
-        if (debug) {
-            AM_LOGI("start:%d, pos:%d, size:%d", parser->working_start, parser->working_pos, parser->working_end);
-        }
-    }
 
     // State machine processing loop‌
     while (processed < input_len) {
@@ -426,6 +430,9 @@ int aml_mpegh_parser_open(void **parser_handle, void *pParserConfig)
     }
 
     phandle->current_state = STATE_FINDING_SYNC;//STATE_READING_HEADER;
+    if (property_get_bool("vendor.media.audiohal.bypass.mpeghparser", false)) {
+        phandle->current_state = STATE_READING_HEADER;
+    }
     phandle->working_end   = 0;
     phandle->working_pos   = 0;
     phandle->header_size   = 0;
@@ -435,10 +442,10 @@ int aml_mpegh_parser_open(void **parser_handle, void *pParserConfig)
     memset(&phandle->active_header, 0x0, sizeof(MhasHeader));
     if (pConfig) {
         phandle->is_sub_parser = pConfig->isSubParser;
-        phandle->is_tv_src_flag = pConfig->isTvFlag;
+        phandle->is_dtv_src_flag = pConfig->isTvFlag;
     }
     *parser_handle = phandle;
-    AM_LOGI("success, phandle:%p, is_sub_parser = %d, is_tv_src_falg = %d", phandle, phandle->is_sub_parser, phandle->is_tv_src_flag);
+    AM_LOGI("success, phandle:%p, is_sub_parser = %d, is_dtv_src_flag = %d", phandle, phandle->is_sub_parser, phandle->is_dtv_src_flag);
     return 0;
 
 error:
@@ -470,6 +477,9 @@ int aml_mpegh_parser_reset(void *parser_handle)
 
     if (phandle) {
         phandle->current_state = STATE_FINDING_SYNC;//STATE_READING_HEADER;
+        if (property_get_bool("vendor.media.audiohal.bypass.mpeghparser", false)) {
+            phandle->current_state = STATE_READING_HEADER;
+        }
         phandle->working_end   = 0;
         phandle->working_pos   = 0;
         phandle->working_start = 0;
@@ -510,6 +520,18 @@ int aml_mpegh_parser_process(void *parserhandle, const void *inABuffer, void *ou
     }
     aml_mpegh_parser *pParserHanle = (aml_mpegh_parser *)phandle;
     bool is_sub_parser = pParserHanle->is_sub_parser;
+    bool is_dtv_src_flag = pParserHanle->is_dtv_src_flag;
+
+    /*
+    1.for local play,new data input need cache into working buffer first.
+    2.for dtv,always save the data first.
+    */
+    if (pParserHanle->need_input || pParserHanle->is_dtv_src_flag) {
+        ret = aml_mpegh_parser_save_data(pParserHanle, inBuf, inSize);
+        if (ret < 0) {
+            return inSize;
+        }
+    }
     do {
         aml_mpegh_parser_internal(phandle, inBuf, inSize, &outBuffer, &usedBytes, &outBytes, &(phandle->parser_info));
         ALOGI("%s %d usedBytes = %d",__func__, __LINE__, usedBytes);
@@ -530,14 +552,15 @@ int aml_mpegh_parser_process(void *parserhandle, const void *inABuffer, void *ou
 
             retValue = (*__callback)(pCallback->common.pAmlParser, outAudioBuffer, phandle);
         }
-        AM_LOGV(" is_sub_parser:%d  phandle:%p inBuf:%p inSize(leftBytes):%d %d,  used_bytes:%d totalUsedBytes:%d outBuffer:%p out_frame_size:%d  phandle->parser_info.frame_samples:%d",
-            is_sub_parser, phandle, inBuf, inSize, leftBytes, usedBytes, totalUsedBytes, outBuffer, outBytes, phandle->parser_info.frame_samples);
+        AM_LOGV("is_sub_parser:%d is_dtv_src_flag: %d phandle:%p inBuf:%p inSize(leftBytes):%d(%d) used_bytes:%d totalUsedBytes:%d outBuffer:%p out_frame_size:%d phandle->parser_info.frame_samples:%d",
+            is_sub_parser, is_dtv_src_flag, phandle, inBuf, inSize, leftBytes, usedBytes, totalUsedBytes, outBuffer, outBytes, phandle->parser_info.frame_samples);
 
-        /*if it is sub parser, shouldn't break directly.
-         *one hwsync packet maybe contains multi data frames,
-         *so it should loop parse all frames.
-         */
-        if (!is_sub_parser) {
+        /*
+        1.if it is sub parser, shouldn't break directly,one hwsync packet maybe contains multi data frames,
+            so it should loop parse all frames.
+        2.for dtv src, more frames need to be parsed to prevent working_buf overflow.
+        */
+        if (!is_sub_parser && !is_dtv_src_flag) {
             retValue = usedBytes;
             break;
         }

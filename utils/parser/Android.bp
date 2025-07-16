@@ -22,6 +22,7 @@ cc_library_shared {
         "aml_audio_heaacparser.c",
         "aml_audio_dtsparser.c",
         "aml_audio_mpeghparser.c",
+        "aml_mpegh_uimanager.c",
         "aml_audio_truehdparser.c",
     ],
 

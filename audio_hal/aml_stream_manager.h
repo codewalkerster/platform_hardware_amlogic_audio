@@ -60,6 +60,7 @@ struct aml_stream_out * aml_get_main_active_stream(audio_format_t audio_format);
 void aml_stream_check_preempt(struct aml_stream_out *amlStream);
 
 void aml_init_stream_manager(struct aml_audio_device *adev);
+bool aml_get_is_exist_active_mpegh_stream(void);
 void aml_destroy_stream_manager(struct aml_audio_device *adev);
 
 #endif //end of _AML_STREAM_MANAGER_H_

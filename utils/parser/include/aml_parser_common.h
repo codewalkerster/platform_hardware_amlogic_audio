@@ -36,6 +36,7 @@ typedef struct parser_config {
     data_format_t dataFormat;
     bool isSubParser;
     bool isTvFlag; //dtv or hdmiin
+    bool isDtvFlag; //dtv src
 } parser_config_t;
 
 typedef struct aml_parser_data_callback {

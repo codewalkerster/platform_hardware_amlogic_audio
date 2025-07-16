@@ -132,7 +132,7 @@ void DoDumpData(const void *data_buf, int size, int aud_src_type);
 void aml_audio_debug_open(void);
 void aml_audio_debug_close(void);
 int aml_dump_audio_bitstreams(const char *path, const void *buf, size_t bytes);
-
+int aml_dump_audio_bitstreams_with_id(const char *filename, const void *buf, size_t bytes, int stream_id);
 static inline int  get_debug_value(AML_DUMP_DEBUG_INFO_T info_id) {
     return aml_debug_items[info_id].value;
 }

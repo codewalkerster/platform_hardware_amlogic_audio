@@ -197,7 +197,8 @@ enum audio_hal_format {
     TYPE_DTSX = 23,
     TYPE_MPEGH = 24,
     TYPE_MPEGH_ASI_UPDATE = 25,
-    TYPE_NOT_SUPPORT = 26,
+    TYPE_MPEGH_CLOSE = 26,
+    TYPE_NOT_SUPPORT = 27,
 };
 #define FRAMESIZE_16BIT_STEREO 4
 #define FRAMESIZE_32BIT_STEREO 8
@@ -627,6 +628,9 @@ struct aml_audio_device {
     bool reset_hdmitx_audio;
     bool is_dtg_case;//dtg case at the UK
     void *zero_data_detect_list;
+    void *mpegh_ui_persistencemem;
+    int mpegh_ui_persistencememsize;
+    void *mpegh_base64_encode_mem;
     pcm_record_delay_t aml_pcm_record_delay;
     bool is_manual;
     audio_manual_set_t manual_encoding_format[AUDIO_PROFILE_ITEM_NUM];  /*refer to AUDIO_ENCODING_FORMAT_E*/
@@ -838,7 +842,7 @@ struct aml_stream_out {
     aml_dec_t *aml_dec;                        /*store the decoder handle*/
     int ad_substream_supported;
     aml_audio_resample_t *resample_handle;
-
+    void * mpegh_uimanager_handle;
     /*spdif output related info start*/
     audio_format_t optical_format;
     //audio_format_t spdif_audio_format;
