@@ -67,15 +67,14 @@ void* pcm_open_dsp(unsigned int card,
     ALOGI("%s, %d, card=%u device=%u flags=%x channel=%d rate=%d card = %u format=%u period_size=%d period_count=%d\n",
             __func__, __LINE__, card, device, flags, rpc_config.channels, rpc_config.rate, card, rpc_config.format, rpc_config.period_size, rpc_config.period_count);
 
-    if (sound_trigger_hdl != NULL) {
-        if (get_sound_trigger_cmd() == SOUND_TRIGGER_DEFAULT)
-            send_ffv_suspend_status(0, false);
+    if (sound_trigger_hdl == NULL)
+        sound_trigger_hdl = pcm_client_open(card, device, flags, &rpc_config);
+    else
+        ALOGI("sound_trigger_hdl is exist %p\n", sound_trigger_hdl);
 
-        ALOGE("sound_trigger_hdl is exist %p\n", sound_trigger_hdl);
-        return sound_trigger_hdl;
-    }
+    if (get_sound_trigger_cmd() == SOUND_TRIGGER_DEFAULT)
+        send_ffv_suspend_status(0, false);
 
-    sound_trigger_hdl = pcm_client_open(card, device, flags, &rpc_config);
     return sound_trigger_hdl;
 }
 
@@ -105,6 +104,8 @@ int pcm_close_dsp(void* hdl)
     open_config = NULL;
     ret = pcm_client_close(hdl);
     sound_trigger_hdl = NULL;
+    // Notify DSP that ffv has been turned off
+    aml_enable_ffv_to_dsp(false);
     return ret;
 }
 
@@ -271,65 +272,10 @@ int fetch_suspend_data_from_dsp(void* buf)
     return ret;
 }
 
-int pcm_get_htimestamp(void* hdl, unsigned int *avail,
-                       struct timespec *tstamp, uint64_t total_read, struct timespec ts)
+void pcm_get_latency_dsp(int sound_trigger_hdl_num, unsigned int *avail_dsp)
 {
-    struct timespec t1 = {0};
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    double buffer_time = (double)open_config->config->period_size * open_config->config->period_count / open_config->config->rate;
-    uint64_t buffer_num = (t1.tv_sec*1000000ULL + t1.tv_nsec/1000 -(ts.tv_sec*1000000ULL + ts.tv_nsec/1000)) / buffer_time * 1000000ULL;
-
-    *avail = pcm_client_get_latency(hdl);
-    total_read += open_config->config->period_size * open_config->config->period_count * buffer_num;
-
-    uint64_t pos = *avail + total_read;
-    tstamp->tv_sec = t1.tv_sec + pos / open_config->config->rate;
-    tstamp->tv_nsec = t1.tv_nsec + ((double)pos / open_config->config->rate - pos/open_config->config->rate) * 1E9L;
-    return 0;
-}
-
-/* Helper function to get PCM hardware timestamp.*/
-uint64_t pcm_get_timestamp_dsp(int sound_trigger_hdl_num, uint32_t sample_rate, unsigned int isOutput, uint64_t total_read, struct timespec ts)
-{
-    struct timespec timestamp;
-    unsigned int available;
-    rpc_pcm_config cfg;
     void* hdl = open_config->dsp_pcm_handles[sound_trigger_hdl_num];
-    if (hdl == NULL) {
-        ALOGE("Error getting PCM timestamp, pcm is null");
-        return 0;
-    }
-    if (pcm_get_htimestamp(hdl, &available, &timestamp, total_read, ts) < 0) {
-        ALOGE("%s Error getting PCM timestamp!", __func__);
-        return 0;
-    }
-
-    int frames = 0;
-    pcm_get_config_dsp(hdl, &cfg);
-    if (isOutput) {
-        frames = (int) (cfg.period_size * cfg.period_count - available);
-    } else {
-        frames = -available; /* rewind timestamp */
-    }
-    clock_gettime(CLOCK_MONOTONIC, &timestamp);
-
-    /* assumes the adjustment (in nsec) is less than the max value of long,
-     * which for 32-bit long this is 2^31 * 1e-9 seconds, slightly over 2 seconds.
-     * For 64-bit long it is  9e+9 seconds. */
-    if (sample_rate > 0) {
-        long adj_nsec = (frames / (float) sample_rate) * 1E9L;
-        timestamp.tv_nsec += adj_nsec;
-        while (timestamp.tv_nsec > 1E9L) {
-            timestamp.tv_sec++;
-            timestamp.tv_nsec -= 1E9L;
-        }
-        if (timestamp.tv_nsec < 0) {
-            timestamp.tv_sec--;
-            timestamp.tv_nsec += 1E9L;
-        }
-    }
-    /*Converts a timespec to nanoseconds*/
-    return timestamp.tv_sec * 1000000000LL + timestamp.tv_nsec;
+    *avail_dsp = pcm_client_get_latency(hdl) * (open_config->config->rate / 1000);
 }
 
 void set_sound_trigger_cmd(int cmd)
@@ -368,7 +314,14 @@ void send_ffv_suspend_status(int sound_trigger_hdl_num, bool ffv_suspend_status)
 
 void aml_enable_ffv_to_dsp(bool enable_ffv)
 {
-    ALOGD("%s %d enable_ffv=%d\n", __func__, __LINE__, enable_ffv);
-    enable_ffv_to_dsp(enable_ffv);
+    bool arg;
+    int h = xAudio_Ipc_init();
+
+    if (h < 0)
+        return;
+    arg = enable_ffv;
+    xAIPC_SEND(h, MBX_CMD_AML_ENABLE_FFV, &arg, sizeof(arg));
+    xAudio_Ipc_Deinit(h);
+    ALOGD("%s enable_ffv=%d\n", __func__, enable_ffv);
 }
 

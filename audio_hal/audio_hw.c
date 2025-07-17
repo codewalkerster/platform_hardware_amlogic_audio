@@ -2724,7 +2724,7 @@ static ssize_t in_read_from_hw(struct audio_stream_in *stream, void* buffer, siz
                 /*coverity[sleep]*/
 #ifdef LOWPOWER_DSP_FFV
                 if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
-                    ret = sound_trigger_read(in, buffer, bytes, &in->dsp_ffv_in_t->ts);
+                    ret = sound_trigger_read(in, buffer, bytes);
                 } else {
 #endif
                     ret = aml_alsa_input_read(stream, buffer, bytes);
@@ -2740,10 +2740,6 @@ static ssize_t in_read_from_hw(struct audio_stream_in *stream, void* buffer, siz
 
     if (ret >= 0) {
         in->frames_read += in_frames;
-#ifdef LOWPOWER_DSP_FFV
-        if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC)
-            in->timestamp_nsec = pcm_get_timestamp_dsp(in->dsp_ffv_in_t->sound_trigger_handle, in->config.rate, 0 /*isOutput*/, in->frames_read, in->dsp_ffv_in_t->ts);
-#endif
     }
     bool mic_muted = false;
     adev_get_mic_mute((struct audio_hw_device*)adev, &mic_muted);
@@ -2816,8 +2812,10 @@ static int in_get_capture_position (const struct audio_stream_in* stream, int64_
     }
 #ifdef LOWPOWER_DSP_FFV
     if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
-        *frames = in->frames_read;
-        *time = in->timestamp_nsec;
+        unsigned int avail_dsp = 0;
+        pcm_get_latency_dsp(in->dsp_ffv_in_t->sound_trigger_handle, &avail_dsp);
+        *time = aml_audio_get_systime_ns();
+        *frames = in->frames_read + avail_dsp;
         pthread_mutex_unlock(&in->lock);
         return 0;
     }

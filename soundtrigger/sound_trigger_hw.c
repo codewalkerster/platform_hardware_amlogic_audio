@@ -256,7 +256,6 @@ static int stdev_load_sound_model(const struct sound_trigger_hw_device *dev,
 {
     struct amlogic_sound_trigger_device *stdev = (struct amlogic_sound_trigger_device *)dev;
     int ret = 0;
-    set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
     pthread_mutex_lock(&stdev->lock);
     if (handle == NULL || sound_model == NULL) {
         ALOGE("%s NULL pointer", __func__);
@@ -333,9 +332,6 @@ static int stdev_unload_sound_model(const struct sound_trigger_hw_device *dev,
     struct amlogic_sound_trigger_device *stdev = (struct amlogic_sound_trigger_device *)dev;
     int status = 0;
     ALOGI("unload_sound_model:%d", handle);
-    set_sound_trigger_cmd(SOUND_TRIGGER_CLOSE_DEVICE);
-    // Notify DSP that ffv has been turned off
-    aml_enable_ffv_to_dsp(false);
     pthread_mutex_lock(&stdev->lock);
 
     struct recognition_context *model_context = NULL;
@@ -353,8 +349,8 @@ static int stdev_unload_sound_model(const struct sound_trigger_hw_device *dev,
     }
     if (!model_context) {
         ALOGW("Can't find sound model handle %d in registered list", handle);
-        pthread_mutex_unlock(&stdev->lock);
-        return -ENOSYS;
+        status = -ENOSYS;
+        goto exit;
     }
     if (previous_model_context) {
         previous_model_context->next = model_context->next;
@@ -363,6 +359,8 @@ static int stdev_unload_sound_model(const struct sound_trigger_hw_device *dev,
     }
     free(model_context->config);
     free(model_context);
+
+exit:
     pthread_mutex_unlock(&stdev->lock);
     return status;
 }
@@ -426,10 +424,10 @@ void callback_wakeup_event(void)
                                 stdev->root_model_context->recognition_cookie);
 
     free(event);
-    /* Leave the device open for streaming. */
-    pthread_mutex_unlock(&stdev->lock);
 
 exit:
+    /* Leave the device open for streaming. */
+    pthread_mutex_unlock(&stdev->lock);
     stdev->root_model_context->recognition_callback = NULL;
     return;
 }
@@ -446,6 +444,7 @@ static int stdev_start_recognition(const struct sound_trigger_hw_device *dev,
     bool other_callbacks_found = recognition_callback_exists(stdev);
     int ret = 0;
 
+    set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
     stdev->root_model_context = get_model_context(stdev, handle);
     if (!stdev->root_model_context) {
         ALOGW("Can't find sound model handle %d in registered list", handle);
@@ -481,10 +480,11 @@ static int stdev_stop_recognition(const struct sound_trigger_hw_device *dev,
     struct amlogic_sound_trigger_device *stdev = (struct amlogic_sound_trigger_device *)dev;
     ALOGI("%s", __func__);
     pthread_mutex_lock(&stdev->lock);
+    set_sound_trigger_cmd(SOUND_TRIGGER_CLOSE_DEVICE);
+
     struct recognition_context *model_context = get_model_context(stdev, handle);
     if (!model_context) {
         ALOGW("Can't find sound model handle %d in registered list", handle);
-        pthread_mutex_unlock(&stdev->lock);
         status = -ENOSYS;
         goto exit;
     }
@@ -495,11 +495,10 @@ static int stdev_stop_recognition(const struct sound_trigger_hw_device *dev,
     model_context->recognition_cookie = NULL;
     model_context->model_started = false;
 
-    pthread_mutex_unlock(&stdev->lock);
-
     ALOGI("%s done for handle %d", __func__, handle);
 
 exit:
+    pthread_mutex_unlock(&stdev->lock);
     return status;
 }
 

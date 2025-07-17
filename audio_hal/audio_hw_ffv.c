@@ -111,7 +111,7 @@ ssize_t in_read_from_fetch_buf(struct audio_stream_in *stream, void* buffer, siz
     return 0;
 }
 
-int sound_trigger_read(struct aml_stream_in *in, void* buffer, size_t bytes, struct timespec *ts)
+int sound_trigger_read(struct aml_stream_in *in, void* buffer, size_t bytes)
 {
     int ret;
     struct aml_audio_device *adev = in->dev;
@@ -119,7 +119,6 @@ int sound_trigger_read(struct aml_stream_in *in, void* buffer, size_t bytes, str
         ALOGE("%s: No handle to sound trigger HAL", __func__);
         return -EIO;
     }
-    clock_gettime(CLOCK_MONOTONIC, ts);
     ret = adev->dsp_ffv->sound_trigger_read_samples(in->dsp_ffv_in_t->sound_trigger_handle, buffer, bytes);
     if (ret <= 0) {
         ALOGE("fail to read ret=%d\n", ret);

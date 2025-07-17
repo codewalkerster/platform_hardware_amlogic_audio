@@ -21,7 +21,7 @@
 #ifdef LOWPOWER_DSP_FFV
 int sound_trigger_open(struct aml_stream_in *in, unsigned int port, unsigned int card);
 ssize_t in_read_from_fetch_buf(struct audio_stream_in *stream, void* buffer, size_t bytes);
-int sound_trigger_read(struct aml_stream_in *in, void* buffer, size_t bytes, struct timespec *ts);
+int sound_trigger_read(struct aml_stream_in *in, void* buffer, size_t bytes);
 int sound_trigger_close(struct aml_stream_in *in);
 int sound_trigger_to_suspend(struct aml_stream_in *in);
 void dsp_ffv_stream_init(struct aml_stream_in *in);
