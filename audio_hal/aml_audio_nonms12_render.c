@@ -965,6 +965,7 @@ int aml_decoder_config_prepare(struct audio_stream_out *stream, audio_format_t f
         break;
     }
     case AUDIO_FORMAT_PCM_16_BIT:
+    case AUDIO_FORMAT_PCM_FLOAT:
     case AUDIO_FORMAT_PCM_32_BIT:
     case AUDIO_FORMAT_PCM_8_BIT:
     case AUDIO_FORMAT_PCM_8_24_BIT: {

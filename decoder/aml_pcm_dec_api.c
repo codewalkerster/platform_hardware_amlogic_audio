@@ -19,12 +19,15 @@
 #include <cutils/log.h>
 #include "aml_dec_api.h"
 #include "aml_malloc_debug.h"
+#include <audio_utils/format.h>
 
 #define PCM_MAX_LENGTH (8192*2*2)
 
 struct pcm_dec_t {
     aml_dec_t  aml_dec;
     aml_pcm_config_t pcm_config;
+    unsigned char *convert_format_buf;
+    int convert_format_buf_size;
 };
 
 static inline short CLIP16(int r)
@@ -116,7 +119,11 @@ static int pcm_decoder_init(aml_dec_t **ppaml_dec, aml_dec_config_t * dec_config
     dec_pcm_data = &aml_dec->dec_pcm_data;
     dec_pcm_data->buf_size = PCM_MAX_LENGTH;
     dec_pcm_data->buf = (unsigned char*) aml_audio_calloc(1, dec_pcm_data->buf_size);
-    if (!dec_pcm_data->buf) {
+
+    pcm_dec->convert_format_buf_size = PCM_MAX_LENGTH;
+    pcm_dec->convert_format_buf = (unsigned char *)aml_audio_malloc(pcm_dec->convert_format_buf_size);
+
+    if (!dec_pcm_data->buf || !pcm_dec->convert_format_buf ) {
         ALOGE("malloc buffer failed\n");
         goto exit;
     }
@@ -144,6 +151,10 @@ exit:
         if (raw_in_data && raw_in_data->buf) {
             aml_audio_free(raw_in_data->buf);
         }
+        if (pcm_dec->convert_format_buf) {
+            aml_audio_free(pcm_dec->convert_format_buf);
+            pcm_dec->convert_format_buf = NULL;
+        }
         aml_audio_free(pcm_dec);
     }
     *ppaml_dec = NULL;
@@ -153,6 +164,7 @@ exit:
 
 static int pcm_decoder_release(aml_dec_t * aml_dec)
 {
+    struct pcm_dec_t *pcm_dec = (struct pcm_dec_t *)aml_dec;;
     dec_data_info_t * dec_pcm_data = NULL;
     dec_data_info_t * raw_in_data = NULL;
 
@@ -165,7 +177,10 @@ static int pcm_decoder_release(aml_dec_t * aml_dec)
         if (raw_in_data->buf) {
             aml_audio_free(raw_in_data->buf);
         }
-
+        if (pcm_dec->convert_format_buf) {
+            aml_audio_free(pcm_dec->convert_format_buf);
+            pcm_dec->convert_format_buf = NULL;
+        }
         if (aml_dec->decFunc) {
             aml_audio_free(aml_dec->decFunc);
             aml_dec->decFunc = NULL;
@@ -192,6 +207,16 @@ static int pcm_decoder_process(aml_dec_t * aml_dec, unsigned char*buffer, int by
         return AML_DEC_RETURN_TYPE_FAIL;
     }
 
+    audio_format_t output_format;
+    if (aml_dec->output_format == FMT_16BIT) {
+        output_format = AUDIO_FORMAT_PCM_16_BIT;
+    } else if (aml_dec->output_format == FMT_32BIT) {
+        output_format = AUDIO_FORMAT_PCM_32_BIT;
+    }else{
+        ALOGE("%s aml_dec->output_format not match FMT_16BIT or FMT_32BIT", __func__);
+        return -1;
+    }
+
     pcm_dec = (struct pcm_dec_t *)aml_dec;
     pcm_config = &pcm_dec->pcm_config;
     dec_data_info_t * dec_pcm_data = &aml_dec->dec_pcm_data;
@@ -216,12 +241,15 @@ static int pcm_decoder_process(aml_dec_t * aml_dec, unsigned char*buffer, int by
     if (dec_pcm_data->buf_size < downmix_size) {
         ALOGI("realloc outbuf_max_len  from %d to %d\n", dec_pcm_data->buf_size, downmix_size);
         dec_pcm_data->buf = aml_audio_realloc(dec_pcm_data->buf, downmix_size);
-        if (dec_pcm_data->buf == NULL) {
+        pcm_dec->convert_format_buf = aml_audio_realloc(pcm_dec->convert_format_buf, downmix_size);
+        if (dec_pcm_data->buf == NULL || pcm_dec->convert_format_buf == NULL) {
             ALOGE("realloc pcm buffer failed size %d\n", downmix_size);
             return AML_DEC_RETURN_TYPE_FAIL;
         }
+        pcm_dec->convert_format_buf_size = downmix_size;
         dec_pcm_data->buf_size = downmix_size;
         memset(dec_pcm_data->buf, 0, downmix_size);
+        memset(pcm_dec->convert_format_buf, 0, downmix_size);
     }
 
     if ((pcm_config->input_channel == 2 || pcm_config->input_channel == 1)
@@ -237,11 +265,20 @@ static int pcm_decoder_process(aml_dec_t * aml_dec, unsigned char*buffer, int by
         return AML_DEC_RETURN_TYPE_OK;
     }
 
-
     dec_pcm_data->data_len = downmix_size;
     dec_pcm_data->data_sr  = pcm_config->samplerate;
     dec_pcm_data->data_ch  = pcm_config->output_channel; //2;
     dec_pcm_data->data_format  = pcm_config->pcm_format;
+
+    if (dec_pcm_data->data_format == AUDIO_FORMAT_PCM_FLOAT) {
+        uint32_t samples = dec_pcm_data->data_len / audio_bytes_per_sample(AUDIO_FORMAT_PCM_FLOAT);
+        memcpy(pcm_dec->convert_format_buf, dec_pcm_data->buf, dec_pcm_data->data_len);
+        memcpy_by_audio_format(dec_pcm_data->buf, output_format,
+                               pcm_dec->convert_format_buf, AUDIO_FORMAT_PCM_FLOAT, samples);
+        dec_pcm_data->data_len = samples * audio_bytes_per_sample(output_format);
+        dec_pcm_data->data_format  = output_format;
+    }
+
     ALOGV("%s data_in=%d ch =%d out=%d ch=%d", __func__, bytes, pcm_config->input_channel, downmix_size, pcm_config->output_channel);
 
     if (pcm_config->max_out_channels >= pcm_config->input_channel) {

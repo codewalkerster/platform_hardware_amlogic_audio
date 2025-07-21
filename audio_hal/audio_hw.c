@@ -6158,7 +6158,7 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
     write_bytes = bytes;
 
     /* PCM use the Tunnel mode */
-    if (audio_is_linear_pcm(aml_out->hal_internal_format)) {
+    if (audio_is_linear_pcm(aml_out->hal_internal_format) && aml_out->hal_internal_format != AUDIO_FORMAT_PCM_FLOAT) {
         bool is_local_out_bitstream = !is_tv_stream_out(aml_out) && (adev->sink_format > AUDIO_FORMAT_PCM_16_BIT);
 
         pcm_data_do_pre_attenuation(

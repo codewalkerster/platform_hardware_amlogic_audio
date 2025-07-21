@@ -175,6 +175,7 @@ static aml_dec_func_t *get_dynamic_decoder_function(aml_dec_t *aml_dec, audio_fo
             return NULL;
     }
     case AUDIO_FORMAT_PCM_16_BIT:
+    case AUDIO_FORMAT_PCM_FLOAT:
     case AUDIO_FORMAT_PCM_32_BIT:
     case AUDIO_FORMAT_PCM_8_BIT:
     case AUDIO_FORMAT_PCM_8_24_BIT: {
