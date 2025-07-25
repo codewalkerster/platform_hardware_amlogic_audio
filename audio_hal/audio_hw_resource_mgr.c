@@ -556,8 +556,15 @@ int do_output_device_routing(struct aml_audio_device *adev, audio_devices_t out_
                 adev->reset_hdmitx_audio = true;
             }
         } else {
-            //keep hdmi always unmute for FFV and assistant miss first word.
-            //audio_route_apply_path(mgr->ar, "hdmi_off");
+            //fix for switching BT and hdmi-out output from UI setting.
+            //this scene should mute hdmi-out.
+            if ((adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) || (adev->out_device & AUDIO_DEVICE_OUT_ALL_USB)
+                || (adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER)) {
+                audio_route_apply_path(mgr->ar, "hdmi_off");
+            } else {
+                //keep hdmi always unmute for FFV and assistant miss first word.
+                //audio_route_apply_path(mgr->ar, "hdmi_off");
+            }
         }
         break;
     case AUDIO_DEVICE_OUT_WIRED_HEADPHONE:
