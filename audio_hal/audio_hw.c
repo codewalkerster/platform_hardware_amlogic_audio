@@ -2813,7 +2813,7 @@ static int in_get_capture_position (const struct audio_stream_in* stream, int64_
 #ifdef LOWPOWER_DSP_FFV
     if (in->device & AUDIO_DEVICE_IN_BUILTIN_MIC) {
         unsigned int avail_dsp = 0;
-        pcm_get_latency_dsp(in->dsp_ffv_in_t->sound_trigger_handle, &avail_dsp);
+        pcm_get_delay_frames_dsp(in->dsp_ffv_in_t->sound_trigger_handle, &avail_dsp);
         *time = aml_audio_get_systime_ns();
         *frames = in->frames_read + avail_dsp;
         pthread_mutex_unlock(&in->lock);

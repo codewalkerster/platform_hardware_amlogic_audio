@@ -26,6 +26,8 @@
 #include <errno.h>
 #include "alsa_device_parser.h"
 
+#define DSP_PCM_ID_BUILTINMIC  5 /* builtinmic device id in dsp */
+
 #define UNUSED(x)	(void)(x)
 struct pcm_open_config* open_config = NULL;
 int sound_trigger_cmd = SOUND_TRIGGER_CLOSE_DEVICE;
@@ -118,9 +120,9 @@ uint32_t pcm_client_bytes_to_frame_dsp(int sound_trigger_hdl_num, uint32_t bytes
 int alsa_device_update_pcm_index_dsp(int alsaPORT, int stream)
 {
     if (alsaPORT == PORT_BUILTINMIC && stream == CAPTURE)
-        return 5;
+        return DSP_PCM_ID_BUILTINMIC;
     else
-        return 0;
+        return DSP_PCM_ID_BUILTINMIC; /* default for vts test */
 }
 
 int pcm_read_dsp(void* hdl, void *data, unsigned int bytes)
@@ -272,10 +274,10 @@ int fetch_suspend_data_from_dsp(void* buf)
     return ret;
 }
 
-void pcm_get_latency_dsp(int sound_trigger_hdl_num, unsigned int *avail_dsp)
+void pcm_get_delay_frames_dsp(int sound_trigger_hdl_num, unsigned int *avail_dsp)
 {
     void* hdl = open_config->dsp_pcm_handles[sound_trigger_hdl_num];
-    *avail_dsp = pcm_client_get_latency(hdl) * (open_config->config->rate / 1000);
+    *avail_dsp = pcm_client_get_delay_frames(hdl);
 }
 
 void set_sound_trigger_cmd(int cmd)
