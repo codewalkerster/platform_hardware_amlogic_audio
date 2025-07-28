@@ -50,6 +50,10 @@ typedef struct
     int chunk_size;
     char model_path[256];
     int value;
+    /* background audio gain from 0 to 1.0, default is 1.0 */
+    float bg_gain;
+    /* model size (1/2/3), smaller model type, lower cpu cost */
+    int model_type;
 } aai_iva_audio_enhancement_param_t;
 
 /*

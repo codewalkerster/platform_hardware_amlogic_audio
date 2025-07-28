@@ -58,7 +58,7 @@ typedef enum AML_DUMP_DEBUG_INFO {
     AML_DUMP_AUDIOHAL_SPEED,
     AML_DUMP_AUDIOHAL_EFFECT,
     AML_DUMP_AUDIOHAL_ASYNC,
-    AML_DUMP_AUDIOHAL_AIDE,
+    AML_DUMP_AUDIOHAL_AIAUDIO,
 
     AML_DEBUG_DUMP_MAX,
 } AML_DUMP_DEBUG_INFO_T;
@@ -126,7 +126,7 @@ void DoDumpData(const void *data_buf, int size, int aud_src_type);
 #define AML_DUMP_AUDIOHAL_SPEED_PROPERTY            "vendor.media.audiohal.speed.dump"
 #define AML_DUMP_AUDIOHAL_EFFECT_PROPERTY           "vendor.media.audiohal.effect.dump"
 #define AML_DUMP_AUDIOHAL_ASYNC_PROPERTY            "vendor.media.audiohal.async.dump"
-#define AML_DUMP_AUDIOHAL_AIDE_PROPERTY             "vendor.media.audiohal.aide.dump"
+#define AML_DUMP_AUDIOHAL_AIAUDIO_PROPERTY          "vendor.media.audiohal.aiaudio.dump"
 
 
 void aml_audio_debug_open(void);

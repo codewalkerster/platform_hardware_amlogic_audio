@@ -877,7 +877,7 @@ int set_AQ_parameters(struct audio_hw_device *dev, struct str_parms *parms)
             val = MAX_AUDIO_ENHANCEMENT_GAIN;
         }
         aml_set_audio_enhancement_gain(&adev->native_postprocess, val);
-        ALOGI("audio_enhancement setting gain %d dB", val);
+        ALOGI("audio_enhancement level (low/middle/high): %d", val);
         goto exit;
     }
 

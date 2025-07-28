@@ -23,8 +23,8 @@
 
 // max the processed channels
 #define MAX_AUDIO_ENHANCEMENT_INSTANCE              (2)
-#define MAX_AUDIO_ENHANCEMENT_GAIN                  (15)
-#define MIN_AUDIO_ENHANCEMENT_GAIN                  (-15)
+#define MAX_AUDIO_ENHANCEMENT_GAIN                  (3)
+#define MIN_AUDIO_ENHANCEMENT_GAIN                  (1)
 
 typedef struct audio_enhancement_libraries_context_s {
     //dlopen libaaisdk.so

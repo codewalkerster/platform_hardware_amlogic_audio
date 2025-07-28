@@ -209,6 +209,9 @@ int aml_open_audio_enhancement_module(struct aml_native_postprocess *native_post
     }
     strcpy(pAudioEnhancementModule->stEnhancementParam.model_path, AUDIO_ENHANCMENT_MODEL_PATH);
 
+    pAudioEnhancementModule->stEnhancementParam.model_type = 2;
+    pAudioEnhancementModule->stEnhancementParam.bg_gain = 1.0;
+
     // iva library dlopen/dlsym
     pstIvaEnhancementHandle = &pAudioEnhancementModule->iva_enhancement_handle;
     ret = iva_libraries_open(&pAudioEnhancementModule->iva_enhancement_handle, AUDIO_AI_LIB_PATH);
@@ -300,6 +303,8 @@ int aml_set_audio_enhancement_enable(struct aml_native_postprocess *native_postp
     if (enable) {
         ring_buffer_reset(&pAudioEnhancementModule->input_rbuffer);
         ring_buffer_reset(&pAudioEnhancementModule->output_rbuffer);
+    } else {
+        aml_set_audio_enhancement_gain(native_postprocess, 0);
     }
 
     if (pstIvaEnhancementHandle) {
@@ -329,7 +334,9 @@ int aml_update_audio_channel_mask(struct aml_native_postprocess *native_postproc
 
 int aml_set_audio_enhancement_gain(struct aml_native_postprocess *native_postprocess, int gain_db)
 {
-    ALOGD("%s, %ddB", __func__, gain_db);
+    int dialog_gain = gain_db;
+    float background_gain = 1.0;
+
     if (!native_postprocess || !native_postprocess->audio_enhancment_handle) {
         ALOGE("%s() invalid param for audio enhancement", __func__);
         return -1;
@@ -337,9 +344,29 @@ int aml_set_audio_enhancement_gain(struct aml_native_postprocess *native_postpro
 
     aml_audio_enhancement_module_t *pAudioEnhancementModule = (aml_audio_enhancement_module_t *)native_postprocess->audio_enhancment_handle;
     audio_enhancement_libraries_context_t *pstIvaEnhancementHandle = &pAudioEnhancementModule->iva_enhancement_handle;
+    switch (dialog_gain) {
+        case 1:
+            dialog_gain = 4;
+            background_gain = 1.0;
+            break;
+        case 2:
+            dialog_gain = 8;
+            background_gain = 0.95;
+            break;
+        case 3:
+            dialog_gain = 12;
+            background_gain = 0.5;
+            break;
+        default:
+            dialog_gain = 0;
+            background_gain = 1.0;
+            break;
+    }
     pAudioEnhancementModule->audio_enhancement_gain = gain_db;
-    pAudioEnhancementModule->stEnhancementParam.value = gain_db;
+    pAudioEnhancementModule->stEnhancementParam.value = dialog_gain;
+    pAudioEnhancementModule->stEnhancementParam.bg_gain = background_gain;
 
+    ALOGD("%s, level = %d, dialog enhance %ddB, background duck %f", __func__, gain_db, dialog_gain, background_gain);
     if (pstIvaEnhancementHandle) {
         for (int i = 0; i < MAX_AUDIO_ENHANCEMENT_INSTANCE; i++) {
             if (pstIvaEnhancementHandle->nnans_imple[i] && pstIvaEnhancementHandle->iva_setparam) {
@@ -395,7 +422,7 @@ int aml_audio_enhancement_module_process(void *handle, audio_buffer_t *inBuf, au
     uint32_t src_frame_size = audio_bytes_per_sample(format) * nChannels;
     uint32_t src_data_bytes = src_frame_size * inframeCount;
 
-    if (get_debug_value(AML_DUMP_AUDIOHAL_AIDE)) {
+    if (get_debug_value(AML_DUMP_AUDIOHAL_AIAUDIO)) {
         aml_dump_audio_bitstreams(AUDIO_ENHANCE_DUMP_BEFORE, inBuf->raw, src_data_bytes);
     }
 
@@ -517,7 +544,7 @@ int aml_audio_enhancement_module_process(void *handle, audio_buffer_t *inBuf, au
     if (get_buffer_read_space(output_rbuffer) >= src_data_bytes)
         ring_buffer_read(output_rbuffer, outBuf->raw, src_data_bytes);
 
-    if (get_debug_value(AML_DUMP_AUDIOHAL_AIDE)) {
+    if (get_debug_value(AML_DUMP_AUDIOHAL_AIAUDIO)) {
         aml_dump_audio_bitstreams(AUDIO_ENHANCE_DUMP_OUTPUT, outBuf->raw, src_data_bytes);
     }
 
