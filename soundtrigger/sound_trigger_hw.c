@@ -444,7 +444,8 @@ static int stdev_start_recognition(const struct sound_trigger_hw_device *dev,
     bool other_callbacks_found = recognition_callback_exists(stdev);
     int ret = 0;
 
-    set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
+    if (get_sound_trigger_cmd() != SOUND_TRIGGER_WAKEUP_KEYWORD)
+        set_sound_trigger_cmd(SOUND_TRIGGER_DEFAULT);
     stdev->root_model_context = get_model_context(stdev, handle);
     if (!stdev->root_model_context) {
         ALOGW("Can't find sound model handle %d in registered list", handle);
