@@ -1119,10 +1119,3 @@ aml_dec_func_t *get_dca_dec_func_handle(void)
     return amlDcvFunc;
 }
 
-aml_dec_func_t aml_dca_func = {
-    .f_init                 = dca_decoder_init_patch,
-    .f_release              = dca_decoder_release_patch,
-    .f_process              = dca_decoder_process_patch,
-    .f_config               = dca_decoder_config,
-    .f_info                 = dca_decoder_getinfo,
-};

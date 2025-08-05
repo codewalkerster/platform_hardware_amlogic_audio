@@ -23,7 +23,8 @@ LOCAL_SHARED_LIBRARIES := \
     libalsautils \
     libamlresampler \
     libaudioutils \
-    libamaudioutils_boot
+    libamaudioutils_boot \
+    libamlmpeghiec
 
 LOCAL_C_INCLUDES := \
    external/tinyalsa/include \
@@ -37,6 +38,8 @@ LOCAL_C_INCLUDES := \
    $(LOCAL_PATH)/../utils/resampler/include \
    $(LOCAL_PATH)/../utils/speed/include \
    $(LOCAL_PATH)/../audio_hal \
+   hardware/amlogic/audio//utils/mpegh_iec \
+   hardware/amlogic/audio/utils/mpegh_iec/include \
    $(LOCAL_PATH)/../utils/parser/include \
    $(LOCAL_PATH)/../utils/cJSON \
 

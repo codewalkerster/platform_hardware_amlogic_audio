@@ -57,75 +57,6 @@ typedef enum eDTSLibType {
     eDTSXLib  = 2,
 } eDTSLibType_t;
 
-static aml_dec_func_t * get_decoder_function(audio_format_t format, int dts_lib_type)
-{
-    switch ((uint32_t)format) {
-    case AUDIO_FORMAT_AC3:
-    case AUDIO_FORMAT_E_AC3: {
-        return &aml_dcv_func;
-    }
-    case AUDIO_FORMAT_DOLBY_TRUEHD:
-    case AUDIO_FORMAT_MAT:
-        return &aml_iec_func;
-    case AUDIO_FORMAT_DTS: {
-        if (dts_lib_type == eDTSXLib)
-            return &aml_dtsx_func;
-        else
-            return &aml_dca_func;
-    }
-    case AUDIO_FORMAT_DTS_HD: {
-        if (dts_lib_type == eDTSXLib)
-            return &aml_dtsx_func;
-        else if (dts_lib_type == eDTSHDLib)
-            return &aml_dca_func;
-        else
-            return &aml_iec_func;
-    }
-    case AUDIO_FORMAT_DTS_UHD_P2: {
-        if (dts_lib_type == eDTSXLib)
-            return &aml_dtsx_func;
-        else
-            return NULL;
-    }
-    case AUDIO_FORMAT_PCM_16_BIT:
-    case AUDIO_FORMAT_PCM_32_BIT:
-    case AUDIO_FORMAT_PCM_8_BIT:
-    case AUDIO_FORMAT_PCM_8_24_BIT: {
-        return &aml_pcm_func;
-    }
-    case AUDIO_FORMAT_MP3:
-    case AUDIO_FORMAT_MP2: {
-       return  &aml_mad_func;
-    }
-    case AUDIO_FORMAT_AAC:
-    case AUDIO_FORMAT_AAC_LATM:
-    case AUDIO_FORMAT_AAC_LC:
-    case AUDIO_FORMAT_AAC_HE_V1:
-    case AUDIO_FORMAT_AAC_HE_V2:
-    case AUDIO_FORMAT_HE_AAC_V2: {
-        return  &aml_faad_func;
-    }
-    case AUDIO_FORMAT_MPEGH:
-    case AUDIO_FORMAT_MPEGH_BL_L3:
-    case AUDIO_FORMAT_MPEGH_BL_L4:
-    case AUDIO_FORMAT_MPEGH_LC_L3:
-    case AUDIO_FORMAT_MPEGH_LC_L4: {
-        return &aml_mpegh_func;
-    }
-    case AUDIO_FORMAT_IEC61937:
-        return &aml_iec_func;
-    default:
-        if (format == AUDIO_FORMAT_DRA) {
-            return  &aml_dra_func;
-        }
-        ALOGE("[%s:%d] doesn't support decoder format:%#x", __func__, __LINE__, format);
-        return NULL;
-    }
-
-    return NULL;
-}
-
-
 static aml_dec_func_t *get_dynamic_decoder_function(aml_dec_t *aml_dec, audio_format_t format, int dts_lib_type)
 {
     aml_dec_func_t *pFunc = NULL;
@@ -199,7 +130,6 @@ static aml_dec_func_t *get_dynamic_decoder_function(aml_dec_t *aml_dec, audio_fo
     case AUDIO_FORMAT_MPEGH_LC_L3:
     case AUDIO_FORMAT_MPEGH_LC_L4: {
         pFunc = get_mpegh_dec_func_handle();
-        AM_LOGI("  aml_mpegh_func %p  pFunc:%p", (void *)&aml_mpegh_func, pFunc);
         return pFunc;
     }
     case AUDIO_FORMAT_IEC61937: {
@@ -209,7 +139,6 @@ static aml_dec_func_t *get_dynamic_decoder_function(aml_dec_t *aml_dec, audio_fo
     default:
         if (format == AUDIO_FORMAT_DRA) {
             pFunc = get_dra_dec_func_handle();
-            AM_LOGI("  aml_dra_func %p  pFunc:%p", (void *)&aml_dra_func, pFunc);
             return pFunc;
         }
         ALOGE("[%s:%d] doesn't support decoder format:%#x", __func__, __LINE__, format);

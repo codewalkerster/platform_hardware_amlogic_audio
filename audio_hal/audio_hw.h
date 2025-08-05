@@ -195,6 +195,9 @@ enum audio_hal_format {
     TYPE_AAC  = 21,
     TYPE_HEAAC = 22,
     TYPE_DTSX = 23,
+    TYPE_MPEGH = 24,
+    TYPE_MPEGH_ASI_UPDATE = 25,
+    TYPE_NOT_SUPPORT = 26,
 };
 #define FRAMESIZE_16BIT_STEREO 4
 #define FRAMESIZE_32BIT_STEREO 8
@@ -1107,6 +1110,11 @@ static inline bool is_raw_stream(struct aml_stream_out *out)
     case AUDIO_FORMAT_DTS_HD:
     case AUDIO_FORMAT_DTS_UHD_P2:
     case AUDIO_FORMAT_IEC61937:
+    case AUDIO_FORMAT_MPEGH:
+    case AUDIO_FORMAT_MPEGH_BL_L3:
+    case AUDIO_FORMAT_MPEGH_BL_L4:
+    case AUDIO_FORMAT_MPEGH_LC_L3:
+    case AUDIO_FORMAT_MPEGH_LC_L4:
         is_raw_format = true;
         break;
     default :

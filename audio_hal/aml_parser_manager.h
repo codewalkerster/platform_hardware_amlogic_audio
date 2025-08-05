@@ -41,6 +41,7 @@ typedef enum aml_parser_type {
     AML_PARSER_DTS,
     AML_PARSER_DTSHD,
     AML_PARSER_HEAAC,
+    AML_PARSER_MPEGH,
 
     AML_PARSER_MAX,
 } aml_parser_type_t;

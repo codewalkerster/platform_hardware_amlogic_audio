@@ -565,11 +565,3 @@ aml_dec_func_t *get_dra_dec_func_handle(void)
 
     return amlDcvFunc;
 }
-
-aml_dec_func_t aml_dra_func = {
-    .f_init                 = dra_decoder_init,
-    .f_release              = dra_decoder_release,
-    .f_process              = dra_decoder_process,
-    .f_config               = dra_decoder_config,
-    .f_info                 = dra_decoder_getinfo,
-};

@@ -38,6 +38,7 @@
 #include "aml_audio_ac3parser.h"
 #include "aml_audio_spdifdec.h"
 #include "aml_audio_ac4parser.h"
+#include "aml_audio_mpeghparser.h"
 #include "aml_audio_dtsparser.h"
 #include "audio_hw_utils.h"
 
@@ -53,6 +54,7 @@ const char* parserType2Str(aml_parser_type_t type)
     ENUM_TYPE_TO_STR(AML_PARSER_DTS)
     ENUM_TYPE_TO_STR(AML_PARSER_DTSHD)
     ENUM_TYPE_TO_STR(AML_PARSER_HEAAC)
+    ENUM_TYPE_TO_STR(AML_PARSER_MPEGH)
     ENUM_TYPE_TO_STR(AML_PARSER_MAX)
     ENUM_TYPE_TO_STR_END
 }
@@ -100,6 +102,11 @@ static bool is_raw_parser_support(audio_format_t inFormat) {
         case AUDIO_FORMAT_DTS_HD_MA:
         case AUDIO_FORMAT_DTS_UHD:
         case AUDIO_FORMAT_DTS_UHD_P2:
+        case AUDIO_FORMAT_MPEGH:
+        case AUDIO_FORMAT_MPEGH_BL_L3:
+        case AUDIO_FORMAT_MPEGH_BL_L4:
+        case AUDIO_FORMAT_MPEGH_LC_L3:
+        case AUDIO_FORMAT_MPEGH_LC_L4:
             retValue = true;
             break;
         default:
@@ -140,6 +147,13 @@ static int _convert_format_to_parser_type(audio_format_t inFormat, bool isHwsync
             case AUDIO_FORMAT_DTS_UHD:
             case AUDIO_FORMAT_DTS_UHD_P2:
                 parserType = AML_PARSER_DTS;
+                break;
+            case AUDIO_FORMAT_MPEGH:
+            case AUDIO_FORMAT_MPEGH_BL_L3:
+            case AUDIO_FORMAT_MPEGH_BL_L4:
+            case AUDIO_FORMAT_MPEGH_LC_L3:
+            case AUDIO_FORMAT_MPEGH_LC_L4:
+                parserType = AML_PARSER_MPEGH;
                 break;
             default:
                 break;
@@ -185,6 +199,13 @@ static aml_parser_func_t *_get_dynamic_parser_function(aml_parser_t *pAmlParser,
             case AUDIO_FORMAT_DTS_UHD:
             case AUDIO_FORMAT_DTS_UHD_P2:
                 pParserFunc = get_dts_parser_func_handle();
+                break;
+            case AUDIO_FORMAT_MPEGH:
+            case AUDIO_FORMAT_MPEGH_BL_L3:
+            case AUDIO_FORMAT_MPEGH_BL_L4:
+            case AUDIO_FORMAT_MPEGH_LC_L3:
+            case AUDIO_FORMAT_MPEGH_LC_L4:
+                pParserFunc = get_mpegh_parser_func_handle();
                 break;
             default:
                 break;

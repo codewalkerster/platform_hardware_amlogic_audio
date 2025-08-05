@@ -275,10 +275,3 @@ aml_dec_func_t *get_iec_dec_func_handle(void)
     return amlDcvFunc;
 }
 
-aml_dec_func_t aml_iec_func = {
-    .f_init                 = iec_passthrough_init,
-    .f_release              = iec_passthrough_release,
-    .f_process              = iec_passthrough_process,
-    .f_config               = iec_passthrough_config,
-    .f_info                 = iec_passthrough_getinfo,
-};

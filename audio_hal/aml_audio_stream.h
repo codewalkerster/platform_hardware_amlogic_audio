@@ -400,6 +400,11 @@ static inline bool is_digital_raw_format(audio_format_t format)
     case AUDIO_FORMAT_AAC_HE_V2:
     case AUDIO_FORMAT_AAC_LATM:
     case AUDIO_FORMAT_DRA:
+    case AUDIO_FORMAT_MPEGH:
+    case AUDIO_FORMAT_MPEGH_BL_L3:
+    case AUDIO_FORMAT_MPEGH_BL_L4:
+    case AUDIO_FORMAT_MPEGH_LC_L3:
+    case AUDIO_FORMAT_MPEGH_LC_L4:
         return true;
     default:
         return false;

@@ -1159,6 +1159,8 @@ size_t aml_alsa_output_write_new(void *handle, const void *buffer, size_t bytes)
             snprintf(audio_type, 32, "%s", "mat");
         } else if (alsa_handle->format == AUDIO_FORMAT_DTS) {
             snprintf(audio_type, 32, "%s", "dts");
+        } else if(alsa_handle->format == AUDIO_FORMAT_MPEGH) {
+            snprintf(audio_type, 32, "%s", "mpegh");
         } else {
             snprintf(audio_type, 32, "%s", "pcm");
         }

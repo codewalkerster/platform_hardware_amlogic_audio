@@ -252,7 +252,6 @@ typedef struct aml_iec_config {
 
 typedef struct aml_mpegh_config {
     audio_format_t format;
-    bool is_iec61937;
     int samplerate;
     int channel;
 } aml_mpegh_config_t;

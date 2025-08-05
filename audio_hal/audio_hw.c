@@ -3092,7 +3092,6 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
                 config->format = AUDIO_FORMAT_AC3;
             }
         }
-
         out->stream.common.get_channels = out_get_channels_direct;
         out->stream.common.get_format = out_get_format_direct;
         out->stream.write = out_write_new;
@@ -7129,6 +7128,7 @@ ssize_t out_write_new(struct audio_stream_out *stream,
         parserConfig.dataFormat.sampleRate = aml_out->hal_rate;
         parserConfig.dataFormat.format = aml_out->hal_format;
         parserConfig.dataFormat.subFormat = aml_out->hal_internal_format;
+        parserConfig.isTvFlag = aml_out->is_tv_src_stream || aml_out->is_dtv_src_stream;
         pthread_mutex_lock(&aml_out->parser_MutexLock);
         aml_parser_init((aml_parser_t **)&aml_out->aml_parser, &parserConfig);
         pthread_mutex_unlock(&aml_out->parser_MutexLock);

@@ -893,16 +893,16 @@ static void iec_decoder_config_prepare(struct audio_stream_out *stream, aml_iec_
 
 static void mpegh_decoder_config_prepare(struct audio_stream_out *stream, aml_mpegh_config_t * mpegh_config){
     struct aml_stream_out *aml_out = (struct aml_stream_out *)stream;
-
-    if (aml_out->hal_format == AUDIO_FORMAT_IEC61937) {
-        mpegh_config->is_iec61937 = true;
+    struct aml_audio_device *adev = NULL;
+    adev = aml_out->dev;
+    //Temporary setting: if with ms12, mpegh decoder output 6ch pcm.
+    if (eDolbyMS12Lib == adev->dolby_lib_type) {
+        mpegh_config->channel = 6;
     } else {
-        mpegh_config->is_iec61937 = false;
+        mpegh_config->channel = 2;
     }
-    mpegh_config->channel = aml_out->hal_ch;
     mpegh_config->samplerate = aml_out->hal_rate;
     mpegh_config->format = aml_out->hal_internal_format;
-
     return;
 }
 

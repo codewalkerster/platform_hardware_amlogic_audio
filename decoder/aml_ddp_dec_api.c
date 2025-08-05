@@ -1244,13 +1244,3 @@ aml_dec_func_t *get_ddp_dec_func_handle(void)
     return amlDcvFunc;
 }
 
-aml_dec_func_t aml_dcv_func = {
-    .f_init                 = dcv_decoder_init_patch,
-    .f_release              = dcv_decoder_release_patch,
-    .f_process              = dcv_decoder_process_patch,
-    .f_config               = dcv_decoder_config,
-    .f_info                 = dcv_decoder_info,
-    .f_flush                = dcv_decoder_flush,
-};
-
-

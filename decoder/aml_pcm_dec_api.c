@@ -320,11 +320,3 @@ aml_dec_func_t *get_pcm_dec_func_handle(void)
 
     return amlDcvFunc;
 }
-
-aml_dec_func_t aml_pcm_func = {
-    .f_init                 = pcm_decoder_init,
-    .f_release              = pcm_decoder_release,
-    .f_process              = pcm_decoder_process,
-    .f_config               = NULL,
-    .f_info                 = NULL,
-};

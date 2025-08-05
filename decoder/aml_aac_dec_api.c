@@ -732,12 +732,3 @@ aml_dec_func_t *get_faad_dec_func_handle(void)
 
     return amlDcvFunc;
 }
-
-aml_dec_func_t aml_faad_func = {
-    .f_init                 = faad_decoder_init,
-    .f_release              = faad_decoder_release,
-    .f_process              = faad_decoder_process,
-    .f_config               = faad_decoder_config,
-    .f_info                 = faad_decoder_getinfo,
-    .f_flush                = faad_decoder_flush,
-};

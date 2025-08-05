@@ -297,7 +297,7 @@ int get_hardware_config_parameters(
         get_dts_hardware_config_parameters(final_config, 2, rate);
     }
     //MPEG-H
-    else if (output_format == 0x2C000000u/*AUDIO_FORMAT_MPEGH*/) {
+    else if (output_format == AUDIO_FORMAT_MPEGH) {
         get_mpegh_hardware_config_parameters(final_config, 2, rate);
     }
     //PCM

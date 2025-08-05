@@ -104,6 +104,7 @@ static const struct audio_format_code_list gAudioFormatList[] = {
     {AML_HDMI_FORMAT_MAT, "AUDIO_FORMAT_MAT"},
     {AML_HDMI_FORMAT_DST, "AUDIO_FORMAT_DST"},
     {AML_HDMI_FORMAT_WMAPRO, "AUDIO_FORMAT_WMAPRO"},
+    {AML_HDMI_FORMAT_MPEGH, "AUDIO_FORMAT_MPEGH"},
     {AML_HDMI_FORMAT_RESERVED2, "AUDIO_FORMAT_RESERVED2"},
 };
 
@@ -674,6 +675,8 @@ int set_arc_format(struct audio_hw_device *dev, char *value, size_t len)
                 fmt_desc = &hdmi_desc->dts_fmt;
             } else if (val == AML_HDMI_FORMAT_DTSHD) {
                 fmt_desc = &hdmi_desc->dtshd_fmt;
+            } else if (val == AML_HDMI_FORMAT_MPEGH) {
+                fmt_desc = &hdmi_desc->mpegh_fmt;
             } else {
                 ALOGW("[%s:%d] unsupport fmt:%d", __func__, __LINE__, val);
                 return -EINVAL;

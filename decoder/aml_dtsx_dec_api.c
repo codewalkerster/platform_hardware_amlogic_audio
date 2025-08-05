@@ -2477,11 +2477,3 @@ aml_dec_func_t *get_dtsx_dec_func_handle(void)
 
     return amlDcvFunc;
 }
-
-aml_dec_func_t aml_dtsx_func = {
-    .f_init                 = dtsx_decoder_init_patch,
-    .f_release              = dtsx_decoder_release_patch,
-    .f_process              = dtsx_decoder_process_patch,
-    .f_config               = NULL,
-    .f_info                 = NULL,
-};

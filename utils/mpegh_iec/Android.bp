@@ -1,0 +1,26 @@
+package {
+    // See: http://go/android-license-faq
+    // A large-scale-change added 'default_applicable_licenses' to import
+    // all of the 'license_kinds' from "hardware_amlogic_license"
+    // to get the below license kinds:
+    //   SPDX-license-identifier-Apache-2.0
+    default_applicable_licenses: ["hardware_amlogic_license"],
+}
+
+cc_library_shared {
+    name: "libamlmpeghiec",
+    proprietary: true,
+    srcs: [
+        "EarconPacketWriter_lib.cpp",
+        "iec61937_enc.cpp",
+        "iec61937_dec.cpp",
+        "bitbuffer.cpp",
+    ],
+    local_include_dirs: ["include"],
+    export_include_dirs: ["include"],
+    cflags: [
+        "-Werror",
+        "-Wno-unused-label",
+        "-Wno-unused-parameter",
+    ],
+}

@@ -611,6 +611,8 @@ int get_codec_type(int format)
     case AUDIO_FORMAT_PCM_16_BIT:
     case AUDIO_FORMAT_PCM_32_BIT:
         return TYPE_PCM;
+    case AUDIO_FORMAT_MPEGH:
+        return TYPE_MPEGH;
     default:
         return TYPE_PCM;
     }

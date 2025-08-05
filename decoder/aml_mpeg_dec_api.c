@@ -611,12 +611,3 @@ aml_dec_func_t *get_mad_dec_func_handle(void)
 
     return amlDcvFunc;
 }
-
-aml_dec_func_t aml_mad_func = {
-    .f_init                 = mad_decoder_init,
-    .f_release              = mad_decoder_release,
-    .f_process              = mad_decoder_process,
-    .f_config               = mad_decoder_config,
-    .f_info                 = mad_decoder_getinfo,
-    .f_flush                = mad_decoder_flush,
-};

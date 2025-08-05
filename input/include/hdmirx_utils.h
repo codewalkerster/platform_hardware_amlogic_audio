@@ -45,7 +45,8 @@ typedef enum {
     AML_HDMI_FORMAT_MAT                   = 0xC,    // SAD_CODEC_MAT
     AML_HDMI_FORMAT_DST                   = 0xD,    // SAD_CODEC_DST
     AML_HDMI_FORMAT_WMAPRO                = 0xE,    // SAD_CODEC_WMAPRO
-    AML_HDMI_FORMAT_RESERVED2             = 0xF,    // SAD_CODEC_RESERVED2
+    AML_HDMI_FORMAT_MPEGH                 = 0xF,    // SAD_CODEC_MPEGH
+    AML_HDMI_FORMAT_RESERVED2             = 0x10,   // SAD_CODEC_RESERVED2
 } AML_HDMI_FORMAT_E;
 
 typedef enum {

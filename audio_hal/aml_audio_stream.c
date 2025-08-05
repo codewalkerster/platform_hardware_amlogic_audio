@@ -498,6 +498,10 @@ void get_sink_format(struct audio_stream_out *stream)
         (source_format != AUDIO_FORMAT_AAC_LATM) && \
         (source_format != AUDIO_FORMAT_HE_AAC_V1) && \
         (source_format != AUDIO_FORMAT_HE_AAC_V2) && \
+        (source_format != AUDIO_FORMAT_MPEGH_BL_L3) && \
+        (source_format != AUDIO_FORMAT_MPEGH_BL_L4) && \
+        (source_format != AUDIO_FORMAT_MPEGH_LC_L3) && \
+        (source_format != AUDIO_FORMAT_MPEGH_LC_L4) && \
         (source_format != AUDIO_FORMAT_MPEGH)) {
         /*unsupport format [dts-hd/true-hd]*/
         ALOGI("%s() source format %#x change to %#x", __FUNCTION__, source_format, AUDIO_FORMAT_PCM_16_BIT);
@@ -529,6 +533,8 @@ void get_sink_format(struct audio_stream_out *stream)
         case AML_DIGITAL_AUDIO_MODE_AUTO:
             if (is_dts_format(source_format)) {
                 sink_audio_format = MIN(source_format, sink_dts_capability);
+            } else if (is_mpegh_format(source_format)) {
+                sink_audio_format = sink_mpegh_capability;
             } else {
                 sink_audio_format = get_suitable_output_format(aml_out, source_format, sink_capability);
             }
@@ -540,7 +546,7 @@ void get_sink_format(struct audio_stream_out *stream)
             /*if the sink device only support pcm, we check whether we can output dd or dts to spdif,
              *For arc case, we can't support pcm and dd dual output, so we limit it to non arc case
              */
-            if (bd_config->spdif_independent && ((adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI_ARC) == 0) && adev->dual_spdif_support) {
+            if (bd_config->spdif_independent && ((adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI_ARC) == 0) && adev->dual_spdif_support && !is_mpegh_format(source_format)) {
                 if (sink_audio_format == AUDIO_FORMAT_PCM_16_BIT) {
                     if (is_dts_format(source_format)) {
                         optical_audio_format = MIN(source_format, AUDIO_FORMAT_DTS);
@@ -566,7 +572,7 @@ void get_sink_format(struct audio_stream_out *stream)
             }
             optical_audio_format = sink_audio_format;
             /*if the sink device only support pcm, we check whether we can output dd or dts to spdif*/
-            if (bd_config->spdif_independent && ((adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI_ARC) == 0) && adev->dual_spdif_support) {
+            if (bd_config->spdif_independent && ((adev->cur_out_devices & AUDIO_DEVICE_OUT_HDMI_ARC) == 0) && adev->dual_spdif_support && !is_mpegh_format(source_format)) {
                 if (sink_audio_format == AUDIO_FORMAT_PCM_16_BIT) {
                     if (is_dts_format(source_format)) {
                         optical_audio_format = MIN(source_format, AUDIO_FORMAT_DTS);
