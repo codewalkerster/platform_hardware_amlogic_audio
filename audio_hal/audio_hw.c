@@ -4285,7 +4285,7 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
     /* deal with AQ cmd */
     ret = set_AQ_parameters(dev, parms);
     if (ret >= 0) {
-        ALOGD("get AQ param(kv: %s)", kvpairs);
+        ALOGD("set AQ param(kv: %s)", kvpairs);
         goto exit;
     }
 
@@ -4659,7 +4659,7 @@ static void adev_get_hal_control_volume_en(struct aml_audio_device *adev, char *
     }
 }
 
-static char * adev_get_parameters (const struct audio_hw_device *dev,
+static char *adev_get_parameters(const struct audio_hw_device *dev,
                                    const char *keys)
 {
     struct aml_audio_device *adev = (struct aml_audio_device *) dev;
@@ -4813,9 +4813,6 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
         sprintf(temp_buf, "hal_param_get_earcrx_attend_type=%d", type);
         ALOGD("temp_buf %s", temp_buf);
         return strdup(temp_buf);
-    } else if (strstr(keys, "aq_tuning")) {
-        get_AQ_parameters(dev, temp_buf, keys);
-        return strdup(temp_buf);
     } else if (strstr (keys, "ms12_version") ) {
         sprintf(temp_buf, "ms12_version=%d", adev->support_ms12_version);
         ALOGD("temp_buf %s", temp_buf);
@@ -4898,12 +4895,6 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
 #endif
         ALOGV("temp_buf %s", temp_buf);
         return strdup(temp_buf);
-    } else if (strstr(keys, "audio_enhancement_gain")) {
-        sprintf(temp_buf, "audio_enhancement_gain=%d", aml_get_audio_enhancement_gain(&adev->native_postprocess));
-        return  strdup(temp_buf);
-    } else if (strstr(keys, "audio_enhancement_enable")) {
-        sprintf(temp_buf, "audio_enhancement_enable=%d", aml_get_audio_enhancement_enable(&adev->native_postprocess));
-        return  strdup(temp_buf);
     }
 
     if (eDTSXLib == adev->dts_lib_type) {
@@ -4911,6 +4902,12 @@ static char * adev_get_parameters (const struct audio_hw_device *dev,
             if (aml_dtsx_get_runtime_params(&adev->dts_x, keys, temp_buf) == 0)
                 return strdup(temp_buf);
         }
+    }
+    if (strstr(keys, "aq_tuning") || strstr(keys, "audio_") || strstr(keys, "ai_")) {
+        ALOGI("get AQ param keys %s", keys);
+        int ret = get_AQ_parameters(dev, temp_buf, keys);
+        if (!ret)
+            return strdup(temp_buf);
     }
 
     return strdup("");

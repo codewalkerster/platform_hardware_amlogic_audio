@@ -54,6 +54,27 @@ static inline int32_t clamp32(int64_t sample)
     return sample;
 }
 
+static inline float clamp(double sample)
+{
+    if (sample > 1.0)
+        sample = 1.0;
+    else if (sample < -1.0)
+        sample = -1.0;
+
+    return sample;
+}
+
+void apply_volume_float(float volume, float *buf, int samples)
+{
+    float *input = buf;
+
+    for (int i = 0; i < samples; i++) {
+        buf[i] = clamp((double)volume * buf[i]);
+    }
+
+    return;
+}
+
 void apply_volume(float volume, void *buf, int sample_size, int bytes)
 {
     int16_t *input16 = (int16_t *)buf;

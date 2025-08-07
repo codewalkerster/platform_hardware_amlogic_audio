@@ -339,6 +339,47 @@ static char * in_get_parameters(const struct audio_stream *stream, const char *k
     return params_str;
 }
 
+static int in_add_audio_effect(const struct audio_stream *stream __unused, effect_handle_t effect __unused)
+{
+    return 0;
+}
+
+static int in_remove_audio_effect(const struct audio_stream *stream __unused, effect_handle_t effect __unused)
+{
+    return 0;
+}
+
+static int in_set_gain(struct audio_stream_in *stream __unused, float gain __unused)
+{
+    return 0;
+}
+
+static uint32_t in_get_input_frames_lost (struct audio_stream_in *stream __unused)
+{
+    return 0;
+}
+
+static int in_get_capture_position(const struct audio_stream_in *stream __unused,
+                                   int64_t *frames __unused, int64_t *time __unused)
+{
+    return 0;
+}
+
+static int in_get_active_microphones(const struct audio_stream_in *stream __unused,
+                                     struct audio_microphone_characteristic_t *mic_array __unused,
+                                     size_t *mic_count __unused) {
+    return -ENOSYS;
+}
+
+static int in_set_microphone_direction(const struct audio_stream_in *stream __unused,
+                                           audio_microphone_direction_t dir __unused) {
+    return -ENOSYS;
+}
+
+static int in_set_microphone_field_dimension(const struct audio_stream_in *stream __unused, float zoom __unused) {
+    return -ENOSYS;
+}
+
 #ifdef SUPPORT_KARAOKE
 static int read_from_kara_buffer(struct audio_stream_in *stream, void *buffer, size_t bytes)
 {
@@ -515,8 +556,17 @@ int adev_open_usb_input_stream(struct usb_audio_device *hw_dev,
     in->stream.common.dump = in_dump;
     in->stream.common.set_parameters = in_set_parameters;
     in->stream.common.get_parameters = in_get_parameters;
+    in->stream.common.add_audio_effect = in_add_audio_effect;
+    in->stream.common.remove_audio_effect = in_remove_audio_effect;
 
+    in->stream.set_gain = in_set_gain;
     in->stream.read = in_read;
+    in->stream.get_input_frames_lost = in_get_input_frames_lost;
+    in->stream.get_capture_position = in_get_capture_position;
+
+    in->stream.get_active_microphones = in_get_active_microphones;
+    in->stream.set_microphone_direction = in_set_microphone_direction;
+    in->stream.set_microphone_field_dimension = in_set_microphone_field_dimension;
 
     stream_lock_init(&in->lock);
 

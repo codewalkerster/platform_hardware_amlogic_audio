@@ -151,6 +151,15 @@ struct audio_board_config {
 #endif
 
     /*
+      The type of Global Mic for UI
+      0: None
+      1: USB
+      2: Linein
+      3: USB + Linein
+    */
+    int global_Mic_Device_Type;
+
+    /*
       0: hide VAD Switch UI
       1: display VAD Switch UI
     */

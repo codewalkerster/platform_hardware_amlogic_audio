@@ -30,5 +30,6 @@ typedef enum
 #define AUDIO_AI_LIB64_PATH   "/vendor/lib64/libaaisdk.so"
 
 #define AUDIO_ENHANCMENT_MODEL_PATH "/vendor/etc/"
+#define AUDIO_VOCAL_ISOLATE_MODEL_PATH "/vendor/etc/"
 
 #endif

@@ -1418,6 +1418,11 @@ int aml_audio_get_latency_offset(audio_devices_t devices, audio_format_t source_
 {
     int latency_ms = 0;
     struct aml_audio_device *adev = adev_get_handle();
+    int external_latency_ms = 0;
+
+    if (adev && adev->native_postprocess.external_audio_latency > 0) {
+        external_latency_ms = adev->native_postprocess.external_audio_latency;
+    }
 
     if (!ms12_enable && adev->is_netflix) {
         return aml_audio_get_netflix_port_latency(get_output_by_devices(devices), source_format);
@@ -1433,6 +1438,8 @@ int aml_audio_get_latency_offset(audio_devices_t devices, audio_format_t source_
     } else if ((devices & AUDIO_DEVICE_OUT_SPEAKER) != 0 || (devices & AUDIO_DEVICE_OUT_LINE) != 0) {
         latency_ms = aml_audio_get_speaker_latency_offset(source_format,ms12_enable);
     }
+
+    latency_ms += external_latency_ms;
     return latency_ms;
 }
 

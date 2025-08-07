@@ -41,6 +41,7 @@
 #include "amlAudioMixer.h"
 #include "audio_hw_resource_mgr.h"
 #include "aml_audio_enhancement.h"
+#include "aml_audio_vocal_isolate.h"
 
 #ifdef ENABLE_AEC_APP
 #include "audio_aec.h"
@@ -928,9 +929,17 @@ static ssize_t output_port_stereo_post_process(output_port *port, void *buffer, 
     if (adev->native_postprocess.audio_enhancment_handle) {
         audio_buffer_t in_buf;
         audio_buffer_t out_buf;
-        in_buf.frameCount =  out_buf.frameCount = frames;
+        in_buf.frameCount = out_buf.frameCount = frames;
         in_buf.raw = out_buf.raw = buffer;
         aml_audio_enhancement_module_process(adev->native_postprocess.audio_enhancment_handle, &in_buf, &out_buf);
+    }
+
+    if (adev->native_postprocess.audio_vocal_isolate_handle) {
+        audio_buffer_t in_buf;
+        audio_buffer_t out_buf;
+        in_buf.frameCount = out_buf.frameCount = frames;
+        in_buf.raw = out_buf.raw = buffer;
+        aml_audio_vocal_isolate_module_process(adev->native_postprocess.audio_vocal_isolate_handle, &in_buf, &out_buf);
     }
 
     if (adev->enable_soundbar_mode) {

@@ -93,6 +93,7 @@ include $(BUILD_PREBUILT)
         ../vendor_process/aml_ai_audio.c \
         ../vendor_process/aml_audio_enhancement.c \
         ../vendor_process/aml_audio_aloop_record.c \
+        ../vendor_process/aml_audio_vocal_isolate.c \
         ../aml_aq_hw/audio_eq_drc_compensation.c \
         ../aml_aq_hw/audio_eq_drc_parser.c \
         ../aml_aq_hw/ini/dictionary.c \
@@ -139,6 +140,7 @@ include $(BUILD_PREBUILT)
         hardware/amlogic/audio/vendor_process/libaudioeffect/AI \
         hardware/amlogic/audio/vendor_process/libaudioeffect/AI/aiaq \
         hardware/amlogic/audio/vendor_process/libaudioeffect/AI/audio_enhancement \
+        hardware/amlogic/audio/vendor_process/libaudioeffect/AI/audio_vocal_isolate \
         hardware/amlogic/audio/vendor_process/include \
         hardware/amlogic/audio/input/include \
         hardware/amlogic/audio/decoder/include \

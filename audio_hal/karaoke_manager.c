@@ -32,6 +32,7 @@
 #include "aml_reverb.h"
 #include "aml_config_data.h"
 #include "amlAudioMixer.h" // for submix
+#include "aml_android_utils.h"
 
 #define USB_DEFAULT_PERIOD_SIZE      512
 #define USB_DEFAULT_PERIOD_COUNT     4
@@ -553,6 +554,14 @@ static int kara_open_micphone(struct kara_manager *kara, struct audioCfg *cfg)
         goto err;
     }
 
+    /*re config period size by vendor*/
+    unsigned int vendor_period_size = aml_usb_reconfig_period_size(in->proxy.alsa_config.period_size,
+                                                                   in->proxy.alsa_config.rate);
+    in->proxy.alsa_config.period_size = vendor_period_size;
+    in->proxy.alsa_config.period_count *= 2; // default period_count from proxy is 2
+    AM_LOGI("usb vendor_period_size = %d period_count = %d",
+             in->proxy.alsa_config.period_size, in->proxy.alsa_config.period_count);
+
     AM_LOGI("proxy_prepare configs: channels %d format %d rate %d",
             proxy_config.channels, proxy_config.format, proxy_config.rate);
     AM_LOGI("in_configs: channels = %d, format = %d, rate = %d, frame_size = %d",
@@ -886,7 +895,7 @@ int karaoke_get_audioCfg_from_ms12_info(struct audioCfg *cfg, struct aml_ms12_de
     cfg->frame_size = cfg->channelCnt *
                       pcm_format_to_bits(aml_pcm_format_from_audio_format(cfg->format)) / 8;
 
-    AM_LOGI("format=%d, channel=%d, sampleRate=%d", cfg->format, cfg->channelCnt, cfg->sampleRate);
+    AM_LOGV("format=%d, channel=%d, sampleRate=%d", cfg->format, cfg->channelCnt, cfg->sampleRate);
     return ret;
 }
 
@@ -903,7 +912,7 @@ int karaoke_get_audioCfg_from_pcm_config(struct audioCfg *cfg, struct pcm_config
     cfg->format = aml_audio_format_from_pcm_format(pcm_cfg->format);
     cfg->frame_size = cfg->channelCnt * pcm_format_to_bits(pcm_cfg->format) / 8;
 
-    AM_LOGI("format=%d, channel=%d, sampleRate=%d, frame_size=%d",
+    AM_LOGV("format=%d, channel=%d, sampleRate=%d, frame_size=%d",
             cfg->format, cfg->channelCnt, cfg->sampleRate, cfg->frame_size);
     return ret;
 }
@@ -1440,6 +1449,7 @@ int karaoke_set_parameters(struct audio_hw_device *dev, char *param_value)
         sscanf(param, "%d", &val);
         valbool = !!val;
         karaoke_set_on(kara, valbool);
+
         if (valbool) {
             /* karaoke depends on continues output */
             if (adev->useAudioMixer) {

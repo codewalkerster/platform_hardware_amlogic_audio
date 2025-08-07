@@ -180,6 +180,7 @@ void aml_audio_board_config_init(struct audio_board_config *config)
         /* get project config of karaoke */
         karaoke_get_project_config((void *)config);
 #endif
+        config->global_Mic_Device_Type = aml_get_jason_int_value("Global_Mic_Device_Type_Config", 0);
     } else {
         ALOGW("%s() Fail!", __func__);
     }
@@ -270,6 +271,13 @@ char * get_parameters_from_json_config(struct audio_board_config *board_config, 
     }  else if (!strcmp(keys, "Effect_Ai_Aq_Config")) {
         sprintf(temp_buf, "Effect_Ai_Aq_Config=%s",
              (board_config->ai_aq_config == 1 ? "1" : "0"));
+        return strdup(temp_buf);
+    } else if (!strcmp(keys, "Global_Mic_Device_Type_Config")) {
+        sprintf(temp_buf, "Global_Mic_Device_Type_Config=%s",
+            (board_config->global_Mic_Device_Type == 0 ? "0" :\
+            (board_config->global_Mic_Device_Type == 1 ? "1" :\
+            (board_config->global_Mic_Device_Type == 2 ? "2" :\
+            (board_config->global_Mic_Device_Type == 3 ? "3" : "0")))));
         return strdup(temp_buf);
     }  else if (!strcmp(keys, "VAD_Switch_Audio_Config")) {
         sprintf(temp_buf, "VAD_Switch_Audio_Config=%s",

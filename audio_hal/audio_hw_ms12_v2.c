@@ -74,6 +74,7 @@
 #include "tv_patch_ctrl.h"
 #include "audio_hw_resource_mgr.h"
 #include "aml_audio_enhancement.h"
+#include "aml_audio_vocal_isolate.h"
 
 //dolby truehd parser
 #include "aml_audio_truehdparser.h"
@@ -4811,6 +4812,28 @@ static int audio_enhancment_process(struct aml_audio_device *adev, Aml_MS12_Proc
     return 0;
 }
 
+static int audio_vocal_isolate_process(struct aml_audio_device *adev, Aml_MS12_ProcessInfo_t *pstProcessInfo) {
+    Aml_MS12_ProcessInfo_t *Info = pstProcessInfo;
+    aml_audio_vocal_isolate_module_t *pAudioVocalIsolateModule = (aml_audio_vocal_isolate_module_t *)adev->native_postprocess.audio_vocal_isolate_handle;
+
+    if (!pAudioVocalIsolateModule || !pAudioVocalIsolateModule->audio_vocal_isolate_enable) {
+        return 0;
+    }
+
+    audio_buffer_t in_buf;
+    audio_buffer_t out_buf;
+    pAudioVocalIsolateModule->channel_width = Info->s32Channel;
+    pAudioVocalIsolateModule->channel_mask = acmod_convert_to_channel_mask(Info->as32Acmod[0], Info->as32Acmod[1]);
+    int frames = Info->u32InBufferSize / sizeof(float) / Info->s32Channel;
+    in_buf.frameCount =  out_buf.frameCount = frames;
+    in_buf.raw = out_buf.raw = Info->pu8InBuffer;
+
+    /* always float type */
+    aml_audio_vocal_isolate_module_process(pAudioVocalIsolateModule, &in_buf, &out_buf);
+
+    return 0;
+}
+
 static int audio_aloop_write_delay(struct aml_audio_device *adev, Aml_MS12_ProcessInfo_t *pstProcessInfo) {
     Aml_MS12_ProcessInfo_t *Info = pstProcessInfo;
     pcm_record_delay_t *pcm_record = &adev->aml_pcm_record_delay;
@@ -4847,6 +4870,7 @@ int ms12_content_process_callback(void *priv_data, void *info) {
         pstProcessInfo->s32InFrameType, pstProcessInfo->pu8InBuffer, pstProcessInfo->u32InBufferSize);
 
     audio_enhancment_process(adev, pstProcessInfo);
+    audio_vocal_isolate_process(adev, pstProcessInfo);
     audio_aloop_write_delay(adev, pstProcessInfo);
 
     pstProcessInfo->s32OutFrameType = pstProcessInfo->s32InFrameType;

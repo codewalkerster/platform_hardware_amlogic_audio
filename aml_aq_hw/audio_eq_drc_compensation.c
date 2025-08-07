@@ -37,6 +37,7 @@
 #include "dolby_lib_api.h"
 #include "alsa_device_parser.h"
 #include "aml_audio_aloop_record.h"
+#include "aml_audio_vocal_isolate.h"
 
 #undef  LOG_TAG
 #define LOG_TAG  "audio_hw_aq"
@@ -492,7 +493,7 @@ int eq_drc_release(struct eq_drc_data *pdata)
     return 0;
 }
 
-void get_AQ_parameters(const struct audio_hw_device *dev, char *temp_buf, const char *keys)
+int get_AQ_parameters(const struct audio_hw_device *dev, char *temp_buf, const char *keys)
 {
     struct aml_audio_device *adev = (struct aml_audio_device *)dev;
     int value = -1;
@@ -585,10 +586,31 @@ void get_AQ_parameters(const struct audio_hw_device *dev, char *temp_buf, const 
         sprintf(temp_buf, "aq_tuning:ai_audio_result=%d", set_value);
         goto exit;
     }
+    parm = strstr(keys, "audio_enhancement_enable");
+    if (parm) {
+        sprintf(temp_buf, "audio_enhancement_enable=%d", aml_get_audio_enhancement_enable(&adev->native_postprocess));
+        goto exit;
+    }
+    parm = strstr(keys, "audio_enhancement_gain");
+    if (parm) {
+        sprintf(temp_buf, "audio_enhancement_gain=%d", aml_get_audio_enhancement_gain(&adev->native_postprocess));
+        goto exit;
+    }
+    parm = strstr(keys, "audio_vocal_isolate_enable");
+    if (parm) {
+        sprintf(temp_buf, "audio_vocal_isolate_enable=%d", aml_get_audio_vocal_isolate_enable(&adev->native_postprocess));
+        goto exit;
+    }
+    parm = strstr(keys, "audio_vocal_gain");
+    if (parm) {
+        sprintf(temp_buf, "audio_vocal_gain=%f", aml_get_audio_vocal_gain(&adev->native_postprocess));
+        goto exit;
+    }
 
+    return -1;
 exit:
     ALOGI("%s(), [%s]", __func__, temp_buf);
-    return;
+    return 0;
 }
 
 int set_AQ_parameters(struct audio_hw_device *dev, struct str_parms *parms)
@@ -883,7 +905,7 @@ int set_AQ_parameters(struct audio_hw_device *dev, struct str_parms *parms)
 
     ret = str_parms_get_int(parms, "audio_enhancement_enable", &val);
     if (ret >= 0) {
-        if (!adev->native_postprocess.audio_enhancment_handle) {
+        if (val && !adev->native_postprocess.audio_enhancment_handle) {
             audio_config_base_t audio_config = {0};
             int channel_width = 2;
             audio_config.channel_mask = AUDIO_CHANNEL_OUT_STEREO;
@@ -928,6 +950,44 @@ int set_AQ_parameters(struct audio_hw_device *dev, struct str_parms *parms)
 
         pcm_record->delay_in_ms = delay_in_ms;
         ALOGI("audio_pcm_record_enable: %s, audio delay %dms\n", (record_enable == 1) ? "enable":"disable", delay_in_ms);
+        goto exit;
+    }
+
+    /* debug command: param_set 0 "audio_vocal_isolate_enable=1" */
+    /* debug command: param_set 0 "audio_vocal_gain=0.5" */
+    ret = str_parms_get_int(parms, "audio_vocal_isolate_enable", &val);
+    if (ret >= 0) {
+        ALOGI("audio_vocal_isolate_enable: %s\n", (val == 1) ? "enable":"disable");
+        if (!adev->native_postprocess.audio_vocal_isolate_handle) {
+            audio_config_base_t audio_config = {0};
+            audio_config.channel_mask = AUDIO_CHANNEL_OUT_STEREO;
+            audio_config.sample_rate = 48000;
+            if (eDolbyMS12Lib == adev->dolby_lib_type) {
+                /* For ms12 callback, the audio format must 8 or 10 channel, float */
+                audio_config.format = AUDIO_FORMAT_PCM_FLOAT;
+            } else {
+                audio_config.format = get_primary_out_format(adev);
+            }
+            aml_open_audio_vocal_isolate_module(&adev->native_postprocess, &audio_config);
+        }
+        aml_set_audio_vocal_isolate_enable(&adev->native_postprocess, val);
+        goto exit;
+    }
+
+    ret = str_parms_get_str(parms, "audio_vocal_gain", value, sizeof(value));
+    if (ret >= 0) {
+        float vocal_gain = 0;
+        sscanf(value,"%f", &vocal_gain);
+        ALOGI("[%s] set vocal gain = %f", __func__, vocal_gain);
+        aml_set_audio_vocal_gain(&adev->native_postprocess, vocal_gain);
+        goto exit;
+    }
+
+    ret = str_parms_get_int(parms, "hal_param_music_gain", &val);
+    if (ret >= 0) {
+        adev->native_postprocess.music_gain = val;
+        ALOGV("music gain: %ddB\n", adev->native_postprocess.music_gain/100);
+        aml_update_audio_vocal_isolate_volume(&adev->native_postprocess);
         goto exit;
     }
 

@@ -48,5 +48,7 @@ void apply_volume_fade(float *last_volume, float *volume, void *buf, int sample_
 void apply_tone_16bit2ch(unsigned char* buf, int datalen);
 int volume2Ms12DapPostgain(float inVol);
 void apply_volume_2ch_by_format(float volume, void *buffer, int samples, audio_format_t in_format, audio_format_t out_format);
+void apply_volume_float(float volume, float *buf, int samples);
+
 #endif
 

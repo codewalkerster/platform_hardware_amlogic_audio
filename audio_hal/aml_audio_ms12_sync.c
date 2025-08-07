@@ -757,6 +757,11 @@ static int get_ms12_nontunnel_latency_offset(enum OUT_PORT port
     struct aml_audio_device *adev = adev_get_handle();
     bool dap_enable = is_audio_postprocessing_add_dolbyms12_dap(adev);
     bool virtual_bass_enable = get_ms12_dap_virtual_bass_enable();
+    int external_latency_ms = 0;
+
+    if (adev && adev->native_postprocess.external_audio_latency > 0) {
+        external_latency_ms = adev->native_postprocess.external_audio_latency;
+    }
 
     if (is_netflix) {
         input_latency_ms  = get_ms12_netflix_nontunnel_input_latency(input_format);
@@ -776,9 +781,9 @@ static int get_ms12_nontunnel_latency_offset(enum OUT_PORT port
         }
         port_latency_ms   = get_ms12_port_latency(port, output_format, is_eARC, is_tunnel);
     }
-    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms + sound_effect_latency_ms;
-    ALOGV("%s total latency =%d ms in=%d ms out=%d ms port=%d ms sound_effect=%d ms", __func__,
-        latency_ms, input_latency_ms, output_latency_ms, port_latency_ms, sound_effect_latency_ms);
+    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms + sound_effect_latency_ms + external_latency_ms;
+    ALOGV("%s total latency =%d ms in=%d ms out=%d ms port=%d ms sound_effect=%d ms external latency=%d ms", __func__,
+        latency_ms, input_latency_ms, output_latency_ms, port_latency_ms, sound_effect_latency_ms, external_latency_ms);
     return latency_ms;
 }
 
@@ -826,7 +831,11 @@ static int get_ms12_tunnel_latency_offset(enum OUT_PORT port
     struct aml_audio_device *adev = adev_get_handle();
     bool dap_enable = is_audio_postprocessing_add_dolbyms12_dap(adev);
     bool virtual_bass_enable = get_ms12_dap_virtual_bass_enable();
+    int external_latency_ms = 0;
 
+    if (adev && adev->native_postprocess.external_audio_latency > 0) {
+        external_latency_ms = adev->native_postprocess.external_audio_latency;
+    }
 
     //ALOGD("%s  prot:%d, is_netflix:%d, input_format:0x%x, output_format:0x%x", __func__,
     //            port, is_netflix, input_format, output_format);
@@ -859,9 +868,9 @@ static int get_ms12_tunnel_latency_offset(enum OUT_PORT port
         }
         port_latency_ms   = get_ms12_port_latency(port, output_format, is_eARC, is_tunnel);
     }
-    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms + sound_effect_latency_ms;
-    ALOGV("%s total latency =%d ms in=%d ms out=%d ms(is output ddp_atmos %d) port=%d ms sound_effect=%d ms", __func__,
-        latency_ms, input_latency_ms, output_latency_ms, is_output_ddp_atmos, port_latency_ms, sound_effect_latency_ms);
+    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms + sound_effect_latency_ms + external_latency_ms;
+    ALOGV("%s total latency =%d ms in=%d ms out=%d ms port=%d ms sound_effect=%d ms external latency=%d ms", __func__,
+        latency_ms, input_latency_ms, output_latency_ms, port_latency_ms, sound_effect_latency_ms, external_latency_ms);
     return latency_ms;
 }
 
@@ -1396,6 +1405,11 @@ static int get_nonms12_tunnel_latency_offset(enum OUT_PORT port
     int port_latency_ms = 0;
     int is_dv = getprop_bool(MS12_OUTPUT_5_1_DDP); /* suppose that Dolby Vision is under test */
     struct aml_audio_device *adev = adev_get_handle();
+    int external_latency_ms = 0;
+
+    if (adev && adev->native_postprocess.external_audio_latency > 0) {
+        external_latency_ms = adev->native_postprocess.external_audio_latency;
+    }
 
     if (is_netflix) {
         input_latency_ms  = get_nonms12_netflix_tunnel_input_latency(input_format, input_channel_count, platform_type);
@@ -1417,14 +1431,14 @@ static int get_nonms12_tunnel_latency_offset(enum OUT_PORT port
         }
     }
 
-    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms;
+    latency_ms = input_latency_ms + output_latency_ms + port_latency_ms + external_latency_ms;
 
     if (adev->aml_pcm_record_delay.aloop_write_enable) {
         latency_ms += adev->aml_pcm_record_delay.delay_in_ms;
     }
 
-    ALOGV("%s total latency =%d, ms in=%d ms out=%d ms(is output ddp_atmos %d) port=%d ms", __func__,
-       latency_ms, input_latency_ms, output_latency_ms, is_output_ddp_atmos, port_latency_ms);
+    ALOGV("%s total latency =%d, ms in=%d ms out=%d ms(is output ddp_atmos %d) port=%d ms external latency=%d ms", __func__,
+       latency_ms, input_latency_ms, output_latency_ms, is_output_ddp_atmos, port_latency_ms, external_latency_ms);
 
     return latency_ms;
 }

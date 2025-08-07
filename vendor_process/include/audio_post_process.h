@@ -91,6 +91,9 @@ struct aml_native_postprocess {
     void *ai_handle;
     //native private process handle: audio enhancment
     void *audio_enhancment_handle;
+    //native private process handle: audio vocal isolate
+    void *audio_vocal_isolate_handle;
+    int external_audio_latency;
 
     //if any effect is do process() should hold dev->effects_lock
     pthread_mutex_t lock;
@@ -104,6 +107,9 @@ struct aml_native_postprocess {
     size_t temp_proc_bytes;
     void *temp_vx_proc_buffer;
     size_t temp_vx_proc_capacity;
+
+    /* music gain from framework, unit: 0.01dB, always < 0dB */
+    int music_gain;
 };
 
 /*

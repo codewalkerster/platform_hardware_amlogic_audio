@@ -47,6 +47,10 @@ int aml_sysfs_set_str(const char *path, const char *value);
  */
 int aml_strstr(char *mystr,char *substr);
 
+/* reconfig usb period size by vendor property */
+#define USB_DEFAULT_PERIOD_US                (10 * 1000)
+unsigned int aml_usb_reconfig_period_size(unsigned int base_period_size, unsigned int sample_rate);
+
 #ifdef __cplusplus
 }
 #endif

@@ -215,3 +215,28 @@ int aml_strstr(char *mystr,char *substr) {
 
     return ok;
 }
+/*
+ * Returns the supplied value rounded up to the next even multiple of 16
+ */
+static unsigned int round_to_16_mult(unsigned int size)
+{
+    return (size + 15) & ~15;   /* 0xFFFFFFF0; */
+}
+
+/*
+ * Returns the period size based on the supplied sample rate and ro.vendor.audio.usb.period_us
+ */
+unsigned int aml_usb_reconfig_period_size(unsigned int base_period_size, unsigned int sample_rate)
+{
+    ALOGD("%s:base_period_size:%d, sample_rate:%d", __func__, base_period_size, sample_rate);
+    if (0 == base_period_size || 0 == sample_rate) {
+        return base_period_size;
+    }
+
+    unsigned int period_us = property_get_int32("ro.vendor.audio.usb.period_us", USB_DEFAULT_PERIOD_US);
+    unsigned int num_sample_frames = ((uint64_t)sample_rate * period_us) / 1000000;
+    if (num_sample_frames < base_period_size) {
+        num_sample_frames = base_period_size;
+    }
+     return round_to_16_mult(num_sample_frames);
+}
