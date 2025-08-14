@@ -254,6 +254,7 @@ typedef struct aml_mpegh_config {
     audio_format_t format;
     int samplerate;
     int channel;
+    int output_bw;
 } aml_mpegh_config_t;
 
 typedef struct aml_dec_config {

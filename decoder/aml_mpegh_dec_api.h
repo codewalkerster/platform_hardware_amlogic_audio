@@ -62,6 +62,7 @@ typedef struct mpegh_dec {
     void *mpeghLibHandler;
     HANDLE_IEC61937_ENCODER encoder_handle;
     int rate_factor;
+    int output_bw;
 } mpegh_dec_t;
 aml_dec_func_t *get_mpegh_dec_func_handle(void);
 #endif

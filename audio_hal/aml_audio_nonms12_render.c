@@ -903,6 +903,7 @@ static void mpegh_decoder_config_prepare(struct audio_stream_out *stream, aml_mp
     }
     mpegh_config->samplerate = aml_out->hal_rate;
     mpegh_config->format = aml_out->hal_internal_format;
+    mpegh_config->output_bw = get_primary_out_format(adev) == AUDIO_FORMAT_PCM_16_BIT ? 16 : 32;
     return;
 }
 

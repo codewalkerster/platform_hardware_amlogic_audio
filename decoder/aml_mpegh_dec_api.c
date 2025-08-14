@@ -294,6 +294,7 @@ static int mpegh_decoder_init(aml_dec_t **ppaml_dec, aml_dec_config_t *dec_confi
     mpegh_dec->total_pcm_size  = 0;
     mpegh_dec->total_raw_size  = 0;
     mpegh_dec->total_time      = 0;
+    mpegh_dec->output_bw = mpegh_config->output_bw;
 
     return 0;
 
@@ -359,14 +360,26 @@ static int mpegh_decoder_process(aml_dec_t *aml_dec, unsigned char *buffer, int 
     if (pcm_len > 0) {
         AudioInfo audioinfo;
         mpegh_op->getinfo(mpegh_op, &audioinfo);
+        /*32 convert to 16*/
+        if (mpegh_dec->output_bw == 16) {
+            uint32_t src_frame_size = audio_bytes_per_sample(AUDIO_FORMAT_PCM_32_BIT) * audioinfo.channels;
+            uint32_t frame_count = pcm_len / src_frame_size;
+
+            memcpy_by_audio_format(dec_pcm_data->buf, AUDIO_FORMAT_PCM_16_BIT,
+                (const void *)dec_pcm_data->buf, AUDIO_FORMAT_PCM_32_BIT, frame_count * audioinfo.channels);
+
+            pcm_len = frame_count * audio_bytes_per_sample(AUDIO_FORMAT_PCM_16_BIT) * audioinfo.channels;
+        }
+
         dec_pcm_data->data_ch = audioinfo.channels;
         dec_pcm_data->data_sr = audioinfo.samplerate;
         dec_pcm_data->data_len = pcm_len;
-        dec_pcm_data->data_format = AUDIO_FORMAT_PCM_32_BIT;
+        dec_pcm_data->data_format = mpegh_dec->output_bw == 16 ? AUDIO_FORMAT_PCM_16_BIT : AUDIO_FORMAT_PCM_32_BIT;
         if (_mpegh_debug.fp_decode_pcm) {
             fwrite(dec_pcm_data->buf, 1, pcm_len, _mpegh_debug.fp_decode_pcm);
         }
     }
+
     if (_mpegh_debug.debug_flag)
         AM_LOGI("decode bytes:%d, pcm_len:%d, data_ch:%d, data_sr:%d", bytes, pcm_len, dec_pcm_data->data_ch, dec_pcm_data->data_sr);
 
