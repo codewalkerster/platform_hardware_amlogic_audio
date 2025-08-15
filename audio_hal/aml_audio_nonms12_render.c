@@ -428,9 +428,23 @@ int aml_audio_nonms12_render(struct audio_stream_out *stream, void *abuffer)
                         }
                         else {
                             size_t n_dap_used_bytes = 0;
-                            pp_ret = aml_dap_process(stream, (char*)dec_data, pcm_len, &n_dap_used_bytes);
-                            if (pp_ret) {
-                                ALOGI("%s line %d pp_ret %d lxs debug!\n", __func__, __LINE__, pp_ret);
+                            size_t n_dap_consumed_total_bytes = 0;
+                            size_t n_remain_bytes = pcm_len;
+                            while (n_remain_bytes > 0) {
+                                n_dap_used_bytes = 0;
+                                pp_ret = aml_dap_process(stream, (char*)dec_data + n_dap_consumed_total_bytes, n_remain_bytes, &n_dap_used_bytes);
+                                if (pp_ret) {
+                                    AM_LOGE("aml_dap_process error %d written_size:%d n_dap_used_bytes %d\n", pp_ret, n_remain_bytes, n_dap_used_bytes);
+                                    break;
+                                }
+                                n_dap_consumed_total_bytes += n_dap_used_bytes;
+                                if (n_dap_used_bytes > 0 && n_dap_consumed_total_bytes <= pcm_len) {
+                                    n_remain_bytes = pcm_len - n_dap_consumed_total_bytes;
+                                } else {
+                                    AM_LOGE("aml_dap_process consumed size incorrect! written_size %d dap_used_size %d dap_total_consumed_size %d",
+                                        n_remain_bytes, n_dap_used_bytes, n_dap_consumed_total_bytes);
+                                    break;
+                                }
                             }
                         }
                     }
