@@ -16,6 +16,10 @@
 #ifndef _AUDIO_HW_DSP_H_
 #define _AUDIO_HW_DSP_H_
 
+#define MAX_GENERIC_SOUND_MODELS    (9)
+#define MAX_KEY_PHRASES             (1)
+#define MAX_MODELS                  (MAX_GENERIC_SOUND_MODELS + MAX_KEY_PHRASES)
+
 enum soundtriggerevent {
     SOUND_TRIGGER_DEFAULT = 0,
     SOUND_TRIGGER_WAKEUP_KEYWORD = 1,
@@ -28,7 +32,7 @@ struct pcm_open_config {
     unsigned int device;
     unsigned int flags;
     struct pcm_config *config;
-    void* dsp_pcm_handles[10];
+    void* dsp_pcm_handles[MAX_MODELS];
 };
 
 typedef uint64_t xpointer;

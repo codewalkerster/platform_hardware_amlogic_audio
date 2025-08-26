@@ -31,10 +31,6 @@
  * To enable this file, you can make with command line parameter
  * SOUND_TRIGGER_USE_STUB_MODULE=1
  */
-#define MAX_GENERIC_SOUND_MODELS    (9)
-#define MAX_KEY_PHRASES             (1)
-#define MAX_MODELS                  (MAX_GENERIC_SOUND_MODELS + MAX_KEY_PHRASES)
-
 #define LOG_TAG "Amlogic_sound_trigger_hw"
 #define LOG_NDEBUG 1
 #define PARSE_BUF_LEN 1024  // Length of the parsing buffer.S
@@ -573,7 +569,7 @@ int sound_trigger_open_for_streaming()
     stdev->open_config.config = sound_trigger_config->config;
 
     ALOGI("%s, %d, card=%u device=%u flags=%x \n", __func__, __LINE__, stdev->open_config.card, stdev->open_config.device, stdev->open_config.flags);
-    if (stdev->sound_trigger_handle < MAX_MODELS) {
+    if (stdev->sound_trigger_handle < (MAX_MODELS - 1)) {
         stdev->sound_trigger_handle++;
     } else {
         stdev->sound_trigger_handle = 1;
