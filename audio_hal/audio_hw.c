@@ -4017,7 +4017,6 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
             /*if we want the manual behavior is same with BYPASS, use below code*/
             adev->digital_audio_mode = AML_DIGITAL_AUDIO_MODE_AUTO;
             adev->is_manual = true;
-            ALOGI("%s size=%d", __func__, sizeof(adev->manual_encoding_format));
             memset(adev->manual_encoding_format, 0, sizeof(adev->manual_encoding_format));
             ret = str_parms_get_str(parms, "hal_param_digital_audio_subformat", value, sizeof(value));
             if (ret >= 0) {
