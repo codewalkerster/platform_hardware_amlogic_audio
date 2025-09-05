@@ -2608,12 +2608,7 @@ static ssize_t in_read(struct audio_stream_in *stream, void* buffer, size_t byte
              goto exit;
         }
         in->frames_read += in_frames;
-
-        struct aec_info info;
-        get_pcm_timestamp(in->pcm, in_get_sample_rate(&stream->common),
-                                &info, false /*input */);
-        in->timestamp_nsec = audio_utils_ns_from_timespec(&info.timestamp);
-        return bytes;
+        goto exit;
     }
 #endif
 
