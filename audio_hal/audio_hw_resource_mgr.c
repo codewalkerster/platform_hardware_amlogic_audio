@@ -556,15 +556,7 @@ int do_output_device_routing(struct aml_audio_device *adev, audio_devices_t out_
                 adev->reset_hdmitx_audio = true;
             }
         } else {
-            //fix for switching BT and hdmi-out output from UI setting.
-            //this scene should mute hdmi-out.
-            if ((adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) || (adev->out_device & AUDIO_DEVICE_OUT_ALL_USB)
-                || (adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER)) {
-                audio_route_apply_path(mgr->ar, "hdmi_off");
-            } else {
-                //keep hdmi always unmute for FFV and assistant miss first word.
-                //audio_route_apply_path(mgr->ar, "hdmi_off");
-            }
+            audio_route_apply_path(mgr->ar, "hdmi_off");
         }
         break;
     case AUDIO_DEVICE_OUT_WIRED_HEADPHONE:
@@ -607,6 +599,7 @@ routing_done:
     return ret;
 }
 
+
 int set_output_device_mute(struct aml_audio_device *adev, audio_devices_t device, bool enable, bool use_fade)
 {
     audio_hw_resource_mgr *mgr = get_hw_resource_manger(adev);
@@ -628,17 +621,6 @@ int set_output_device_mute(struct aml_audio_device *adev, audio_devices_t device
 
     switch ((int)device)
     {
-    case AUDIO_DEVICE_OUT_HDMI:
-        AM_LOGI("device:0x%x  mute:%d  current hdmi-out mute:%d", device, enable, aml_mixer_ctrl_get_int(&adev->alsa_mixer, AML_MIXER_ID_HDMI_OUT_AUDIO_MUTE));
-        if (enable) {
-            audio_route_apply_path(mgr->ar, "hdmi_off");
-        } else {
-            if (aml_mixer_ctrl_get_int(&adev->alsa_mixer, AML_MIXER_ID_HDMI_OUT_AUDIO_MUTE)) {
-                audio_route_apply_path(mgr->ar, "hdmi");
-            }
-        }
-        audio_route_update_mixer(mgr->ar);
-        break;
     case AUDIO_DEVICE_OUT_SPDIF:
         if (extern_arc) {
             aml_mixer_ctrl_set_int(mgr->mixer_ctrl, AML_MIXER_ID_SPDIF_B_MUTE, enable);
@@ -648,6 +630,7 @@ int set_output_device_mute(struct aml_audio_device *adev, audio_devices_t device
         port_info->mute = enable;
         break;
     case AUDIO_DEVICE_OUT_HDMI_ARC:
+    case AUDIO_DEVICE_OUT_HDMI:
         if (extern_arc) {
             aml_mixer_ctrl_set_int(mgr->mixer_ctrl, AML_MIXER_ID_SPDIF_MUTE, enable);
         } else {

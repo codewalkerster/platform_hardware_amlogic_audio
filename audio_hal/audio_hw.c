@@ -3772,35 +3772,6 @@ static int check_usb_card_device(struct str_parms *parms, int device)
     return ret;
 }
 
-static int _control_hdmi_mute_state(struct aml_audio_device *adev, audio_devices_t current_device, bool is_mute)
-{
-    if (is_STB(adev)
-        && (!is_HDMI_connected(adev) || (adev->cur_out_devices & AUDIO_DEVICE_OUT_SPEAKER)
-            || is_include_a2dp_out_port(adev->out_device) || is_include_usb_out_port(adev->out_device))) {// speaker, BT speaker, usb speaker
-        //only katniss assistant voice output from OTT speaker.
-        //Here should mute hdmi-out(hdmi-out is always unmute) to avoid hdmi-out and speaker have sound at same time.
-        switch (current_device) {
-            case AUDIO_DEVICE_OUT_SPEAKER:
-                if (adev->cur_out_devices == AUDIO_DEVICE_OUT_SPEAKER) {
-                    AM_LOGI(" %s hdmi-out device", is_mute?"mute":"unmute");
-                    set_output_device_mute(adev, AUDIO_DEVICE_OUT_HDMI, is_mute/*mute*/, false/*use_fade*/);
-                }
-                break;
-            case AUDIO_DEVICE_OUT_BLUETOOTH_A2DP:
-            case AUDIO_DEVICE_OUT_USB_DEVICE:
-                AM_LOGI(" %s hdmi-out device", is_mute?"mute":"unmute");
-                set_output_device_mute(adev, AUDIO_DEVICE_OUT_HDMI, is_mute/*mute*/, false/*use_fade*/);
-                break;
-            default:
-                break;
-        };
-    } else {
-        //do nothing.
-    }
-
-    return 0;
-}
-
 static void set_device_connect_state(struct aml_audio_device *adev, struct str_parms *parms, int device, bool state)
 {
     AM_LOGI("state:%d, dev:%s(%#x), pre_out:%#x, pre_in:%#x", state, audioDevType2Str(device),
@@ -3823,11 +3794,18 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
                 }
                 set_output_device_avail(adev, device, true);
                 clear_arc_cached_edid(adev);
+                /* switch to hdmi out to avoid missing first word for voice assistant, once connecting hdmi */
+                /* a2dp/usb have higher output priority than hdmi-out, not routing to hdmi-out.
+                 * as switching hdmi_format would send hdmi-out disconnect/connect, which run to here.
+                 */
+                if ((adev->out_device & AUDIO_DEVICE_OUT_ALL_A2DP) || (adev->out_device & AUDIO_DEVICE_OUT_ALL_USB)) {
+                    //do nothing.
+                } else if (device & AUDIO_DEVICE_OUT_HDMI) {
+                    aml_audio_output_routing(adev, AUDIO_DEVICE_OUT_HDMI);
+                }
             } else if (device & AUDIO_DEVICE_OUT_ALL_A2DP) {
                 a2dp_out_open(adev);
                 adev->out_device |= device;
-                //mute hdmi-out
-                _control_hdmi_mute_state(adev, AUDIO_DEVICE_OUT_BLUETOOTH_A2DP, true);
             } else if (device &  AUDIO_DEVICE_OUT_ALL_USB ||
                        device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE ||
                        device & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
@@ -3837,10 +3815,6 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
                 }
                 adev->address = str_parms_to_str(parms);
                 AM_LOGI("tag=usb update address=%p/'%s'", adev->address, adev->address);
-                //mute hdmi-out when usb connect
-                if (device & AUDIO_DEVICE_OUT_ALL_USB) {
-                    _control_hdmi_mute_state(adev, AUDIO_DEVICE_OUT_USB_DEVICE, true);
-                }
             }
         }
     } else {
@@ -3856,18 +3830,12 @@ static void set_device_connect_state(struct aml_audio_device *adev, struct str_p
                         aml_mixer_ctrl_set_int(&adev->alsa_mixer, AML_MIXER_ID_HDMI_ARC_AUDIO_ENABLE, false);
                 }
             } else if (device & AUDIO_DEVICE_OUT_ALL_A2DP) {
-                //unmute hdmi-out
-                _control_hdmi_mute_state(adev, AUDIO_DEVICE_OUT_BLUETOOTH_A2DP, false);
                 adev->out_device &= (~device);
                 adev->bt_avrcp_supported = false;
                 a2dp_out_close(adev);
             } else if (device &  AUDIO_DEVICE_OUT_ALL_USB ||
                        device & AUDIO_DEVICE_OUT_WIRED_HEADPHONE||
                        device & AUDIO_DEVICE_OUT_WIRED_HEADSET) {
-                //unmute hdmi-out when usb disconnect
-                if (device & AUDIO_DEVICE_OUT_ALL_USB) {
-                    _control_hdmi_mute_state(adev, AUDIO_DEVICE_OUT_USB_DEVICE, false);
-                }
                 adev->out_device &= (~device);
                 AM_LOGI("tag=usb disconnect address=%p", adev->address);
                 free(adev->address);
@@ -5590,10 +5558,6 @@ int out_standby_new(struct audio_stream *stream)
     AM_LOGD("io %d: out:%p streamType:%s exit", aml_out->io_handle, aml_out, streamType2Str(aml_out->streamType));
     aml_audio_trace_int("out_standby_new", 0);
 
-    //unmute hdmi-out
-    if (aml_out->is_normal_pcm) {
-        _control_hdmi_mute_state(aml_dev, AUDIO_DEVICE_OUT_SPEAKER, false);
-    }
     return status;
 }
 
@@ -6441,9 +6405,6 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
                 );
         }
 #endif
-
-        //mute hdmi-out
-        _control_hdmi_mute_state(adev, AUDIO_DEVICE_OUT_SPEAKER, true);
     }
 
     /* for asdk14 cases:
