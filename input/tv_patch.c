@@ -54,6 +54,7 @@
 #include "dolby_lib_api.h"
 #include "spdif_encoder_api.h"
 #include "audio_port.h"
+#include "audio_hw_ms12_v2.h"
 
 void audio_digital_input_format_check(struct aml_audio_patch *patch)
 {
@@ -231,6 +232,33 @@ bool check_stream_reconfigure(struct aml_stream_in *stream_in, struct aml_audio_
      return false;
 }
 
+void set_start_threshold_for_ms12(struct aml_stream_out *aml_out)
+{
+    audio_format_t hal_internal_format = ms12_get_audio_hal_format(aml_out->hal_internal_format);
+    struct aml_audio_device *adev = aml_out->dev;
+    struct aml_audio_patch *patch = get_dev_patch(adev);
+
+    if (patch && (patch->input_src == AUDIO_DEVICE_IN_HDMI || patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC)) {
+        int start_threshold = 1536;
+        if (patch->input_src == AUDIO_DEVICE_IN_HDMI) {
+            start_threshold = 1536;
+        }
+        else if (patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC) {
+            start_threshold = 1792;
+        }
+
+        if (hal_internal_format == AUDIO_FORMAT_PCM_16_BIT || hal_internal_format == AUDIO_FORMAT_PCM_32_BIT) {
+            if (patch->input_src == AUDIO_DEVICE_IN_HDMI && is_game_mode(adev))
+                start_threshold = 256 * 2;
+            else
+                start_threshold = 0;
+        }
+        /* For MAT HBR, set ms12 start threshold about 2 frames */
+        set_ms12_set_main_start_threshold(&aml_out->stream, start_threshold);
+        ALOGI("hdmi/arc/earc in ddp/mat case, set start threshold %d", start_threshold);
+    }
+}
+
 /*==================================patch & threadloops=========================================*/
 // buffer/period ratio, bigger will add more latency
 int teardown_input_format_change(struct aml_audio_patch *patch, struct audio_stream_in *old_stream, struct audio_stream_in **new_stream)
@@ -271,7 +299,7 @@ int teardown_input_format_change(struct aml_audio_patch *patch, struct audio_str
        if (old_aml_in->hal_format == AUDIO_FORMAT_PCM_32_BIT && stream_config.format == AUDIO_FORMAT_PCM_16_BIT &&
                  old_aml_in->tv_param.cur_audio_packet_type == AUDIO_PACKET_HBR) {
            old_aml_in->tv_param.change_to_HBR_stream = true;
-           ALOGI("%s Format Change to HBR stream %d", __func__);
+           ALOGI("%s Format Change to HBR stream", __func__);
        }
         /* For HDMI case, it needs to change stream to 16bit to reconfigure ALSA device first when it switch to HBR stream. */
         if (old_aml_in->tv_param.change_to_HBR_stream) {

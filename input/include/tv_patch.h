@@ -19,6 +19,7 @@
 
 int create_tv_patch(struct aml_audio_patch **patch, audio_devices_t input, audio_devices_t output);
 int release_tv_patch(struct aml_audio_patch *patch);
+void set_start_threshold_for_ms12(struct aml_stream_out *aml_out);
 
 #endif /* _TV_PATCH_H_ */
 

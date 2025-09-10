@@ -77,6 +77,7 @@
 
 //dolby truehd parser
 #include "aml_audio_truehdparser.h"
+#include "tv_patch.h"
 
 #define DDP_MAX_BUFFER_SIZE 2560//dolby ms12 input buffer threshold
 #define CONVERT_ONEDB_TO_GAIN  1.122018f
@@ -5139,29 +5140,6 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
         set_ms12_ac4_presentation_group_index(stream, media_presentation_id);
     }
 
-    if (patch && (patch->input_src == AUDIO_DEVICE_IN_HDMI || patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC)) {
-        if ((hal_internal_format == AUDIO_FORMAT_AC3) || (hal_internal_format == AUDIO_FORMAT_E_AC3)) {
-            dolby_ms12_set_enforce_timeslice(true);
-            ALOGI("hdmi in ddp/dd case, use enforce timeslice");
-        }
-
-        if (hal_internal_format == AUDIO_FORMAT_AC3 ||
-            hal_internal_format == AUDIO_FORMAT_E_AC3 ||
-            hal_internal_format == AUDIO_FORMAT_E_AC3_JOC ||
-            hal_internal_format == AUDIO_FORMAT_MAT) {
-
-            int start_threshold = 1536;
-            if (patch->input_src == AUDIO_DEVICE_IN_HDMI)
-                start_threshold = 1536;
-            else if (patch->input_src == AUDIO_DEVICE_IN_HDMI_ARC)
-                start_threshold = 1792;
-
-            /* For MAT HBR, set ms12 start threshold about 2 frames */
-            set_ms12_set_main_start_threshold(stream, start_threshold);
-            ALOGI("hdmi/arc/earc in ddp/mat case, set start threshold %d", start_threshold);
-        }
-    }
-
     if (patch && patch->input_src == AUDIO_DEVICE_IN_HDMI) {
         if ((hal_internal_format == AUDIO_FORMAT_AC3) || (hal_internal_format == AUDIO_FORMAT_E_AC3)) {
             codec_info.s32EnforceTimeslice = 1;
@@ -5198,6 +5176,9 @@ int dolby_ms12_main_open(struct audio_stream_out *stream) {
         set_ms12_ac4_prefer_presentation_selection_by_associated_type_over_language(stream, adev->ms12.pat);
         set_ms12_ac4_presentation_group_index(stream, media_presentation_id);
     }
+
+    set_start_threshold_for_ms12(aml_out);
+
     set_ms12_content_volume_leveler(stream, adev->ms12.dap_leveler);
     set_ms12_content_dialogue_enhancer(stream, adev->ms12.dap_dialogue_enhancer);
 
