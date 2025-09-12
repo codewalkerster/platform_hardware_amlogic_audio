@@ -568,7 +568,7 @@ static int _dtsx_frame_scan(dtsx_dec_t *dts_dec)
             frame_info->syncword = 0;
             frame_size = 0;
             ALOGI("no valid frame, drop %d bytes.", check_size);
-        } else if ((frame_size > 0) && (first_sync_word_pos > 0)) {
+        } else if (first_sync_word_pos > 0) {
             // drop the dirty data in the beginning.
             ring_buffer_seek(input_rbuffer, first_sync_word_pos);
             dts_dec->remain_size -= first_sync_word_pos;
