@@ -6156,7 +6156,10 @@ ssize_t mixer_main_buffer_write(struct audio_stream_out *stream, void *abuffer)
     write_bytes = bytes;
 
     /* PCM use the Tunnel mode */
-    if (audio_is_linear_pcm(aml_out->hal_internal_format) && aml_out->hal_internal_format != AUDIO_FORMAT_PCM_FLOAT) {
+    // For NTS VOL-INTER-AUDIO-PROFILE-UIAUDIO-HEAAC-AL1 :
+    //   it will let the non-tunel pcm and aaudio loundness difference > 3dB.
+    //   currently don't enable for netflix
+    if (audio_is_linear_pcm(aml_out->hal_internal_format) && aml_out->hal_internal_format != AUDIO_FORMAT_PCM_FLOAT && !aml_out->is_netflix_src_stream) {
         bool is_local_out_bitstream = !is_tv_stream_out(aml_out) && (adev->sink_format > AUDIO_FORMAT_PCM_16_BIT);
 
         pcm_data_do_pre_attenuation(
@@ -6548,6 +6551,13 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
             const void *source = buffer;
             int source_bytes = bytes;
             bool is_local_out_bitstream = !get_dev_patch(adev) && (adev->sink_format > AUDIO_FORMAT_PCM_16_BIT);
+
+            // For NTS VOL-INTER-AUDIO-PROFILE-UIAUDIO-HEAAC-AL1 :
+            //   it will let the non-tunel pcm and aaudio loundness difference > 3dB.
+            //   currently don't enable for netflix
+            if (adev->is_netflix) {
+                is_local_out_bitstream = false;
+            }
 
             pcm_data_do_pre_attenuation(
                 source
