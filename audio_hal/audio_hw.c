@@ -6559,6 +6559,13 @@ ssize_t mixer_aux_buffer_write(struct audio_stream_out *stream, void *abuffer)
                 is_local_out_bitstream = false;
             }
 
+            // For NTS VOL-INTER-AUDIO-PROFILE-UIAUDIO-HEAAC-AL1 :
+            //   it will let the non-tunel pcm and aaudio loundness difference > 3dB.
+            //   currently don't enable for netflix
+            if (adev->is_netflix) {
+                is_local_out_bitstream = false;
+            }
+
             pcm_data_do_pre_attenuation(
                 source
                 , source_bytes
